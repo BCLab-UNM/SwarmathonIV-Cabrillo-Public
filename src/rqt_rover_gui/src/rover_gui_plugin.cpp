@@ -1360,7 +1360,7 @@ void RoverGUIPlugin::buildSimulationButtonEventHandler()
     progress_dialog.resize(500, 50);
     progress_dialog.show();
 
-    QString rovers[6] = {"achilles", "aeneas", "ajax", "diomedes", "hector", "paris"};
+    QString rovers[6] = {"lovelace", "maverick", "element618", "diomedes", "hector", "paris"};
     QPoint rover_positions[6] = {QPoint(0,1), QPoint(1,1), QPoint(1,0), QPoint(-1,0), QPoint(0,-1), QPoint(-1,-1)};
 
     // Add rovers to the simulation and start the associated ROS nodes
