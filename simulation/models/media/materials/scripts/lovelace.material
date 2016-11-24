@@ -1,0 +1,19 @@
+material Cabrillo/Lovelace
+{
+  receive_shadows off
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	scale 1.0 1.0
+        texture Lovelace.png
+        filtering anistropic
+        max_anisotropy 16
+      }
+      
+    }
+  }
+}
+

@@ -68,7 +68,9 @@
 				</geometry>
 				<material>
 					<script>
-						<name>Gazebo/White</name>
+  					  <uri>model://media/materials/scripts</uri>
+					  <uri>model://media/materials/textures</uri>
+					  <name>Cabrillo/Element618</name>
 					</script>
 				</material>
 			</visual>
@@ -85,6 +87,37 @@
 				</limit>
 			</axis>
 		</joint>
+
+		<link name='label'>
+			<pose>0.0006 0 0.13 0 0 1.57</pose>
+			<visual name='visual'> 
+			  <geometry>
+			    <plane>
+			      <normal>0 0 1</normal>
+			      <size>0.1 0.15</size>
+			    </plane>
+			  </geometry>
+			  <material>
+			    <script>
+  			      <uri>model://media/materials/scripts</uri>
+			      <uri>model://media/materials/textures</uri>
+			      <name>Cabrillo/Element618</name>
+			    </script>
+			  </material>
+			</visual>
+		</link>
+		<joint name="label" type="revolute">
+			<parent>top</parent>
+			<child>label</child>
+			<axis>
+				<xyz>0 0 0</xyz>
+				<limit>
+					<upper>0</upper>
+					<lower>0</lower>
+				</limit>
+			</axis>
+		</joint>
+
 	<link name="gripper_wrist">
 			<inertial>
 				<mass>0.085</mass>

@@ -1,0 +1,19 @@
+material Cabrillo/Maverick
+{
+  receive_shadows off
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+	scale 1 1
+        texture Maverick.png
+        filtering anistropic
+        max_anisotropy 16
+      }
+      
+    }
+  }
+}
+
