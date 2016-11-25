@@ -80,6 +80,9 @@ namespace rqt_rover_gui
     barrier_clearance = 0.5; // Used to prevent targets being placed to close to walls
 
     map_data = new MapData();
+
+    start_time = 0;
+    last_time = 0;
   }
 
   void RoverGUIPlugin::initPlugin(qt_gui_cpp::PluginContext& context)
@@ -200,6 +203,64 @@ namespace rqt_rover_gui
     info_log_subscriber = nh.subscribe("/infoLog", 10, &RoverGUIPlugin::infoLogMessageEventHandler, this);
     diag_log_subscriber = nh.subscribe("/diagsLog", 10, &RoverGUIPlugin::diagLogMessageEventHandler, this);
 
+    // Start listening to the clock so I can understand sim time.
+    time_subscriber = nh.subscribe((("/clock")), 1, &RoverGUIPlugin::clockEventHandler, this);
+
+    // Add command line parameters to assist the easy setup of simulations...
+    bool do_start = false;
+    for (int i=0; i<argv.length(); i++) {
+    	if (argv[i] == "--startsim") {
+    		do_start = true;
+    	}
+    	else if (argv[i] == "--final") {
+    		ui.final_radio_button->setChecked(true);
+        	emit sendInfoLogMessage("[--final] Round set to final round.");
+    	}
+    	else if (argv[i] == "--prelim") {
+    		ui.final_radio_button->setChecked(false);
+        	emit sendInfoLogMessage("[--prelim] Round set to preliminary round.");
+    	}
+    	else if (argv[i] == "--powerlaw") {
+    		ui.powerlaw_distribution_radio_button->setChecked(true);
+        	emit sendInfoLogMessage("[--powerlaw] Using power law distribution.");
+    	}
+    	else if (argv[i] == "--clustered") {
+    		ui.clustered_distribution_radio_button->setChecked(true);
+        	emit sendInfoLogMessage("[--clustered] Using clustered distribution.");
+        }
+    	else if (argv[i] == "--single") {
+            ui.override_num_rovers_checkbox->setChecked(true);
+            ui.custom_num_rovers_combobox->setCurrentIndex(0);
+            emit sendInfoLogMessage("[--single] Only creating one rover.");
+        }
+        else if (argv[i] == "--world") {
+        	if (i >= argv.length() - 1) {
+        		cout << "ERROR: No argument given to --world" << endl;
+        	}
+        	else {
+        	    i++;
+        	    QFile file(argv[i]);
+        	    if (file.exists()) {
+            		ui.custom_distribution_radio_button->setChecked(true);
+            	    ui.custom_world_path_button->setEnabled(true);
+            	    sim_mgr.setCustomWorldPath(file.fileName());
+            	    emit sendInfoLogMessage("[--world] User selected custom world path: " + file.fileName());
+
+            	    // Extract the base filename for short display
+            	    QFileInfo fi=file;
+            	    ui.custom_world_path->setText(fi.baseName());
+        	    }
+        	    else {
+        	    	cout << "ERROR: World file doesn't exist: " << argv[i].toStdString() << endl;
+        	    }
+        	}
+        }
+    }
+
+    if (do_start) {
+    	emit sendInfoLogMessage("Automatically starting simulation.");
+    	buildSimulationButtonEventHandler();
+    }
 
   }
 
@@ -1198,6 +1259,9 @@ void RoverGUIPlugin::allAutonomousButtonEventHandler()
     //Disable all autonomous button
     ui.all_autonomous_button->setEnabled(false);
     ui.all_autonomous_button->setStyleSheet("color: grey; border:2px solid grey;");
+
+    emit sendInfoLogMessage("Starting competition clock.");
+    rovers_started = true;
 }
 
 void RoverGUIPlugin::allStopButtonEventHandler()
@@ -2246,6 +2310,33 @@ void RoverGUIPlugin::overrideNumRoversCheckboxToggledEventHandler(bool checked)
 void RoverGUIPlugin::refocusKeyboardEventHandler()
 {
     widget->setFocus();
+}
+
+void RoverGUIPlugin::clockEventHandler(const rosgraph_msgs::Clock::ConstPtr& msg) {
+	unsigned long currenttime = msg->clock.sec;
+	if (rovers_started) {
+		if (start_time == 0) {
+			start_time = msg->clock.sec;
+			last_time = msg->clock.sec;
+		}
+
+		// Only act on 1 simulated minute intervals...
+		if (msg->clock.sec >= last_time + 60) {
+			last_time = msg->clock.sec;
+
+			stringstream ss;
+			unsigned long elapsed = (currenttime - start_time);
+			int hours = elapsed / 3600;
+			int minutes = (elapsed / 60) % 60;
+			int seconds = elapsed % 60;
+			ss << "==== [elapsed " << setfill('0') << setw(2) << hours
+					<< ":" << setfill('0') << setw(2) << minutes
+					<< ":" << setfill('0') << setw(2) << seconds
+					<< "]: " <<  "XXX targets collected.";
+			cout << ss.str() << endl;
+			emit sendInfoLogMessage(ss.str().c_str());
+		}
+	}
 }
 
 // Clean up memory when this object is deleted

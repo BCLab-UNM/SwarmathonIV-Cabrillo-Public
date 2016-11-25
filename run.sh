@@ -19,7 +19,19 @@ echo Killing roscore
 pkill roscore
 roscore &
 sleep 2
-rqt -s rqt_rover_gui
+
+exe=$(basename $0)
+if [ "$exe" == "dev.sh" ]; then
+  echo "Executing single rover test mode."
+  rqt -s rqt_rover_gui --args --startsim --single "$@"
+elif [ "$exe" == "prelim.sh" ]; then
+  rqt -s rqt_rover_gui --args --startsim --prelim --powerlaw "$@"
+elif [ "$exe" == "final.sh" ]; then
+  rqt -s rqt_rover_gui --args --startsim --final --powerlaw "$@"  
+else
+  rqt -s rqt_rover_gui --args "$@"
+fi
+
 # The rover program cleans up after itself but if there is a crash this helps to make sure there are no leftovers
 echo Cleaning up ROS and Gazebo Processes
 rosnode kill -a 

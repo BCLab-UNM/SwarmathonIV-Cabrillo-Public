@@ -38,6 +38,7 @@
 #include "std_msgs/MultiArrayLayout.h"
 #include "std_msgs/MultiArrayDimension.h"
 #include "std_msgs/Float32MultiArray.h"
+#include <rosgraph_msgs/Clock.h>
 #include <geometry_msgs/Polygon.h>
 #include <geometry_msgs/Point32.h>
 #include <pluginlib/class_list_macros.h>
@@ -114,6 +115,7 @@ namespace rqt_rover_gui {
     void infoLogMessageEventHandler(const ros::MessageEvent<std_msgs::String const>& event);
     void diagLogMessageEventHandler(const ros::MessageEvent<std_msgs::String const>& event);
 
+    void clockEventHandler(const rosgraph_msgs::Clock::ConstPtr& msg);
 
     void addModelToGazebo();
     QString addPowerLawTargets();
@@ -255,6 +257,14 @@ namespace rqt_rover_gui {
     // Limit the length of log messages in characters to prevent slowdowns when lots of data is added
     size_t max_info_log_length;
     size_t max_diag_log_length;
+
+    // Keep track of the time since "All Autonomous" was pressed. This helps
+    // my students test our rovers in the simulator by keeping track of sim
+    // time in an easy way.
+    ros::Subscriber time_subscriber;
+    bool rovers_started;
+    unsigned long start_time;
+    unsigned long last_time;
 
   };
 } // end namespace
