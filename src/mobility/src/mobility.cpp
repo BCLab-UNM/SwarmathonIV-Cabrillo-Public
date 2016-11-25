@@ -24,6 +24,62 @@
 
 using namespace std;
 
+/* Drive Parameters.
+ *
+ * These parameters control the driving behavior. They are factored out here for convenience.
+ *
+ * c_GOAL_THRESHOLD_DISTANCE (meters)
+ *    The distance inside of which we're considered to be at our goal.
+ *
+ * c_TRANSLATE_THRESHOLD_ANGLE (radians)
+ *    If the angle between us and the goal is bigger than this the rover goes
+ *    into ROTATE to fix the heading.
+ *
+ * c_ROTATE_THRESHOLD_ANGLE (radians)
+ *    The allowable difference between the target angle and theheading. When the
+ *    angle is smaller than this the rover goes into TRANSLATE.
+ *
+ * c_WANDER_RANDOM_ANGLE (radians)
+ *    When wandering pick a new heading that's on average this many radians from the current heading.
+ *
+ * c_WANDER_RANDOM_DISTANCE (meters)
+ *    When wandering pick a new goal that's this many meters along the random heading.
+ *
+ * c_ROTATIONAL_SPEED_MAX
+ *    The maximum allowable turning speed.
+ *
+ * c_ROTAIONAL_SPEED_MIN
+ *    The minimum allowable speed while rotating.
+ *
+ * c_ROTATIONAL_SLOPE
+ *    The rotational speed will be:
+ *    	speed = max(c_ROTATIONAL_SPEED_MIN, min(c_ROTATIONAL_SPEED_MAX, Angle * c_ROTATIONAL_SLOPE))
+ *
+ * c_LINEAR SPEED_MAX
+ *    The maximum allowable driving speed.
+ *
+ * c_LINEAR_SPEED_MIN
+ *    The minimum allowable driving speed.
+ *
+ * c_SPEED_SLOPE
+ *    The rover linear speed will be:
+ *    	speed = max(c_LINEAR_SPEED_MIN, min(c_LINEAR_SPEED_MAX, Distance * c_SPEED_SLOPE))
+ *
+ */
+static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
+static const double C_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
+static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
+static const double c_WANDER_RANDOM_ANGLE         = 0.25;
+static const double c_WANDER_RANDOM_DISTANCE      = 2.0;
+static const double c_ROTATIONAL_SPEED_MAX        = 0.8;
+static const double c_ROTATIONAL_SPEED_MIN        = 0.1;
+static const double c_ROTATIONAL_SLOPE            = M_PI_4;
+static const double c_LINEAR_SPEED_MAX            = 1.0;
+static const double c_LINEAR_SPEED_MIN            = 0.2;
+static const double c_SPEED_SLOPE                 = 0.5;
+static const double c_ROTATE_GIVEUP_SECONDS       = 4.0;
+static const double c_TRANSFORM_WAIT_SECONDS      = 0.1;
+
 //Random number generator
 random_numbers::RandomNumberGenerator* rng;	
 
@@ -152,6 +208,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     
     if (currentMode == 2 || currentMode == 3) { //Robot is in automode
 
+    	double distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
+    	double angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
+    	double desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+
 		switch(stateMachineState) {
 			
 			//Select rotation or translation based on required adjustment
@@ -159,17 +219,17 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			case STATE_MACHINE_TRANSFORM: {
 				stateMachineMsg.data = "TRANSFORMING";
 				//If angle between current and goal is significant
-				if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
+				if (fabs(desired_heading) > c_ROTATE_THRESHOLD_ANGLE) {
 					stateMachineState = STATE_MACHINE_ROTATE; //rotate
 				}
 				//If goal has not yet been reached
-				else if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+				else if (fabs(angle_to_goal) < C_TRANSLATE_THRESHOLD_ANGLE) {
 					stateMachineState = STATE_MACHINE_TRANSLATE; //translate
 				}
 				//If returning with a target
 				else if (targetCollected) {
 					//If goal has not yet been reached
-					if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > 0.5) {
+					if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > c_GOAL_THRESHOLD_DISTANCE) {
 				        //set angle to center as goal heading
 						goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
 						
@@ -193,11 +253,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 				//If no targets have been detected, assign a new goal
 				else if (!targetDetected) {
 					//select new heading from Gaussian distribution around current heading
-					goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
+					goalLocation.theta = rng->gaussian(currentLocation.theta, c_WANDER_RANDOM_ANGLE);
 					
 					//select new position 50 cm from current location
-					goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-					goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+					goalLocation.x = currentLocation.x + (c_WANDER_RANDOM_DISTANCE * cos(goalLocation.theta));
+					goalLocation.y = currentLocation.y + (c_WANDER_RANDOM_DISTANCE * sin(goalLocation.theta));
 				}
 				
 				//Purposefully fall through to next case without breaking
@@ -208,10 +268,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			//Stay in this state until angle is minimized
 			case STATE_MACHINE_ROTATE: {
 				stateMachineMsg.data = "ROTATING";
-			    if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) > 0.1) {
+			    if (desired_heading > c_ROTATE_THRESHOLD_ANGLE) {
 					setVelocity(0.0, 0.2); //rotate left
 			    }
-			    else if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) < -0.1) {
+			    else if (desired_heading < -c_ROTATE_THRESHOLD_ANGLE) {
 					setVelocity(0.0, -0.2); //rotate right
 				}
 				else {
@@ -226,7 +286,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			//Stay in this state until angle is at least PI/2
 			case STATE_MACHINE_TRANSLATE: {
 				stateMachineMsg.data = "TRANSLATING";
-				if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+				if (fabs(angle_to_goal) < C_TRANSLATE_THRESHOLD_ANGLE) {
 					setVelocity(0.3, 0.0);
 				}
 				else {
