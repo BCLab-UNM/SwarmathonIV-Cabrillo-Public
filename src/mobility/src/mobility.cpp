@@ -65,6 +65,8 @@ using namespace std;
  *    The rover linear speed will be:
  *    	speed = max(c_LINEAR_SPEED_MIN, min(c_LINEAR_SPEED_MAX, Distance * c_SPEED_SLOPE))
  *
+ *c_BOUNCE_CONST (radians)
+ *		The angle the rover turns from the wall when not holding a target
  */
 static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
 static const double C_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
@@ -79,7 +81,7 @@ static const double c_LINEAR_SPEED_MIN            = 0.2;
 static const double c_SPEED_SLOPE                 = 0.5;
 static const double c_ROTATE_GIVEUP_SECONDS       = 4.0;
 static const double c_TRANSFORM_WAIT_SECONDS      = 0.1;
-
+static const double c_BOUNCE_CONST                = 1.8;
 //Random number generator
 random_numbers::RandomNumberGenerator* rng;	
 
@@ -418,14 +420,22 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
 	if (!targetDetected && (message->data > 0)) {
 		//obstacle on right side
 		if (message->data == 1) {
+			if(!targetCollected){
+				goalLocation.theta = currentLocation.theta + c_BOUNCE_CONST;
+			}else{
 			//select new heading 0.2 radians to the left
 			goalLocation.theta = currentLocation.theta + 0.2;
+			}
 		}
 		
 		//obstacle in front or on left side
 		else if (message->data == 2) {
+			if(!targetCollected){
+				goalLocation.theta = currentLocation.theta - c_BOUNCE_CONST;
+			}else {
 			//select new heading 0.2 radians to the right
 			goalLocation.theta = currentLocation.theta - 0.2;
+			}
 		}
 							
 		//select new position 50 cm from current location
