@@ -82,6 +82,7 @@ static const double c_SPEED_SLOPE                 = 0.5;
 static const double c_ROTATE_GIVEUP_SECONDS       = 4.0;
 static const double c_TRANSFORM_WAIT_SECONDS      = 0.1;
 static const double c_BOUNCE_CONST                = 1.8;
+
 //Random number generator
 random_numbers::RandomNumberGenerator* rng;	
 
@@ -101,11 +102,13 @@ float status_publish_interval = 5;
 float killSwitchTimeout = 10;
 bool targetDetected = false;
 bool targetCollected = false;
+int backupCount = 0;
 
 // state machine states
 #define STATE_MACHINE_TRANSFORM	0
 #define STATE_MACHINE_ROTATE	1
 #define STATE_MACHINE_TRANSLATE	2
+#define STATE_MACHINE_BACKUP	3
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
 geometry_msgs::Twist velocity;
@@ -210,10 +213,6 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     
     if (currentMode == 2 || currentMode == 3) { //Robot is in automode
 
-    	double distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
-    	double angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
-    	double desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
-
 		switch(stateMachineState) {
 			
 			//Select rotation or translation based on required adjustment
@@ -221,17 +220,21 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			case STATE_MACHINE_TRANSFORM: {
 				stateMachineMsg.data = "TRANSFORMING";
 				//If angle between current and goal is significant
-				if (fabs(desired_heading) > c_ROTATE_THRESHOLD_ANGLE) {
+
+				if(backupCount > 0){
+					stateMachineState = STATE_MACHINE_BACKUP;
+				}
+				else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
 					stateMachineState = STATE_MACHINE_ROTATE; //rotate
 				}
 				//If goal has not yet been reached
-				else if (fabs(angle_to_goal) < C_TRANSLATE_THRESHOLD_ANGLE) {
+				else if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
 					stateMachineState = STATE_MACHINE_TRANSLATE; //translate
 				}
 				//If returning with a target
 				else if (targetCollected) {
 					//If goal has not yet been reached
-					if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > c_GOAL_THRESHOLD_DISTANCE) {
+					if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > 0.5) {
 				        //set angle to center as goal heading
 						goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
 						
@@ -249,17 +252,20 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 						//reset flag
 						targetCollected = false;
 						
+
 						goalLocation.theta = rng->uniformReal(0, 2 * M_PI);
 					}
 				}
+
+
 				//If no targets have been detected, assign a new goal
 				else if (!targetDetected) {
 					//select new heading from Gaussian distribution around current heading
-					goalLocation.theta = rng->gaussian(currentLocation.theta, c_WANDER_RANDOM_ANGLE);
+					goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
 					
 					//select new position 50 cm from current location
-					goalLocation.x = currentLocation.x + (c_WANDER_RANDOM_DISTANCE * cos(goalLocation.theta));
-					goalLocation.y = currentLocation.y + (c_WANDER_RANDOM_DISTANCE * sin(goalLocation.theta));
+					goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+					goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
 				}
 				
 				//Purposefully fall through to next case without breaking
@@ -270,10 +276,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			//Stay in this state until angle is minimized
 			case STATE_MACHINE_ROTATE: {
 				stateMachineMsg.data = "ROTATING";
-			    if (desired_heading > c_ROTATE_THRESHOLD_ANGLE) {
+			    if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) > 0.1) {
 					setVelocity(0.0, 0.2); //rotate left
 			    }
-			    else if (desired_heading < -c_ROTATE_THRESHOLD_ANGLE) {
+			    else if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) < -0.1) {
 					setVelocity(0.0, -0.2); //rotate right
 				}
 				else {
@@ -288,7 +294,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			//Stay in this state until angle is at least PI/2
 			case STATE_MACHINE_TRANSLATE: {
 				stateMachineMsg.data = "TRANSLATING";
-				if (fabs(angle_to_goal) < C_TRANSLATE_THRESHOLD_ANGLE) {
+				if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
 					setVelocity(0.3, 0.0);
 				}
 				else {
@@ -304,6 +310,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 			    break;
 			}
 		
+			case STATE_MACHINE_BACKUP: {
+				if(backupCount > 0){
+					backupCount--;
+				}
+				else {
+					stateMachineState = STATE_MACHINE_TRANSFORM;
+				}
+
+				setVelocity(-0.3, 0.0);
+
+				break;
+			}
+
 			default: {
 			    break;
 			}
@@ -443,6 +462,7 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
 		goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
 		
 		//switch to transform state to trigger collision avoidance
+		backupCount = 20;
 		stateMachineState = STATE_MACHINE_TRANSFORM;
 	}
 }
@@ -470,7 +490,7 @@ void joyCmdHandler(const sensor_msgs::Joy::ConstPtr& message) {
 void publishStatusTimerEventHandler(const ros::TimerEvent&)
 {
   std_msgs::String msg;
-  msg.data = "Cabrillo";
+  msg.data = "online";
   status_publisher.publish(msg);
 }
 
