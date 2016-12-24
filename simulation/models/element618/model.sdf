@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <sdf version='1.4'>
-	<model name="aeneas">
+	<model name="element618">
 
 		<static>false</static>
 
@@ -68,11 +68,43 @@
 				</geometry>
 				<material>
 					<script>
-						<name>Gazebo/Yellow</name>
+  					  <uri>model://media/materials/scripts</uri>
+					  <uri>model://media/materials/textures</uri>
+					  <name>Cabrillo/Element618</name>
 					</script>
 				</material>
 			</visual>
 		</link>
+
+		<link name='label'>
+			<pose>0.0006 0 0.13 0 0 1.57</pose>
+			<visual name='visual'> 
+			  <geometry>
+			    <plane>
+			      <normal>0 0 1</normal>
+			      <size>0.1 0.15</size>
+			    </plane>
+			  </geometry>
+			  <material>
+			    <script>
+  			      <uri>model://media/materials/scripts</uri>
+			      <uri>model://media/materials/textures</uri>
+			      <name>Cabrillo/Element618</name>
+			    </script>
+			  </material>
+			</visual>
+		</link>
+		<joint name="label" type="revolute">
+			<parent>top</parent>
+			<child>label</child>
+			<axis>
+				<xyz>0 0 0</xyz>
+				<limit>
+					<upper>0</upper>
+					<lower>0</lower>
+				</limit>
+			</axis>
+		</joint>
 
 		<joint name="top" type="revolute">
 			<parent>base_link</parent>
@@ -538,7 +570,7 @@
 				</ray>
 				<plugin name="us" filename="libhector_gazebo_ros_sonar.so">
 					<gaussianNoise>0.005</gaussianNoise>
-					<topicName>/aeneas/sonarCenter</topicName>
+					<topicName>/element618/sonarCenter</topicName>
 					<frameId>us_center_link</frameId>
 				</plugin>
 			</sensor>
@@ -578,7 +610,7 @@
 				</ray>
 				<plugin name="us" filename="libhector_gazebo_ros_sonar.so">
 					<gaussianNoise>0.005</gaussianNoise>
-					<topicName>/aeneas/sonarRight</topicName>
+					<topicName>/element618/sonarRight</topicName>
 					<frameId>us_center_link</frameId>
 				</plugin>
 			</sensor>
@@ -618,7 +650,7 @@
 				</ray>
 				<plugin name="us" filename="libhector_gazebo_ros_sonar.so">
 					<gaussianNoise>0.005</gaussianNoise>
-					<topicName>/aeneas/sonarLeft</topicName>
+					<topicName>/element618/sonarLeft</topicName>
 					<frameId>us_center_link</frameId>
 				</plugin>
 			</sensor>
@@ -672,9 +704,9 @@
 				<plugin name="camera_controller" filename="libgazebo_ros_camera.so">
 					<alwaysOn>true</alwaysOn>
 					<updateRate>0.0</updateRate>
-					<cameraName>/aeneas/camera</cameraName>
-					<imageTopicName>/aeneas/camera/image</imageTopicName>
-					<cameraInfoTopicName>/aeneas/camera/info</cameraInfoTopicName>
+					<cameraName>/element618/camera</cameraName>
+					<imageTopicName>/element618/camera/image</imageTopicName>
+					<cameraInfoTopicName>/element618/camera/info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>
@@ -698,8 +730,8 @@
 			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
-			<wristTopic>/aeneas/wristAngle</wristTopic>
-			<fingerTopic>/aeneas/fingerAngle</fingerTopic>
+			<wristTopic>/element618/wristAngle</wristTopic>
+			<fingerTopic>/element618/fingerAngle</fingerTopic>
 
 			<!-- optional: print debug info to the console -->
 			<debug>
@@ -743,11 +775,11 @@
 			<rightRearJoint>right_rear</rightRearJoint>
 			<wheelSeparation>0.27</wheelSeparation>
 			<wheelDiameter>0.12</wheelDiameter>
-			<robotBaseFrame>aeneas/base_link</robotBaseFrame>
+			<robotBaseFrame>element618/base_link</robotBaseFrame>
 			<torque>2.8</torque>
-			<commandTopic>/aeneas/velocity</commandTopic>
-			<odometryTopic>/aeneas/odom</odometryTopic>
-			<odometryFrame>aeneas/odom</odometryFrame>
+			<commandTopic>/element618/velocity</commandTopic>
+			<odometryTopic>/element618/odom</odometryTopic>
+			<odometryFrame>element618/odom</odometryFrame>
 			<broadcastTF>0</broadcastTF>
 		</plugin>
 
@@ -756,8 +788,8 @@
 			<alwaysOn>1</alwaysOn>
 			<updateRate>5</updateRate>
 			<bodyName>base_link</bodyName>
-			<frameId>aeneas/base_link</frameId>
-			<topicName>/aeneas/fix</topicName>
+			<frameId>element618/base_link</frameId>
+			<topicName>/element618/fix</topicName>
 			<referenceLatitude>28.584810</referenceLatitude>
 			<referenceLongitude>-80.649650</referenceLongitude>
 			<referenceHeading>0.0</referenceHeading>
@@ -772,8 +804,8 @@
 		<plugin name="imu_sim" filename="libhector_gazebo_ros_imu.so">
 			<updateRate>10</updateRate>
 			<bodyName>base_link</bodyName>
-			<frameId>aeneas/base_link</frameId>
-			<topicName>/aeneas/imu</topicName>
+			<frameId>element618/base_link</frameId>
+			<topicName>/element618/imu</topicName>
 			<xyzOffset>0 0 0</xyzOffset>
 			<rpyOffset>0 0 0</rpyOffset>
 			<gaussianNoise>0</gaussianNoise>  
