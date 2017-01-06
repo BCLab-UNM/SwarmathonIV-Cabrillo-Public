@@ -6,7 +6,7 @@
 
 		<link name='base_link'>
 			<inertial>
-				<mass>5.0</mass>
+				<mass>10.0</mass>
 				<inertia>
 					<ixx>0.04</ixx>
 					<ixy>0.0</ixy>
@@ -331,7 +331,7 @@
 		<link name="left_front_wheel">
 			<pose>0.095 0.135 -0.03 0 0 0</pose>
 			<inertial>
-				<mass>0.1</mass>
+				<mass>0.5</mass>
 				<inertia>
 					<ixx>0.00635</ixx>
 					<ixy>0.0</ixy>
@@ -383,7 +383,7 @@
 		<link name="right_front_wheel">
 			<pose>0.095 -0.135 -0.03 0 0 0</pose>
 			<inertial>
-				<mass>0.1</mass>
+				<mass>0.5</mass>
 				<inertia>
 					<ixx>0.00635</ixx>
 					<ixy>0.0</ixy>
@@ -435,7 +435,7 @@
 		<link name="left_rear_wheel">
 			<pose>-0.095 0.135 -0.03 0 0 0</pose>
 			<inertial>
-				<mass>0.1</mass>
+				<mass>0.5</mass>
 				<inertia>
 					<ixx>0.00635</ixx>
 					<ixy>0.0</ixy>
@@ -487,7 +487,7 @@
 		<link name="right_rear_wheel">
 			<pose>-0.095 -0.135 -0.03 0 0 0</pose>
 			<inertial>
-				<mass>0.1</mass>
+				<mass>0.5</mass>
 				<inertia>
 					<ixx>0.00635</ixx>
 					<ixy>0.0</ixy>
@@ -687,8 +687,8 @@
 				<camera name="head">
 					<horizontal_fov>1.0123</horizontal_fov>
 					<image>
-						<width>640</width>
-						<height>480</height>
+						<width>320</width>
+						<height>240</height>
 						<format>B8G8R8</format>
 					</image>
 					<clip>
