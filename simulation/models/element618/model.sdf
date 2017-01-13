@@ -730,8 +730,8 @@
 			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
-			<wristTopic>/element618/wristAngle</wristTopic>
-			<fingerTopic>/element618/fingerAngle</fingerTopic>
+			<wristTopic>/element618/wristAngle/cmd</wristTopic>
+			<fingerTopic>/element618/fingerAngle/cmd</fingerTopic>
 
 			<!-- optional: print debug info to the console -->
 			<debug>
@@ -777,7 +777,7 @@
 			<wheelDiameter>0.12</wheelDiameter>
 			<robotBaseFrame>element618/base_link</robotBaseFrame>
 			<torque>2.8</torque>
-			<commandTopic>/element618/velocity</commandTopic>
+			<commandTopic>/element618/skidsteer</commandTopic>
 			<odometryTopic>/element618/odom</odometryTopic>
 			<odometryFrame>element618/odom</odometryFrame>
 			<broadcastTF>0</broadcastTF>

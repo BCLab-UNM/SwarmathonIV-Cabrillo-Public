@@ -29,6 +29,7 @@
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/Image.h>
 #include <ros/macros.h>
+#include <rosgraph_msgs/Clock.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/Range.h>
 #include <sensor_msgs/Imu.h>
@@ -50,7 +51,7 @@
 #include <map>
 #include <set>
 #include <mutex>
-
+#include <ublox_msgs/NavSOL.h>
 
 //ROS msg types
 //#include "rover_onboard_target_detection/ATag.h"
@@ -88,6 +89,7 @@ namespace rqt_rover_gui {
     Q_OBJECT
       
   public:
+
     RoverGUIPlugin();
     ~RoverGUIPlugin();
     virtual void initPlugin(qt_gui_cpp::PluginContext& context);
@@ -106,8 +108,11 @@ namespace rqt_rover_gui {
     void cameraEventHandler(const sensor_msgs::ImageConstPtr& image);
     void EKFEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
     void GPSEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
+    void GPSNavSolutionEventHandler(const ros::MessageEvent<const ublox_msgs::NavSOL> &event);
     void encoderEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
-    void obstacleEventHandler(const ros::MessageEvent<std_msgs::UInt8 const>& event);
+    void obstacleEventHandler(const ros::MessageEvent<std_msgs::UInt8 const> &event);
+    void scoreEventHandler(const ros::MessageEvent<std_msgs::String const> &event);
+    void simulationTimerEventHandler(const rosgraph_msgs::Clock& msg);
     void diagnosticEventHandler(const ros::MessageEvent<std_msgs::Float32MultiArray const> &event);
 
     void centerUSEventHandler(const sensor_msgs::Range::ConstPtr& msg);
@@ -155,6 +160,10 @@ namespace rqt_rover_gui {
     void joystickGripperFingersOpenUpdate(double);
 
     void updateObstacleCallCount(QString text);
+    void updateNumberOfTagsCollected(QString text);
+    void updateNumberOfSatellites(QString text);
+    void allStopButtonSignal();
+    void updateCurrentSimulationTimeLabel(QString text);
 
   private slots:
 
@@ -183,7 +192,7 @@ namespace rqt_rover_gui {
     void buildSimulationButtonEventHandler();
     void clearSimulationButtonEventHandler();
     void visualizeSimulationButtonEventHandler();
-    void gazeboServerFinishedEventHandler();  
+    void gazeboServerFinishedEventHandler();
     void displayInfoLogMessage(QString msg);
     void displayDiagLogMessage(QString msg);
 
@@ -204,6 +213,7 @@ namespace rqt_rover_gui {
     ros::Subscriber joystick_subscriber;
     map<string,ros::Subscriber> encoder_subscribers;
     map<string,ros::Subscriber> gps_subscribers;
+    map<string,ros::Subscriber> gps_nav_solution_subscribers;
     map<string,ros::Subscriber> ekf_subscribers;
     map<string,ros::Subscriber> rover_diagnostic_subscribers;
     ros::Subscriber us_center_subscriber;
@@ -212,6 +222,8 @@ namespace rqt_rover_gui {
     ros::Subscriber imu_subscriber;
     ros::Subscriber info_log_subscriber;
     ros::Subscriber diag_log_subscriber;
+    ros::Subscriber score_subscriber;
+    ros::Subscriber simulation_timer_subscriber;
 
     map<string,ros::Subscriber> status_subscribers;
     map<string,ros::Subscriber> obstacle_subscribers;
@@ -232,9 +244,21 @@ namespace rqt_rover_gui {
     GazeboSimManager sim_mgr;
 
     map<string,int> rover_control_state;
+    map<string,int> rover_numSV_state;
     map<string, RoverStatus> rover_statuses;
 
     float arena_dim; // in meters
+
+    // simulation timer variables
+    double current_simulated_time_in_seconds;
+    double last_current_time_update_in_seconds;
+    double timer_start_time_in_seconds;
+    double timer_stop_time_in_seconds;
+    bool is_timer_on;
+    // helper functions for the simulation timer
+    double getHours(double seconds);
+    double getMinutes(double seconds);
+    double getSeconds(double seconds);
 
     bool display_sim_visualization;
 
@@ -272,7 +296,6 @@ namespace rqt_rover_gui {
     unsigned long last_time;
 
     std::mutex diag_update_mutex;
-
   };
 } // end namespace
 

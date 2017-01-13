@@ -731,8 +731,8 @@
 			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
-			<wristTopic>/maverick/wristAngle</wristTopic>
-			<fingerTopic>/maverick/fingerAngle</fingerTopic>
+			<wristTopic>/maverick/wristAngle/cmd</wristTopic>
+			<fingerTopic>/maverick/fingerAngle/cmd</fingerTopic>
 
 			<!-- optional: print debug info to the console -->
 			<debug>
@@ -778,7 +778,7 @@
 			<wheelDiameter>0.12</wheelDiameter>
 			<robotBaseFrame>maverick/base_link</robotBaseFrame>
 			<torque>2.8</torque>
-			<commandTopic>/maverick/velocity</commandTopic>
+			<commandTopic>/maverick/skidsteer</commandTopic>
 			<odometryTopic>/maverick/odom</odometryTopic>
 			<odometryFrame>maverick/odom</odometryFrame>
 			<broadcastTF>0</broadcastTF>

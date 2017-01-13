@@ -731,8 +731,8 @@
 			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
-			<wristTopic>/lovelace/wristAngle</wristTopic>
-			<fingerTopic>/lovelace/fingerAngle</fingerTopic>
+			<wristTopic>/lovelace/wristAngle/cmd</wristTopic>
+			<fingerTopic>/lovelace/fingerAngle/cmd</fingerTopic>
 
 			<!-- optional: print debug info to the console -->
 			<debug>
@@ -778,7 +778,7 @@
 			<wheelDiameter>0.12</wheelDiameter>
 			<robotBaseFrame>lovelace/base_link</robotBaseFrame>
 			<torque>2.8</torque>
-			<commandTopic>/lovelace/velocity</commandTopic>
+			<commandTopic>/lovelace/skidsteer</commandTopic>
 			<odometryTopic>/lovelace/odom</odometryTopic>
 			<odometryFrame>lovelace/odom</odometryFrame>
 			<broadcastTF>0</broadcastTF>
