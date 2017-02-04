@@ -434,8 +434,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             //Otherwise, drop off target and select new random uniform heading
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
-            	circleCount = 42;
             	goalLocation = searchController.search(currentLocation);
+            	circleCount = 55;
             }
 
             //Purposefully fall through to next case without breaking
@@ -579,7 +579,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         	if(circleCount <= 0){
         		stateMachineState = STATE_MACHINE_TRANSFORM;
         	}
-        	sendDriveCommand(0.5,0.8);
+        	sendDriveCommand(0.4,0.6);
 
         	break;
         }
