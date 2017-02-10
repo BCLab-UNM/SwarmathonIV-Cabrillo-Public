@@ -31,7 +31,7 @@
 
 using namespace std;
 
-/* Drive Parameters.
+/* Drive Parameters. ATTENTION: pay attention to the case of these variable names.
  *
  * These parameters control the driving behavior. They are factored out here for convenience.
  *
@@ -76,7 +76,7 @@ using namespace std;
  *		The angle the rover turns from the wall when not holding a target
  */
 static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
-static const double C_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
+static const double c_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
 static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
 static const double c_WANDER_RANDOM_ANGLE         = 0.25;
 static const double c_WANDER_RANDOM_DISTANCE      = 2.0;
@@ -695,14 +695,24 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
     if ((!targetDetected || targetCollected) && (message->data > 0)) {
         // obstacle on right side
         if (message->data == 1) {
-            // select new heading 0.2 radians to the left
-            goalLocation.theta = currentLocation.theta + 0.6;
+            // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
+            if (targetCollected == true) {
+            	goalLocation.theta = currentLocation.theta + c_BOUNCE_CONST;
+            }
+            else if (targetCollected == false){
+        		goalLocation.theta = currentLocation.theta + 0.6;
+            }
         }
 
         // obstacle in front or on left side
         else if (message->data == 2) {
-            // select new heading 0.2 radians to the right
-            goalLocation.theta = currentLocation.theta + 0.6;
+            // select new heading 0.6 radians to the RIGHT.
+            if (targetCollected == true) {
+            	goalLocation.theta = currentLocation.theta - c_BOUNCE_CONST;
+            }
+            else if (targetCollected == false){
+        		goalLocation.theta = currentLocation.theta - 0.6;
+            }
         }
 
         // continues an interrupted search
