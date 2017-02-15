@@ -292,6 +292,9 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
+#define distance_to_goal  hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y)
+#define angle_to_goal     angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))
+#define desired_heading   angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)
 
 // This is the top-most logic control block organised as a state machine.
 // This function calls the dropOff, pickUp, and search controllers.
@@ -409,11 +412,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             }
             //If angle between current and goal is significant
             //if error in heading is greater than 0.4 radians
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
+            else if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+            else if (fabs(angle_to_goal) < M_PI_2) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
             //Otherwise, drop off target and select new random uniform heading
@@ -430,14 +433,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Stay in this state until angle is minimized
         case STATE_MACHINE_ROTATE: {
             Logger::chat("ROTATING");
-            // Calculate the diffrence between current and desired
-            // heading in radians.
-            float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
 
             // If angle > 0.4 radians rotate but dont drive forward.
-            if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
+            if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
                 // rotate but dont drive  0.05 is to prevent turning in reverse
-                sendDriveCommand(0.05, errorYaw);
+                sendDriveCommand(0.05, desired_heading);
                 break;
             } else {
                 // move to differential drive step
@@ -452,18 +452,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
         	Logger::chat("SKID_STEER");
 
-            // calculate the distance between current and desired heading in radians
-            float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
-
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+            if (fabs(angle_to_goal) < M_PI_2) {
                 // drive and turn simultaniously
-                sendDriveCommand(searchVelocity, errorYaw/2);
+                sendDriveCommand(searchVelocity, desired_heading/2);
             }
             // goal is reached but desired heading is still wrong turn only
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
+            else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
-                sendDriveCommand(0.0, errorYaw);
+                sendDriveCommand(0.0, desired_heading);
             }
             else {
                 // stop
