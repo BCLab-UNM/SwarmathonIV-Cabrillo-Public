@@ -178,7 +178,6 @@ string publishedName;
 char prev_state_machine[128];
 
 // Publishers
-ros::Publisher stateMachinePublish;
 ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
@@ -272,7 +271,6 @@ int main(int argc, char **argv) {
     mapSubscriber = mNH.subscribe((publishedName + "/odom/ekf"), 10, mapHandler);
 
     status_publisher = mNH.advertise<std_msgs::String>((publishedName + "/status"), 1, true);
-    stateMachinePublish = mNH.advertise<std_msgs::String>((publishedName + "/state_machine"), 1, true);
     fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
     wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
     driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
@@ -301,7 +299,6 @@ int main(int argc, char **argv) {
 // controllers in the abridge package.
 void mobilityStateMachine(const ros::TimerEvent&) {
 
-    std_msgs::String stateMachineMsg;
     float rotateOnlyAngleTolerance = 0.4;
     int returnToSearchDelay = 5;
 
@@ -355,7 +352,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
         // If no adjustment needed, select new goal
         case STATE_MACHINE_TRANSFORM: {
-            stateMachineMsg.data = "TRANSFORMING";
+        	Logger::chat("TRANSFORMING");
 
             // If returning with a target
             if (targetCollected && !avoidingObstacle) {
@@ -432,7 +429,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Rotate left or right depending on sign of angle
         // Stay in this state until angle is minimized
         case STATE_MACHINE_ROTATE: {
-            stateMachineMsg.data = "ROTATING";
+            Logger::chat("ROTATING");
             // Calculate the diffrence between current and desired
             // heading in radians.
             float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
@@ -453,7 +450,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Drive forward
         // Stay in this state until angle is at least PI/2
         case STATE_MACHINE_SKID_STEER: {
-            stateMachineMsg.data = "SKID_STEER";
+        	Logger::chat("SKID_STEER");
 
             // calculate the distance between current and desired heading in radians
             float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
@@ -481,7 +478,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_PICKUP: {
-            stateMachineMsg.data = "PICKUP";
+        	Logger::chat("PICKUP");
 
             PickUpResult result;
 
@@ -540,7 +537,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_DROPOFF: {
-            stateMachineMsg.data = "DROPOFF";
+            Logger::chat("DROPOFF");
             break;
         }
 
@@ -564,13 +561,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     }
     else { // mode is NOT auto
         // publish current state for the operator to see
-        stateMachineMsg.data = "WAITING";
-    }
-
-    // publish state machine string for user, only if it has changed, though
-    if (strcmp(stateMachineMsg.data.c_str(), prev_state_machine) != 0) {
-        stateMachinePublish.publish(stateMachineMsg);
-        sprintf(prev_state_machine, "%s", stateMachineMsg.data.c_str());
+    	Logger::chat("WAITING");
     }
 }
 

@@ -11,6 +11,7 @@ public:
 
 	static void init(const std::string &rover);
 	static void log(const char *format, ...);
+	static void chat(const char *format, ...);
 
 	~Logger();
 
@@ -19,9 +20,14 @@ private:
 
 	Logger(const std::string &rover);
 
+	ros::Publisher _log;
+	char _logbuf[LOGGER_BUFFER_SIZE];
+	char _loglast[LOGGER_BUFFER_SIZE];
+
 	ros::Publisher _chat;
-	char _buffer[LOGGER_BUFFER_SIZE];
-	char _lastmsg[LOGGER_BUFFER_SIZE];
+	char _chatbuf[LOGGER_BUFFER_SIZE];
+	char _chatlast[LOGGER_BUFFER_SIZE];
+
 };
 
 #endif
