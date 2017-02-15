@@ -292,10 +292,6 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-#define distance_to_goal  hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y)
-#define angle_to_goal     angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))
-#define desired_heading   angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)
-
 // This is the top-most logic control block organised as a state machine.
 // This function calls the dropOff, pickUp, and search controllers.
 // This block passes the goal location to the proportional-integral-derivative
@@ -304,6 +300,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
     float rotateOnlyAngleTolerance = 0.4;
     int returnToSearchDelay = 5;
+
+    // Initial computation of key qantities. These may need to be redone if the goal location changes.
+    float distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
+    float angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
+    float desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
 
     // calls the averaging function, also responsible for
     // transform from Map frame to odom frame.
@@ -424,6 +425,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
                 goalLocation = searchController.search(currentLocation);
             }
+
+            // Re-compute key quantities. The goal location may change inside the transform state.
+            distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
+            angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
+            desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
 
             //Purposefully fall through to next case without breaking
         }
