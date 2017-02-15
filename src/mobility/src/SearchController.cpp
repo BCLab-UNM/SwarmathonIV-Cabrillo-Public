@@ -2,6 +2,7 @@
 
 SearchController::SearchController() {
   rng = new random_numbers::RandomNumberGenerator();
+  wanderDist = 2;
 }
 
 /**
@@ -14,8 +15,9 @@ geometry_msgs::Pose2D SearchController::search(geometry_msgs::Pose2D currentLoca
   goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
 
   //select new position 50 cm from current location
-  goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-  goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+  goalLocation.x = currentLocation.x + (wanderDist * cos(goalLocation.theta));
+  goalLocation.y = currentLocation.y + (wanderDist * sin(goalLocation.theta));
+
 
   return goalLocation;
 }
@@ -32,8 +34,9 @@ geometry_msgs::Pose2D SearchController::continueInterruptedSearch(geometry_msgs:
 
   //this of course assumes random walk continuation. Change for diffrent search methods.
   newGoalLocation.theta = oldGoalLocation.theta;
-  newGoalLocation.x = currentLocation.x + (0.50 * cos(oldGoalLocation.theta)); //(remainingGoalDist * cos(oldGoalLocation.theta));
-  newGoalLocation.y = currentLocation.y + (0.50 * sin(oldGoalLocation.theta)); //(remainingGoalDist * sin(oldGoalLocation.theta));
+
+  newGoalLocation.x = currentLocation.x + (wanderDist * cos(oldGoalLocation.theta)); //(remainingGoalDist * cos(oldGoalLocation.theta));
+  newGoalLocation.y = currentLocation.y + (wanderDist * sin(oldGoalLocation.theta)); //(remainingGoalDist * sin(oldGoalLocation.theta));
 
   return newGoalLocation;
 }
