@@ -28,6 +28,7 @@
 #include <ros/ros.h>
 #include <signal.h>
 
+#include "Logger.h"
 
 using namespace std;
 
@@ -181,7 +182,6 @@ ros::Publisher stateMachinePublish;
 ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
-ros::Publisher infoLogPublisher;
 ros::Publisher driveControlPublish;
 
 // Subscribers
@@ -191,7 +191,6 @@ ros::Subscriber targetSubscriber;
 ros::Subscriber obstacleSubscriber;
 ros::Subscriber odometrySubscriber;
 ros::Subscriber mapSubscriber;
-
 
 // Timers
 ros::Timer stateMachineTimer;
@@ -276,7 +275,6 @@ int main(int argc, char **argv) {
     stateMachinePublish = mNH.advertise<std_msgs::String>((publishedName + "/state_machine"), 1, true);
     fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
     wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
-    infoLogPublisher = mNH.advertise<std_msgs::String>("/infoLog", 1, true);
     driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
 
     publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
@@ -284,14 +282,10 @@ int main(int argc, char **argv) {
     targetDetectedTimer = mNH.createTimer(ros::Duration(0), targetDetectedReset, true);
 
     tfListener = new tf::TransformListener();
-    std_msgs::String msg;
-    msg.data = "Log Started";
-    infoLogPublisher.publish(msg);
 
-    stringstream ss;
-    ss << "Rover start delay set to " << startDelayInSeconds << " seconds";
-    msg.data = ss.str();
-    infoLogPublisher.publish(msg);
+    Logger::init(publishedName);
+    Logger::log("Log Started");
+    Logger::log("Rover start delay set to %d seconds", startDelayInSeconds);
 
     timerStartTime = time(0);
 
@@ -837,8 +831,7 @@ void mapAverage() {
             std_msgs::String msg;
             stringstream ss;
             ss << "Exception in mapAverage() " + (string)ex.what();
-            msg.data = ss.str();
-            infoLogPublisher.publish(msg);
+            Logger::log(ss.str().c_str());
         }
 
         // Use the position and orientation provided by the ros transform.
