@@ -25,6 +25,8 @@ class SearchController {
   private:
 
     random_numbers::RandomNumberGenerator* rng;
+    double wanderDist;
+
 };
 
 #endif /* SEARCH_CONTROLLER */
