@@ -65,7 +65,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	else {
 		obstacleMode.data = 2; //collision in front or on left side
 	}
-	if (sonarCenter->range < 0.12) //block in front of center unltrasound.
+	if (sonarCenter->range < 0.12) //block in front of center ultrasound.
 	{
 		obstacleMode.data = 4;
 	}
