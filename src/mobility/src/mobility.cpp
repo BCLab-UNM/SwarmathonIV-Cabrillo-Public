@@ -112,6 +112,7 @@ geometry_msgs::Pose2D currentLocationMap;
 geometry_msgs::Pose2D currentLocationAverage;
 geometry_msgs::Pose2D goalLocation;
 
+
 geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
 geometry_msgs::Pose2D centerLocationOdom;
@@ -124,6 +125,7 @@ bool targetDetected = false;
 bool targetCollected = false;
 int backupCount = 0;
 int circleCount = 0;
+int giveupCount = 0;
 
 // Set true when the target block is less than targetDist so we continue
 // attempting to pick it up rather than switching to another block in view.
@@ -229,6 +231,12 @@ int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
     string hostname(host);
+
+    //set food location to zero
+
+    backupCount = 0;
+    circleCount = 0;
+    giveupCount = 0;
 
     // instantiate random number generator
     rng = new random_numbers::RandomNumberGenerator();
@@ -365,12 +373,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_TRANSFORM: {
             stateMachineMsg.data = "TRANSFORMING";
 
-            if(circleCount > 0){
+            //Should I circle?
+            if(circleCount > 0 && !targetCollected){
             	stateMachineState = STATE_MACHINE_CIRCLE;
             	break;
             }
+
             // If returning with a target
             else if (targetCollected && !avoidingObstacle) {
+            	circleCount = 0;
                 // calculate the euclidean distance between
                 // centerLocation and currentLocation
                 dropOffController.setCenterDist(hypot(centerLocation.x - currentLocation.x, centerLocation.y - currentLocation.y));
@@ -422,6 +433,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     break;
                 }
             }
+
             //If angle between current and goal is significant
             //if error in heading is greater than 0.4 radians
             else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
@@ -435,7 +447,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
             	goalLocation = searchController.search(currentLocation);
-            	circleCount = 55;
+            	if(!targetCollected)
+            		circleCount = 55;
             }
 
             //Purposefully fall through to next case without breaking
@@ -526,6 +539,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 if (result.pickedUp) {
                     pickUpController.reset();
 
+
                     // assume target has been picked up by gripper
                     targetCollected = true;
                     result.pickedUp = false;
@@ -536,6 +550,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // set center as goal position
                     goalLocation.x = centerLocationOdom.x = 0;
                     goalLocation.y = centerLocationOdom.y;
+
+
 
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
