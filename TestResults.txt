@@ -5,3 +5,5 @@
 02/17/2017 Arturo cejudo -preliminary round--36 tags but lost 5 
 02/24/2017 Arturo cejudo -preliminary round--47 tags
 02/24/2017 Arturo cejudo -preliminary round--37 tags but lost 2
+02/24/2017 Jaime Garcia -preliminary round--16 tags lost two robots, it tried to pick up another tag and didn't recognize it already carried one
+02/24/2017 Jaime Garcia -preliminary round--6 tags most of them pushed out
