@@ -113,6 +113,7 @@ geometry_msgs::Pose2D currentLocationMap;
 geometry_msgs::Pose2D currentLocationAverage;
 geometry_msgs::Pose2D goalLocation;
 
+
 geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
 geometry_msgs::Pose2D centerLocationOdom;
@@ -124,6 +125,8 @@ float killSwitchTimeout = 10;
 bool targetDetected = false;
 bool targetCollected = false;
 int backupCount = 0;
+int circleCount = 0;
+int giveupCount = 0;
 
 // Set true when the target block is less than targetDist so we continue
 // attempting to pick it up rather than switching to another block in view.
@@ -169,6 +172,7 @@ std_msgs::String msg;
 #define STATE_MACHINE_PICKUP     3
 #define STATE_MACHINE_DROPOFF    4
 #define STATE_MACHINE_BACKUP	 5
+#define STATE_MACHINE_CIRCLE	 6
 
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
@@ -225,6 +229,12 @@ int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
     string hostname(host);
+
+    //set food location to zero
+
+    backupCount = 0;
+    circleCount = 0;
+    giveupCount = 0;
 
     // instantiate random number generator
     rng = new random_numbers::RandomNumberGenerator();
@@ -358,8 +368,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_TRANSFORM: {
         	Logger::chat("TRANSFORMING");
 
+            //Should I circle?
+            if(circleCount > 0 && !targetCollected){
+            	stateMachineState = STATE_MACHINE_CIRCLE;
+            	break;
+            }
+
             // If returning with a target
-            if (targetCollected && !avoidingObstacle) {
+            else if (targetCollected && !avoidingObstacle) {
+            	circleCount = 0;
                 // calculate the euclidean distance between
                 // centerLocation and currentLocation
                 dropOffController.setCenterDist(hypot(centerLocation.x - currentLocation.x, centerLocation.y - currentLocation.y));
@@ -411,6 +428,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     break;
                 }
             }
+
             //If angle between current and goal is significant
             //if error in heading is greater than 0.4 radians
             else if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
@@ -423,7 +441,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             //Otherwise, drop off target and select new random uniform heading
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
-                goalLocation = searchController.search(currentLocation);
+            	goalLocation = searchController.search(currentLocation);
+            	if(!targetCollected)
+            		circleCount = 55;
             }
 
             // Re-compute key quantities. The goal location may change inside the transform state.
@@ -513,6 +533,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 if (result.pickedUp) {
                     pickUpController.reset();
 
+
                     // assume target has been picked up by gripper
                     targetCollected = true;
                     result.pickedUp = false;
@@ -523,6 +544,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // set center as goal position
                     goalLocation.x = centerLocationOdom.x = 0;
                     goalLocation.y = centerLocationOdom.y;
+
+
 
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
@@ -545,6 +568,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_BACKUP: {
+        	stateMachineMsg.data = "BACKING UP";
 			if(backupCount > 0){
 				backupCount--;
 			}
@@ -554,9 +578,21 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 			// FIXME: Need to replace setVelocity(), how???
 			// setVelocity(-0.3, 0.0);
+			sendDriveCommand(-0.3, 0.0);
 
 			break;
 		}
+
+        case STATE_MACHINE_CIRCLE: {
+        	stateMachineMsg.data = "CIRCLING";
+        	circleCount--;
+        	if(circleCount <= 0){
+        		stateMachineState = STATE_MACHINE_TRANSFORM;
+        	}
+        	sendDriveCommand(0.4,0.6);
+
+        	break;
+        }
         default: {
             break;
         }
