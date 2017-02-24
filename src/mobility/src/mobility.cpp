@@ -664,6 +664,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         if (centerSeen && targetCollected) {
             stateMachineState = STATE_MACHINE_TRANSFORM;
             goalLocation = currentLocation;
+            circleCount = 0;
         }
 
         dropOffController.setDataTargets(count,countLeft,countRight);
@@ -673,6 +674,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
             float centeringTurn = 0.15; //radians
             stateMachineState = STATE_MACHINE_TRANSFORM;
+            circleCount = 0;
 
             // this code keeps the robot from driving over
             // the center when searching for blocks
