@@ -568,7 +568,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_BACKUP: {
-        	stateMachineMsg.data = "BACKING UP";
+        	Logger::chat("BACKING UP");
 			if(backupCount > 0){
 				backupCount--;
 			}
@@ -584,7 +584,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 		}
 
         case STATE_MACHINE_CIRCLE: {
-        	stateMachineMsg.data = "CIRCLING";
+        	Logger::chat("CIRCLING");
         	circleCount--;
         	if(circleCount <= 0){
         		stateMachineState = STATE_MACHINE_TRANSFORM;
