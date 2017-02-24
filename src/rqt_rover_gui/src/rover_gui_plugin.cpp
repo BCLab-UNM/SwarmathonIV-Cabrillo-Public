@@ -33,6 +33,7 @@
 #include <boost/foreach.hpp>
 
 //#include <regex> // For regex expressions
+#include <cstdlib>
 
 #include "MapData.h"
 
@@ -53,7 +54,8 @@ namespace rqt_rover_gui
       last_current_time_update_in_seconds(0.0),
       timer_start_time_in_seconds(0.0),
       timer_stop_time_in_seconds(0.0),
-      is_timer_on(false)
+      is_timer_on(false),
+	  score(0)
   {
     setObjectName("RoverGUI");
     info_log_messages = "";
@@ -614,6 +616,7 @@ void RoverGUIPlugin::scoreEventHandler(const ros::MessageEvent<const std_msgs::S
 
     const std_msgs::StringConstPtr& msg = event.getMessage();
     std::string tags_collected = msg->data;
+    score = atoi(tags_collected.c_str());
 
     emit updateNumberOfTagsCollected("<font color='white'>"+QString::fromStdString(tags_collected)+"</font>");
 }
@@ -1871,6 +1874,7 @@ void RoverGUIPlugin::clearSimulationButtonEventHandler()
     timer_start_time_in_seconds = 0.0;
     timer_stop_time_in_seconds = 0.0;
     current_simulated_time_in_seconds = 0.0;
+    last_current_time_update_in_seconds = 0.0;
     is_timer_on = false;
 }
 
@@ -2680,7 +2684,7 @@ void RoverGUIPlugin::clockEventHandler(const rosgraph_msgs::Clock::ConstPtr& msg
 			ss << "==== [elapsed " << setfill('0') << setw(2) << hours
 					<< ":" << setfill('0') << setw(2) << minutes
 					<< ":" << setfill('0') << setw(2) << seconds
-					<< "]: " <<  "XXX targets collected.";
+					<< "]: " <<  score << " targets collected.";
 			cout << ss.str() << endl;
 			emit sendInfoLogMessage(ss.str().c_str());
 		}

@@ -4,6 +4,8 @@
 #include <apriltags_ros/AprilTagDetectionArray.h>
 #include <ros/ros.h>
 
+#include "Logger.h"
+
 struct PickUpResult {
   float cmdVel;
   float angleError;

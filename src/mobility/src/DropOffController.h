@@ -4,6 +4,7 @@
 
 #include <geometry_msgs/Pose2D.h>
 #include <std_msgs/Float32.h>
+#include "Logger.h"
 
 struct DropOffResult {
     float cmdVel;

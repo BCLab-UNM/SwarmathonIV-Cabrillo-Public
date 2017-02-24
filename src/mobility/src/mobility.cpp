@@ -28,10 +28,11 @@
 #include <ros/ros.h>
 #include <signal.h>
 
+#include "Logger.h"
 
 using namespace std;
 
-/* Drive Parameters.
+/* Drive Parameters. ATTENTION: pay attention to the case of these variable names.
  *
  * These parameters control the driving behavior. They are factored out here for convenience.
  *
@@ -76,7 +77,7 @@ using namespace std;
  *		The angle the rover turns from the wall when not holding a target
  */
 static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
-static const double C_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
+static const double c_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
 static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
 static const double c_WANDER_RANDOM_ANGLE         = 0.25;
 static const double c_WANDER_RANDOM_DISTANCE      = 2.0;
@@ -181,11 +182,9 @@ string publishedName;
 char prev_state_machine[128];
 
 // Publishers
-ros::Publisher stateMachinePublish;
 ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
-ros::Publisher infoLogPublisher;
 ros::Publisher driveControlPublish;
 
 // Subscribers
@@ -195,7 +194,6 @@ ros::Subscriber targetSubscriber;
 ros::Subscriber obstacleSubscriber;
 ros::Subscriber odometrySubscriber;
 ros::Subscriber mapSubscriber;
-
 
 // Timers
 ros::Timer stateMachineTimer;
@@ -283,10 +281,8 @@ int main(int argc, char **argv) {
     mapSubscriber = mNH.subscribe((publishedName + "/odom/ekf"), 10, mapHandler);
 
     status_publisher = mNH.advertise<std_msgs::String>((publishedName + "/status"), 1, true);
-    stateMachinePublish = mNH.advertise<std_msgs::String>((publishedName + "/state_machine"), 1, true);
     fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
     wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
-    infoLogPublisher = mNH.advertise<std_msgs::String>("/infoLog", 1, true);
     driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
 
     publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
@@ -294,14 +290,10 @@ int main(int argc, char **argv) {
     targetDetectedTimer = mNH.createTimer(ros::Duration(0), targetDetectedReset, true);
 
     tfListener = new tf::TransformListener();
-    std_msgs::String msg;
-    msg.data = "Log Started";
-    infoLogPublisher.publish(msg);
 
-    stringstream ss;
-    ss << "Rover start delay set to " << startDelayInSeconds << " seconds";
-    msg.data = ss.str();
-    infoLogPublisher.publish(msg);
+    Logger::init(publishedName);
+    Logger::log("Log Started");
+    Logger::log("Rover start delay set to %d seconds", startDelayInSeconds);
 
     timerStartTime = time(0);
 
@@ -310,16 +302,19 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-
 // This is the top-most logic control block organised as a state machine.
 // This function calls the dropOff, pickUp, and search controllers.
 // This block passes the goal location to the proportional-integral-derivative
 // controllers in the abridge package.
 void mobilityStateMachine(const ros::TimerEvent&) {
 
-    std_msgs::String stateMachineMsg;
     float rotateOnlyAngleTolerance = 0.4;
     int returnToSearchDelay = 5;
+
+    // Initial computation of key qantities. These may need to be redone if the goal location changes.
+    float distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
+    float angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
+    float desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
 
     // calls the averaging function, also responsible for
     // transform from Map frame to odom frame.
@@ -371,7 +366,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
         // If no adjustment needed, select new goal
         case STATE_MACHINE_TRANSFORM: {
-            stateMachineMsg.data = "TRANSFORMING";
+        	Logger::chat("TRANSFORMING");
 
             //Should I circle?
             if(circleCount > 0 && !targetCollected){
@@ -436,11 +431,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
             //If angle between current and goal is significant
             //if error in heading is greater than 0.4 radians
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
+            else if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+            else if (fabs(angle_to_goal) < M_PI_2) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
             //Otherwise, drop off target and select new random uniform heading
@@ -451,6 +446,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             		circleCount = 55;
             }
 
+            // Re-compute key quantities. The goal location may change inside the transform state.
+            distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
+            angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
+            desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+
             //Purposefully fall through to next case without breaking
         }
 
@@ -458,15 +458,12 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Rotate left or right depending on sign of angle
         // Stay in this state until angle is minimized
         case STATE_MACHINE_ROTATE: {
-            stateMachineMsg.data = "ROTATING";
-            // Calculate the diffrence between current and desired
-            // heading in radians.
-            float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+            Logger::chat("ROTATING");
 
             // If angle > 0.4 radians rotate but dont drive forward.
-            if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
+            if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
                 // rotate but dont drive  0.05 is to prevent turning in reverse
-                sendDriveCommand(0.05, errorYaw);
+                sendDriveCommand(0.05, desired_heading);
                 break;
             } else {
                 // move to differential drive step
@@ -479,20 +476,17 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Drive forward
         // Stay in this state until angle is at least PI/2
         case STATE_MACHINE_SKID_STEER: {
-            stateMachineMsg.data = "SKID_STEER";
-
-            // calculate the distance between current and desired heading in radians
-            float errorYaw = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+        	Logger::chat("SKID_STEER");
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
+            if (fabs(angle_to_goal) < M_PI_2) {
                 // drive and turn simultaniously
-                sendDriveCommand(searchVelocity, errorYaw/2);
+                sendDriveCommand(searchVelocity, desired_heading/2);
             }
             // goal is reached but desired heading is still wrong turn only
-            else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
+            else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
-                sendDriveCommand(0.0, errorYaw);
+                sendDriveCommand(0.0, desired_heading);
             }
             else {
                 // stop
@@ -507,7 +501,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_PICKUP: {
-            stateMachineMsg.data = "PICKUP";
+        	Logger::chat("PICKUP");
 
             PickUpResult result;
 
@@ -569,7 +563,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_DROPOFF: {
-            stateMachineMsg.data = "DROPOFF";
+            Logger::chat("DROPOFF");
             break;
         }
 
@@ -606,13 +600,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     }
     else { // mode is NOT auto
         // publish current state for the operator to see
-        stateMachineMsg.data = "WAITING";
-    }
-
-    // publish state machine string for user, only if it has changed, though
-    if (strcmp(stateMachineMsg.data.c_str(), prev_state_machine) != 0) {
-        stateMachinePublish.publish(stateMachineMsg);
-        sprintf(prev_state_machine, "%s", stateMachineMsg.data.c_str());
+    	Logger::chat("WAITING");
     }
 }
 
@@ -733,14 +721,24 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
     if ((!targetDetected || targetCollected) && (message->data > 0)) {
         // obstacle on right side
         if (message->data == 1) {
-            // select new heading 0.2 radians to the left
-            goalLocation.theta = currentLocation.theta + 0.6;
+            // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
+            if (targetCollected == true) {
+            	goalLocation.theta = currentLocation.theta + c_BOUNCE_CONST;
+            }
+            else if (targetCollected == false){
+        		goalLocation.theta = currentLocation.theta + 0.6;
+            }
         }
 
         // obstacle in front or on left side
         else if (message->data == 2) {
-            // select new heading 0.2 radians to the right
-            goalLocation.theta = currentLocation.theta + 0.6;
+            // select new heading 0.6 radians to the RIGHT.
+            if (targetCollected == true) {
+            	goalLocation.theta = currentLocation.theta - c_BOUNCE_CONST;
+            }
+            else if (targetCollected == false){
+        		goalLocation.theta = currentLocation.theta - 0.6;
+            }
         }
 
         // continues an interrupted search
@@ -875,8 +873,7 @@ void mapAverage() {
             std_msgs::String msg;
             stringstream ss;
             ss << "Exception in mapAverage() " + (string)ex.what();
-            msg.data = ss.str();
-            infoLogPublisher.publish(msg);
+            Logger::log(ss.str().c_str());
         }
 
         // Use the position and orientation provided by the ros transform.
