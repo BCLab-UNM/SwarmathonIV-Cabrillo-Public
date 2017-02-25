@@ -438,16 +438,20 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             //Otherwise, drop off target and select new random uniform heading
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
-            	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
 
-            		setGoalLocation(foodLocation);
-            		foodLocation.x = 0.0;
-            		foodLocation.y = 0.0;
-            	}
-            	else {
-
+            	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
+            	// behavior from the navigation updates. This code should be put back in when
+            	// this feature is tested.
+            	//if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
+            	//
+            	//	setGoalLocation(foodLocation);
+            	//	foodLocation.x = 0.0;
+            	//	foodLocation.y = 0.0;
+            	//}
+            	//else {
+            	//
             		setGoalLocation(searchController.search(currentLocation));
-            	}
+            	//}
             }
 
             // Re-compute key quantities. The goal location may change inside the transform state.
@@ -742,6 +746,8 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
         if (message->data == 1) {
             // select new heading 0.2 radians to the left
 
+        	// FIXME:
+        	// the line below is redundant:
         	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
 
             // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
@@ -757,6 +763,8 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
         else if (message->data == 2) {
 
             // select new heading 0.2 radians to the right
+        	// FIXME:
+        	// the line below is redundant:
         	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
 
             // select new heading 0.6 radians to the RIGHT.
