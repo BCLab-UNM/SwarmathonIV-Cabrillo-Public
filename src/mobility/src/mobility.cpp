@@ -626,6 +626,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             float centeringTurn = 0.15; //radians
             stateMachineState = STATE_MACHINE_TRANSFORM;
 
+            // FIXME: This is broken, right is not defined here...
+            //
             // this code keeps the robot from driving over
             // the center when searching for blocks
             if (right) {
@@ -778,6 +780,22 @@ void sigintEventHandler(int sig) {
     ros::shutdown();
 }
 
+/*
+ * FIXME: This function is inefficient. It should use the filter technique
+ * for making a running average so that it doesn't have to iterate through
+ * this history list every call.
+ *
+ * Also: IMPORTANT the centerLocation variable is in the rover's odometry
+ * frame. That's makes odometry navigation to the center possible but
+ * we're switching to map navigation. The centerLocation variable should
+ * be changed to be in the Map frame.
+ *
+ * One more thing: This function is called from mobilityStateMachine() which
+ * is wasteful. The only time we need to put a new sample in the averager is
+ * when there's a new GPS sample given to mapHandler(). This function
+ * should be called from mapHandler()
+ *
+ */
 void mapAverage() {
     // store currentLocation in the averaging array
     mapLocation[mapCount] = currentLocationMap;
