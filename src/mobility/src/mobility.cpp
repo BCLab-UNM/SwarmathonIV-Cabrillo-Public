@@ -112,6 +112,7 @@ geometry_msgs::Pose2D currentLocation;
 geometry_msgs::Pose2D currentLocationMap;
 geometry_msgs::Pose2D currentLocationAverage;
 geometry_msgs::Pose2D goalLocation;
+geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
 geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
@@ -124,6 +125,10 @@ float killSwitchTimeout = 10;
 bool targetDetected = false;
 bool targetCollected = false;
 int backupCount = 0;
+
+//set true when the goal is less than 3 meters
+//set false when the goal is more than 3 meters
+bool useOdom = false;
 
 // Set true when the target block is less than targetDist so we continue
 // attempting to pick it up rather than switching to another block in view.
@@ -220,22 +225,27 @@ void mapHandler(const nav_msgs::Odometry::ConstPtr& message);
 void mobilityStateMachine(const ros::TimerEvent&);
 void publishStatusTimerEventHandler(const ros::TimerEvent& event);
 void targetDetectedReset(const ros::TimerEvent& event);
+//function to set goal location and set odom bool
+//and overloaded funciton for x, y and theta components
+void setGoalLocation(geometry_msgs::Pose2D location);
+void setGoalLocation(float, float, float);
+//function to return the currentLocation distinguishing between gps and odom
+geometry_msgs::Pose2D& getCurrentLocation();
 
 int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
     string hostname(host);
 
+    foodLocation.x = 0;
+    foodLocation.y = 0;
     // instantiate random number generator
     rng = new random_numbers::RandomNumberGenerator();
-
     //set initial random heading
-    goalLocation.theta = rng->uniformReal(0, 2 * M_PI);
 
     //select initial search position 50 cm from center (0,0)
-    goalLocation.x = 0.5 * cos(goalLocation.theta+M_PI);
-    goalLocation.y = 0.5 * sin(goalLocation.theta+M_PI);
 
+    setGoalLocation(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
     centerLocation.x = 0;
     centerLocation.y = 0;
     centerLocationOdom.x = 0;
@@ -302,9 +312,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     int returnToSearchDelay = 5;
 
     // Initial computation of key qantities. These may need to be redone if the goal location changes.
-    float distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
-    float angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
-    float desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+    geometry_msgs::Pose2D &currentLocationTemp = getCurrentLocation();
+    float distance_to_goal = hypot(goalLocation.x - currentLocationTemp.x, goalLocation.y - currentLocationTemp.y);
+    float angle_to_goal = angles::shortest_angular_distance(currentLocationTemp.theta, atan2(goalLocation.y - currentLocationTemp.y, goalLocation.x - currentLocationTemp.x));
+    float desired_heading = angles::shortest_angular_distance(currentLocationTemp.theta, goalLocation.theta);
 
     // calls the averaging function, also responsible for
     // transform from Map frame to odom frame.
@@ -362,8 +373,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             if (targetCollected && !avoidingObstacle) {
                 // calculate the euclidean distance between
                 // centerLocation and currentLocation
-                dropOffController.setCenterDist(hypot(centerLocation.x - currentLocation.x, centerLocation.y - currentLocation.y));
-                dropOffController.setDataLocations(centerLocation, currentLocation, timerTimeElapsed);
+            	currentLocationTemp = getCurrentLocation();
+                dropOffController.setCenterDist(hypot(centerLocation.x - currentLocationTemp.x, centerLocation.y - currentLocationTemp.y));
+                dropOffController.setDataLocations(centerLocation, getCurrentLocation(), timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
 
@@ -394,17 +406,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // move back to transform step
                     stateMachineState = STATE_MACHINE_TRANSFORM;
                     reachedCollectionPoint = false;;
-                    centerLocationOdom = currentLocation;
+                    centerLocationOdom = getCurrentLocation();
 
                     dropOffController.reset();
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
-                    goalLocation = result.centerGoal;
+
+                    setGoalLocation(result.centerGoal);
                     stateMachineState = STATE_MACHINE_ROTATE;
                     timerStartTime = time(0);
                 }
                 // we are in precision/timed driving
                 else {
-                    goalLocation = currentLocation;
+
+                    setGoalLocation(getCurrentLocation());
                     sendDriveCommand(result.cmdVel,result.angleError);
                     stateMachineState = STATE_MACHINE_TRANSFORM;
 
@@ -420,16 +434,31 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             else if (fabs(angle_to_goal) < M_PI_2) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
+
             //Otherwise, drop off target and select new random uniform heading
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
-                goalLocation = searchController.search(currentLocation);
+
+            	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
+            	// behavior from the navigation updates. This code should be put back in when
+            	// this feature is tested.
+            	//if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
+            	//
+            	//	setGoalLocation(foodLocation);
+            	//	foodLocation.x = 0.0;
+            	//	foodLocation.y = 0.0;
+            	//}
+            	//else {
+            	//
+            		setGoalLocation(searchController.search(currentLocation));
+            	//}
             }
 
             // Re-compute key quantities. The goal location may change inside the transform state.
-            distance_to_goal = hypot(goalLocation.x - currentLocation.x, goalLocation.y - currentLocation.y);
-            angle_to_goal = angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x));
-            desired_heading = angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta);
+            currentLocationTemp = getCurrentLocation();
+            distance_to_goal = hypot(goalLocation.x - currentLocationTemp.x, goalLocation.y - currentLocationTemp.y);
+            angle_to_goal = angles::shortest_angular_distance(currentLocationTemp.theta, atan2(goalLocation.y - currentLocationTemp.y, goalLocation.x - currentLocationTemp.x));
+            desired_heading = angles::shortest_angular_distance(currentLocationTemp.theta, goalLocation.theta);
 
             //Purposefully fall through to next case without breaking
         }
@@ -512,18 +541,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                 if (result.pickedUp) {
                     pickUpController.reset();
-
+                    currentLocationTemp = getCurrentLocation();
                     // assume target has been picked up by gripper
                     targetCollected = true;
                     result.pickedUp = false;
+                    // store coordinates of last pickup for return
+                    foodLocation.x = currentLocationTemp.x;
+                    foodLocation.y = currentLocationTemp.y;
+
                     stateMachineState = STATE_MACHINE_ROTATE;
 
-                    goalLocation.theta = atan2(centerLocationOdom.y - currentLocation.y, centerLocationOdom.x - currentLocation.x);
 
                     // set center as goal position
-                    goalLocation.x = centerLocationOdom.x = 0;
-                    goalLocation.y = centerLocationOdom.y;
-
+                    setGoalLocation(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationTemp.y, centerLocationOdom.x - currentLocationTemp.x));
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
                     angle.data = 0.8;
@@ -581,6 +611,31 @@ void sendDriveCommand(double linearVel, double angularError)
  * ROS CALLBACK HANDLERS *
  *************************/
 
+
+void setGoalLocation(geometry_msgs::Pose2D location) {
+	goalLocation = location;
+	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
+	if(hypot(currentLocationTemp.x - location.x, currentLocationTemp.y - location.y) > 3) {
+		useOdom = false;
+	} else {
+		useOdom = true;
+	}
+	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
+}
+//overload function setGoalLocation
+void setGoalLocation(float x, float y, float theta){
+	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
+	goalLocation.x = x;
+	goalLocation.y = y;
+	goalLocation.theta = theta;
+	if(hypot(currentLocationTemp.x - goalLocation.x, currentLocationTemp.y - goalLocation.y) > 3) {
+		useOdom = false;
+	} else {
+		useOdom = true;
+	}
+	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
+}
+
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
 
     // If in manual mode do not try to automatically pick up the target
@@ -615,7 +670,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
         if (centerSeen && targetCollected) {
             stateMachineState = STATE_MACHINE_TRANSFORM;
-            goalLocation = currentLocation;
+
+            setGoalLocation(getCurrentLocation());
         }
 
         dropOffController.setDataTargets(count,countLeft,countRight);
@@ -633,15 +689,20 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             if (right) {
                 // turn away from the center to the left if just driving
                 // around/searching.
-                goalLocation.theta += centeringTurn;
+
+            	setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
+                //goalLocation.theta += centeringTurn;
             } else {
                 // turn away from the center to the right if just driving
                 // around/searching.
-                goalLocation.theta -= centeringTurn;
+
+            	setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
+                //goalLocation.theta -= centeringTurn;
             }
 
             // continues an interrupted search
-            goalLocation = searchController.continueInterruptedSearch(currentLocation, goalLocation);
+
+            setGoalLocation(searchController.continueInterruptedSearch(getCurrentLocation(), goalLocation));
 
             targetDetected = false;
             pickUpController.reset();
@@ -685,28 +746,41 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
     if ((!targetDetected || targetCollected) && (message->data > 0)) {
         // obstacle on right side
         if (message->data == 1) {
+            // select new heading 0.2 radians to the left
+
+        	// FIXME:
+        	// the line below is redundant:
+        	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
+
             // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
             if (targetCollected == true) {
-            	goalLocation.theta = currentLocation.theta + c_BOUNCE_CONST;
+            	setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
             }
             else if (targetCollected == false){
-        		goalLocation.theta = currentLocation.theta + 0.6;
+        		setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + 0.6);
             }
         }
 
         // obstacle in front or on left side
         else if (message->data == 2) {
+
+            // select new heading 0.2 radians to the right
+        	// FIXME:
+        	// the line below is redundant:
+        	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
+
             // select new heading 0.6 radians to the RIGHT.
             if (targetCollected == true) {
-            	goalLocation.theta = currentLocation.theta - c_BOUNCE_CONST;
+            	setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta - c_BOUNCE_CONST);
             }
             else if (targetCollected == false){
-        		goalLocation.theta = currentLocation.theta - 0.6;
+        		setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta - 0.6);
             }
         }
 
         // continues an interrupted search
-        goalLocation = searchController.continueInterruptedSearch(currentLocation, goalLocation);
+
+        setGoalLocation(searchController.continueInterruptedSearch(currentLocation, goalLocation));
 
         // switch to transform state to trigger collision avoidance
         stateMachineState = STATE_MACHINE_ROTATE;
@@ -722,8 +796,15 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
     }
 }
 
+geometry_msgs::Pose2D& getCurrentLocation() {
+	if(useOdom)return currentLocation;
+	return currentLocationMap;
+}
+
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
+
     //Get (x,y) location directly from pose
+
     currentLocation.x = message->pose.pose.position.x;
     currentLocation.y = message->pose.pose.position.y;
 
@@ -736,7 +817,8 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 }
 
 void mapHandler(const nav_msgs::Odometry::ConstPtr& message) {
-    //Get (x,y) location directly from pose
+
+	//Get (x,y) location directly from pose
     currentLocationMap.x = message->pose.pose.position.x;
     currentLocationMap.y = message->pose.pose.position.y;
 
