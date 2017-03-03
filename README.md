@@ -8,6 +8,8 @@ This repository contains:
 2. 3D .STL models for the physical Swarmie build 
 3. Bash shell scripts for initializing simulated Swarmies in the Gazebo simulator, as well as physical Swarmies
 
+- For a step-by-step guide to using Swarmathon-ROS to control a physical Swarmie robot, please see the instructions in the physical robot [Quick Start Guide](https://github.com/BCLab-UNM/Swarmathon-Docs/blob/master/Quick%20Start%20Physical%20Guide.md).
+
 - Please submit bug reports for Swarmathon-ROS through GitHub's Issues system. For all other questions regarding the Swarmathon-ROS code base, please visit the forums on the [NASA Swarmathon website](http://www.nasaswarmathon.com).
 
 - We recommend Jason M. O'Kane's [A Gentle Introduction to ROS](https://cse.sc.edu/~jokane/agitr/) for an in-depth walkthrough.
@@ -23,6 +25,12 @@ Swarmathon-ROS is designed and tested exclusively on the 64 bit version of Ubunt
 Follow the detailed instructions for installing ROS Indigo under Ubuntu 14.04 [here](http://wiki.ros.org/indigo/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo 2 simulator.
 
 ##### 2. Install additional ROS plugins
+
+We use the [catkin_tools](https://catkin-tools.readthedocs.io/) package to build the Swarmathon-ROS code base:
+
+```
+sudo apt-get install python-catkin-tools
+```
 
 Our simulated and physical Swarmies use existing ROS plugins, external to this repo, to facilitate non-linear state estimation through sensor fusion and frame transforms. These plugins are contained in the [robot_localization](http://wiki.ros.org/robot_localization) package, which should be installed using the apt-get package management tool:
 
@@ -41,7 +49,6 @@ Finally, our physical Swarmies use a USB camera driver, contained in the [usb_ca
 ```
 sudo apt-get install ros-indigo-usb-cam
 ```
-
 
 ##### 3. Install additional Gazebo plugins
 
@@ -67,33 +74,27 @@ sudo apt-get install git
 
 ##### 5. Install Swarmathon-ROS
 
-1. Clone this GitHub repository to your home directory (~):
+1. Clone this GitHub repository to your home directory (~), renaming the repo so ROS and catkin can properly identify it:
 
   ```
   cd ~
-  git clone https://github.com/BCLab-UNM/Swarmathon-ROS.git
+  git clone https://github.com/BCLab-UNM/Swarmathon-ROS.git rover_workspace
   ```
 
-2. Rename the downloaded repo so it can be properly identified by ROS and catkin:
-
-  ```
-  mv ~/Swarmathon-ROS ~/rover_workspace
-  ```
-
-3. Change your current working directory to the root directory of the downloaded repo:
+2. Change your current working directory to the root directory of the downloaded repo:
 
   ```
   cd ~/rover_workspace
   ```
 
-4. Set up [ublox](http://wiki.ros.org/ublox) GPS submodule:
+3. Set up [ublox](http://wiki.ros.org/ublox) GPS submodule:
 
   ```
   git submodule init
   git submodule update
   ```
 
-5. Compile Swarmathon-ROS as a ROS catkin workspace:
+4. Compile Swarmathon-ROS as a ROS catkin workspace:
  
   Make sure bash is aware of the location of the ROS environment:
   ```
@@ -104,20 +105,20 @@ sudo apt-get install git
   source ~/.bashrc
   ```
   
-  Run catkin_make to build the Swarmathon code:
+  Tell catkin to build the Swarmathon code:
   
   ```
-  catkin_make
+  catkin build
   ```
   
-6. Update your bash session to automatically source the setup file for Swarmathon-ROS:
+5. Update your bash session to automatically source the setup file for Swarmathon-ROS:
 
   ```
   echo "source ~/rover_workspace/devel/setup.bash" >> ~/.bashrc
   source ~/.bashrc
   ```
 
-7. Update your bash session to automatically export the enviromental variable that stores the location of Gazebo's model files:
+6. Update your bash session to automatically export the enviromental variable that stores the location of Gazebo's model files:
 
   ```
   echo "export GAZEBO_MODEL_PATH=~/rover_workspace/simulation/models" >> ~/.bashrc
@@ -208,13 +209,11 @@ Source code for Swarmathon-ROS can be found in the ```~/rover_workspace/src``` d
 
   ```
   sudo apt-get install qtcreator
-  sudo apt-get install python-catkin-tools
   ```
   
 2. Build the workspace:
 
   ```
-  catkin clean --yes
   catkin build
   ```
 

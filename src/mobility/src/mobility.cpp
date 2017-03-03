@@ -1,12 +1,12 @@
 #include <ros/ros.h>
 
-//ROS libraries
+// ROS libraries
 #include <angles/angles.h>
 #include <random_numbers/random_numbers.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
 
-//ROS messages
+// ROS messages
 #include <std_msgs/Float32.h>
 #include <std_msgs/Int16.h>
 #include <std_msgs/UInt8.h>
@@ -18,13 +18,21 @@
 #include <nav_msgs/Odometry.h>
 #include <apriltags_ros/AprilTagDetectionArray.h>
 
-// To handle shutdown signals so the node quits properly in response to "rosnode kill"
+// Include Controllers
+#include "PickUpController.h"
+#include "DropOffController.h"
+#include "SearchController.h"
+
+// To handle shutdown signals so the node quits
+// properly in response to "rosnode kill"
 #include <ros/ros.h>
 #include <signal.h>
 
+#include "Logger.h"
+
 using namespace std;
 
-/* Drive Parameters.
+/* Drive Parameters. ATTENTION: pay attention to the case of these variable names.
  *
  * These parameters control the driving behavior. They are factored out here for convenience.
  *
@@ -69,7 +77,7 @@ using namespace std;
  *		The angle the rover turns from the wall when not holding a target
  */
 static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
-static const double C_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
+static const double c_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
 static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
 static const double c_WANDER_RANDOM_ANGLE         = 0.25;
 static const double c_WANDER_RANDOM_DISTANCE      = 2.0;
@@ -83,32 +91,90 @@ static const double c_ROTATE_GIVEUP_SECONDS       = 4.0;
 static const double c_TRANSFORM_WAIT_SECONDS      = 0.1;
 static const double c_BOUNCE_CONST                = 1.8;
 
-//Random number generator
-random_numbers::RandomNumberGenerator* rng;	
+// Random number generator
+random_numbers::RandomNumberGenerator* rng;
 
-//Mobility Logic Functions
-void setVelocity(double linearVel, double angularVel);
+// Create controllers
+PickUpController pickUpController;
+DropOffController dropOffController;
+SearchController searchController;
+
+// Mobility Logic Functions
+void sendDriveCommand(double linearVel, double angularVel);
 void openFingers(); // Open fingers to 90 degrees
 void closeFingers();// Close fingers to 0 degrees
 void raiseWrist();  // Return wrist back to 0 degrees
 void lowerWrist();  // Lower wrist to 50 degrees
+void mapAverage();  // constantly averages last 100 positions from map
 
-//Numeric Variables
+// Numeric Variables for rover positioning
 geometry_msgs::Pose2D currentLocation;
+geometry_msgs::Pose2D currentLocationMap;
+geometry_msgs::Pose2D currentLocationAverage;
 geometry_msgs::Pose2D goalLocation;
+geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
+
+geometry_msgs::Pose2D centerLocation;
+geometry_msgs::Pose2D centerLocationMap;
+geometry_msgs::Pose2D centerLocationOdom;
+
 int currentMode = 0;
-float mobilityLoopTimeStep = 0.1; //time between the mobility loop calls
+float mobilityLoopTimeStep = 0.1; // time between the mobility loop calls
 float status_publish_interval = 1;
 float killSwitchTimeout = 10;
 bool targetDetected = false;
 bool targetCollected = false;
 int backupCount = 0;
 
+//set true when the goal is less than 3 meters
+//set false when the goal is more than 3 meters
+bool useOdom = false;
+
+// Set true when the target block is less than targetDist so we continue
+// attempting to pick it up rather than switching to another block in view.
+bool lockTarget = false;
+
+// Failsafe state. No legitimate behavior state. If in this state for too long
+// return to searching as default behavior.
+bool timeOut = false;
+
+// Set to true when the center ultrasound reads less than 0.14m. Usually means
+// a picked up cube is in the way.
+bool blockBlock = false;
+
+// central collection point has been seen (aka the nest)
+bool centerSeen = false;
+
+// Set true when we are insie the center circle and we need to drop the block,
+// back out, and reset the boolean cascade.
+bool reachedCollectionPoint = false;
+
+// used for calling code once but not in main
+bool init = false;
+
+// used to remember place in mapAverage array
+int mapCount = 0;
+
+// How many points to use in calculating the map average position
+const unsigned int mapHistorySize = 500;
+
+// An array in which to store map positions
+geometry_msgs::Pose2D mapLocation[mapHistorySize];
+
+bool avoidingObstacle = false;
+
+float searchVelocity = 0.2; // meters/second
+
+std_msgs::String msg;
+
 // state machine states
-#define STATE_MACHINE_TRANSFORM	0
-#define STATE_MACHINE_ROTATE	1
-#define STATE_MACHINE_TRANSLATE	2
-#define STATE_MACHINE_BACKUP	3
+#define STATE_MACHINE_TRANSFORM	 0
+#define STATE_MACHINE_ROTATE	 1
+#define STATE_MACHINE_SKID_STEER 2
+#define STATE_MACHINE_PICKUP     3
+#define STATE_MACHINE_DROPOFF    4
+#define STATE_MACHINE_BACKUP	 5
+
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
 geometry_msgs::Twist velocity;
@@ -116,26 +182,32 @@ char host[128];
 string publishedName;
 char prev_state_machine[128];
 
-//Publishers
-ros::Publisher velocityPublish;
-ros::Publisher stateMachinePublish;
+// Publishers
 ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
-ros::Publisher infoLogPublisher;
+ros::Publisher driveControlPublish;
 
-//Subscribers
+// Subscribers
 ros::Subscriber joySubscriber;
 ros::Subscriber modeSubscriber;
 ros::Subscriber targetSubscriber;
 ros::Subscriber obstacleSubscriber;
 ros::Subscriber odometrySubscriber;
+ros::Subscriber mapSubscriber;
 
-//Timers
+// Timers
 ros::Timer stateMachineTimer;
 ros::Timer publish_status_timer;
-ros::Timer killSwitchTimer;
 ros::Timer targetDetectedTimer;
+
+// records time for delays in sequanced actions, 1 second resolution.
+time_t timerStartTime;
+
+// An initial delay to allow the rover to gather enough position data to 
+// average its location.
+unsigned int startDelayInSeconds = 1;
+float timerTimeElapsed = 0;
 
 //Transforms
 tf::TransformListener *tfListener;
@@ -149,26 +221,46 @@ void modeHandler(const std_msgs::UInt8::ConstPtr& message);
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& tagInfo);
 void obstacleHandler(const std_msgs::UInt8::ConstPtr& message);
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message);
+void mapHandler(const nav_msgs::Odometry::ConstPtr& message);
 void mobilityStateMachine(const ros::TimerEvent&);
 void publishStatusTimerEventHandler(const ros::TimerEvent& event);
-void killSwitchTimerEventHandler(const ros::TimerEvent& event);
 void targetDetectedReset(const ros::TimerEvent& event);
+//function to set goal location and set odom bool
+//and overloaded funciton for x, y and theta components
+void setGoalLocation(geometry_msgs::Pose2D location);
+void setGoalLocation(float, float, float);
+//function to return the currentLocation distinguishing between gps and odom
+geometry_msgs::Pose2D& getCurrentLocation();
 
 int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
     string hostname(host);
 
-    rng = new random_numbers::RandomNumberGenerator(); //instantiate random number generator
-    goalLocation.theta = rng->uniformReal(0, 2 * M_PI); //set initial random heading
+    foodLocation.x = 0;
+    foodLocation.y = 0;
+    // instantiate random number generator
+    rng = new random_numbers::RandomNumberGenerator();
+    //set initial random heading
 
     //select initial search position 50 cm from center (0,0)
-	goalLocation.x = 0.5 * cos(goalLocation.theta);
-	goalLocation.y = 0.5 * sin(goalLocation.theta);
+
+    setGoalLocation(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
+    centerLocation.x = 0;
+    centerLocation.y = 0;
+    centerLocationOdom.x = 0;
+    centerLocationOdom.y = 0;
+
+    for (int i = 0; i < 100; i++) {
+        mapLocation[i].x = 0;
+        mapLocation[i].y = 0;
+        mapLocation[i].theta = 0;
+    }
 
     if (argc >= 2) {
         publishedName = argv[1];
-        cout << "Welcome to the world of tomorrow " << publishedName << "!  Mobility module started." << endl;
+        cout << "Welcome to the world of tomorrow " << publishedName
+             << "!  Mobility turnDirectionule started." << endl;
     } else {
         publishedName = hostname;
         cout << "No Name Selected. Default is: " << publishedName << endl;
@@ -178,343 +270,679 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, (publishedName + "_MOBILITY"), ros::init_options::NoSigintHandler);
     ros::NodeHandle mNH;
 
-    signal(SIGINT, sigintEventHandler); // Register the SIGINT event handler so the node can shutdown properly
+    // Register the SIGINT event handler so the node can shutdown properly
+    signal(SIGINT, sigintEventHandler);
 
     joySubscriber = mNH.subscribe((publishedName + "/joystick"), 10, joyCmdHandler);
     modeSubscriber = mNH.subscribe((publishedName + "/mode"), 1, modeHandler);
     targetSubscriber = mNH.subscribe((publishedName + "/targets"), 10, targetHandler);
     obstacleSubscriber = mNH.subscribe((publishedName + "/obstacle"), 10, obstacleHandler);
     odometrySubscriber = mNH.subscribe((publishedName + "/odom/filtered"), 10, odometryHandler);
+    mapSubscriber = mNH.subscribe((publishedName + "/odom/ekf"), 10, mapHandler);
 
     status_publisher = mNH.advertise<std_msgs::String>((publishedName + "/status"), 1, true);
-    velocityPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/velocity"), 10);
-    stateMachinePublish = mNH.advertise<std_msgs::String>((publishedName + "/state_machine"), 1, true);
-    fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle"), 1, true);
-    wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle"), 1, true);
-    infoLogPublisher = mNH.advertise<std_msgs::String>("/infoLog", 1, true);
+    fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
+    wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
+    driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
 
     publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
-    //killSwitchTimer = mNH.createTimer(ros::Duration(killSwitchTimeout), killSwitchTimerEventHandler);
     stateMachineTimer = mNH.createTimer(ros::Duration(mobilityLoopTimeStep), mobilityStateMachine);
     targetDetectedTimer = mNH.createTimer(ros::Duration(0), targetDetectedReset, true);
-    
+
     tfListener = new tf::TransformListener();
 
-    std_msgs::String msg;
-    msg.data = "Log Started";
-    infoLogPublisher.publish(msg);
+    Logger::init(publishedName);
+    Logger::log("Log Started");
+    Logger::log("Rover start delay set to %d seconds", startDelayInSeconds);
+
+    timerStartTime = time(0);
+
     ros::spin();
-    
+
     return EXIT_SUCCESS;
 }
 
+// This is the top-most logic control block organised as a state machine.
+// This function calls the dropOff, pickUp, and search controllers.
+// This block passes the goal location to the proportional-integral-derivative
+// controllers in the abridge package.
 void mobilityStateMachine(const ros::TimerEvent&) {
-    std_msgs::String stateMachineMsg;
-    
-    if (currentMode == 2 || currentMode == 3) { //Robot is in automode
 
-		switch(stateMachineState) {
-			
-			//Select rotation or translation based on required adjustment
-			//If no adjustment needed, select new goal
-			case STATE_MACHINE_TRANSFORM: {
-				stateMachineMsg.data = "TRANSFORMING";
-				//If angle between current and goal is significant
+    float rotateOnlyAngleTolerance = 0.4;
+    int returnToSearchDelay = 5;
 
-				if(backupCount > 0){
-					stateMachineState = STATE_MACHINE_BACKUP;
-				}
-				else if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
-					stateMachineState = STATE_MACHINE_ROTATE; //rotate
-				}
-				//If goal has not yet been reached
-				else if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
-					stateMachineState = STATE_MACHINE_TRANSLATE; //translate
-				}
-				//If returning with a target
-				else if (targetCollected) {
-					//If goal has not yet been reached
-					if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > 0.5) {
-				        //set angle to center as goal heading
-						goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
-						
-						//set center as goal position
-						goalLocation.x = 0.0;
-						goalLocation.y = 0.0;
-					}
-					//Otherwise, drop off target and select new random uniform heading
-					else {
-						//open fingers
-						std_msgs::Float32 angle;
-						angle.data = M_PI_2;
-						fingerAnglePublish.publish(angle);
-						
-						//reset flag
-						targetCollected = false;
-						
+    // Initial computation of key qantities. These may need to be redone if the goal location changes.
+    geometry_msgs::Pose2D &currentLocationTemp = getCurrentLocation();
+    float distance_to_goal = hypot(goalLocation.x - currentLocationTemp.x, goalLocation.y - currentLocationTemp.y);
+    float angle_to_goal = angles::shortest_angular_distance(currentLocationTemp.theta, atan2(goalLocation.y - currentLocationTemp.y, goalLocation.x - currentLocationTemp.x));
+    float desired_heading = angles::shortest_angular_distance(currentLocationTemp.theta, goalLocation.theta);
 
-						goalLocation.theta = rng->uniformReal(0, 2 * M_PI);
-					}
-				}
+    // calls the averaging function, also responsible for
+    // transform from Map frame to odom frame.
+    mapAverage();
+
+    // Robot is in automode
+    if (currentMode == 2 || currentMode == 3) {
 
 
-				//If no targets have been detected, assign a new goal
-				else if (!targetDetected) {
-					//select new heading from Gaussian distribution around current heading
-					goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
-					
-					//select new position 50 cm from current location
-					goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-					goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
-				}
-				
-				//Purposefully fall through to next case without breaking
+        // time since timerStartTime was set to current time
+        timerTimeElapsed = time(0) - timerStartTime;
+
+        // init code goes here. (code that runs only once at start of
+        // auto mode but wont work in main goes here)
+        if (!init) {
+            if (timerTimeElapsed > startDelayInSeconds) {
+                // Set the location of the center circle location in the map
+                // frame based upon our current average location on the map.
+                centerLocationMap.x = currentLocationAverage.x;
+                centerLocationMap.y = currentLocationAverage.y;
+                centerLocationMap.theta = currentLocationAverage.theta;
+
+                // initialization has run
+                init = true;
+            } else {
+                return;
+            }
+
+        }
+
+        // If no collected or detected blocks set fingers
+        // to open wide and raised position.
+        if (!targetCollected && !targetDetected) {
+            // set gripper
+            std_msgs::Float32 angle;
+
+            // open fingers
+            angle.data = M_PI_2;
+
+            fingerAnglePublish.publish(angle);
+            angle.data = 0;
+
+            // raise wrist
+            wristAnglePublish.publish(angle);
+        }
+
+        // Select rotation or translation based on required adjustment
+        switch(stateMachineState) {
+
+        // If no adjustment needed, select new goal
+        case STATE_MACHINE_TRANSFORM: {
+        	Logger::chat("TRANSFORMING");
+
+            // If returning with a target
+            if (targetCollected && !avoidingObstacle) {
+                // calculate the euclidean distance between
+                // centerLocation and currentLocation
+            	currentLocationTemp = getCurrentLocation();
+                dropOffController.setCenterDist(hypot(centerLocation.x - currentLocationTemp.x, centerLocation.y - currentLocationTemp.y));
+                dropOffController.setDataLocations(centerLocation, getCurrentLocation(), timerTimeElapsed);
+
+                DropOffResult result = dropOffController.getState();
+
+                if (result.timer) {
+                    timerStartTime = time(0);
+                    reachedCollectionPoint = true;
+                }
+
+                std_msgs::Float32 angle;
+
+                if (result.fingerAngle != -1) {
+                    angle.data = result.fingerAngle;
+                    fingerAnglePublish.publish(angle);
+                }
+
+                if (result.wristAngle != -1) {
+                    angle.data = result.wristAngle;
+                    wristAnglePublish.publish(angle);
+                }
+
+                if (result.reset) {
+                    timerStartTime = time(0);
+                    targetCollected = false;
+                    targetDetected = false;
+                    lockTarget = false;
+                    sendDriveCommand(0.0,0);
+
+                    // move back to transform step
+                    stateMachineState = STATE_MACHINE_TRANSFORM;
+                    reachedCollectionPoint = false;;
+                    centerLocationOdom = getCurrentLocation();
+
+                    dropOffController.reset();
+                } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
+
+                    setGoalLocation(result.centerGoal);
+                    stateMachineState = STATE_MACHINE_ROTATE;
+                    timerStartTime = time(0);
+                }
+                // we are in precision/timed driving
+                else {
+
+                    setGoalLocation(getCurrentLocation());
+                    sendDriveCommand(result.cmdVel,result.angleError);
+                    stateMachineState = STATE_MACHINE_TRANSFORM;
+
+                    break;
+                }
+            }
+            //If angle between current and goal is significant
+            //if error in heading is greater than 0.4 radians
+            else if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
+                stateMachineState = STATE_MACHINE_ROTATE;
+            }
+            //If goal has not yet been reached drive and maintane heading
+            else if (fabs(angle_to_goal) < M_PI_2) {
+                stateMachineState = STATE_MACHINE_SKID_STEER;
+            }
+
+            //Otherwise, drop off target and select new random uniform heading
+            //If no targets have been detected, assign a new goal
+            else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
+
+            	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
+            	// behavior from the navigation updates. This code should be put back in when
+            	// this feature is tested.
+            	//if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
+            	//
+            	//	setGoalLocation(foodLocation);
+            	//	foodLocation.x = 0.0;
+            	//	foodLocation.y = 0.0;
+            	//}
+            	//else {
+            	//
+            		setGoalLocation(searchController.search(currentLocation));
+            	//}
+            }
+
+            // Re-compute key quantities. The goal location may change inside the transform state.
+            currentLocationTemp = getCurrentLocation();
+            distance_to_goal = hypot(goalLocation.x - currentLocationTemp.x, goalLocation.y - currentLocationTemp.y);
+            angle_to_goal = angles::shortest_angular_distance(currentLocationTemp.theta, atan2(goalLocation.y - currentLocationTemp.y, goalLocation.x - currentLocationTemp.x));
+            desired_heading = angles::shortest_angular_distance(currentLocationTemp.theta, goalLocation.theta);
+
+            //Purposefully fall through to next case without breaking
+        }
+
+        // Calculate angle between currentLocation.theta and goalLocation.theta
+        // Rotate left or right depending on sign of angle
+        // Stay in this state until angle is minimized
+        case STATE_MACHINE_ROTATE: {
+            Logger::chat("ROTATING");
+
+            // If angle > 0.4 radians rotate but dont drive forward.
+            if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
+                // rotate but dont drive  0.05 is to prevent turning in reverse
+                sendDriveCommand(0.05, desired_heading);
+                break;
+            } else {
+                // move to differential drive step
+                stateMachineState = STATE_MACHINE_SKID_STEER;
+                //fall through on purpose.
+            }
+        }
+
+        // Calculate angle between currentLocation.x/y and goalLocation.x/y
+        // Drive forward
+        // Stay in this state until angle is at least PI/2
+        case STATE_MACHINE_SKID_STEER: {
+        	Logger::chat("SKID_STEER");
+
+            // goal not yet reached drive while maintaining proper heading.
+            if (fabs(angle_to_goal) < M_PI_2) {
+                // drive and turn simultaniously
+                sendDriveCommand(searchVelocity, desired_heading/2);
+            }
+            // goal is reached but desired heading is still wrong turn only
+            else if (fabs(desired_heading) > 0.1) {
+                 // rotate but dont drive
+                sendDriveCommand(0.0, desired_heading);
+            }
+            else {
+                // stop
+                sendDriveCommand(0.0, 0.0);
+                avoidingObstacle = false;
+
+                // move back to transform step
+                stateMachineState = STATE_MACHINE_TRANSFORM;
+            }
+
+            break;
+        }
+
+        case STATE_MACHINE_PICKUP: {
+        	Logger::chat("PICKUP");
+
+            PickUpResult result;
+
+            // we see a block and have not picked one up yet
+            if (targetDetected && !targetCollected) {
+                result = pickUpController.pickUpSelectedTarget(blockBlock);
+                sendDriveCommand(result.cmdVel,result.angleError);
+                std_msgs::Float32 angle;
+
+                if (result.fingerAngle != -1) {
+                    angle.data = result.fingerAngle;
+                    fingerAnglePublish.publish(angle);
+                }
+
+                if (result.wristAngle != -1) {
+                    angle.data = result.wristAngle;
+
+                    // raise wrist
+                    wristAnglePublish.publish(angle);
+                }
+
+                if (result.giveUp) {
+                    targetDetected = false;
+                    stateMachineState = STATE_MACHINE_TRANSFORM;
+                    sendDriveCommand(0,0);
+                    pickUpController.reset();
+                }
+
+                if (result.pickedUp) {
+                    pickUpController.reset();
+                    currentLocationTemp = getCurrentLocation();
+                    // assume target has been picked up by gripper
+                    targetCollected = true;
+                    result.pickedUp = false;
+                    // store coordinates of last pickup for return
+                    foodLocation.x = currentLocationTemp.x;
+                    foodLocation.y = currentLocationTemp.y;
+
+                    stateMachineState = STATE_MACHINE_ROTATE;
+
+
+                    // set center as goal position
+                    setGoalLocation(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationTemp.y, centerLocationOdom.x - currentLocationTemp.x));
+                    // lower wrist to avoid ultrasound sensors
+                    std_msgs::Float32 angle;
+                    angle.data = 0.8;
+                    wristAnglePublish.publish(angle);
+                    sendDriveCommand(0.0,0);
+
+                    return;
+                }
+            } else {
+                stateMachineState = STATE_MACHINE_TRANSFORM;
+            }
+
+            break;
+        }
+
+        case STATE_MACHINE_DROPOFF: {
+            Logger::chat("DROPOFF");
+            break;
+        }
+
+        case STATE_MACHINE_BACKUP: {
+			if(backupCount > 0){
+				backupCount--;
 			}
-			
-			//Calculate angle between currentLocation.theta and goalLocation.theta
-			//Rotate left or right depending on sign of angle
-			//Stay in this state until angle is minimized
-			case STATE_MACHINE_ROTATE: {
-				stateMachineMsg.data = "ROTATING";
-			    if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) > 0.1) {
-					setVelocity(0.0, 0.2); //rotate left
-			    }
-			    else if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) < -0.1) {
-					setVelocity(0.0, -0.2); //rotate right
-				}
-				else {
-					setVelocity(0.0, 0.0); //stop
-					stateMachineState = STATE_MACHINE_TRANSLATE; //move to translate step
-				}
-			    break;
-			}
-			
-			//Calculate angle between currentLocation.x/y and goalLocation.x/y
-			//Drive forward
-			//Stay in this state until angle is at least PI/2
-			case STATE_MACHINE_TRANSLATE: {
-				stateMachineMsg.data = "TRANSLATING";
-				if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
-					setVelocity(0.3, 0.0);
-				}
-				else {
-					setVelocity(0.0, 0.0); //stop
-					
-					//close fingers
-					std_msgs::Float32 angle;
-					angle.data = 0;
-					fingerAnglePublish.publish(angle);
-					
-					stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step
-				}
-			    break;
-			}
-		
-			case STATE_MACHINE_BACKUP: {
-				if(backupCount > 0){
-					backupCount--;
-				}
-				else {
-					stateMachineState = STATE_MACHINE_TRANSFORM;
-				}
-
-				setVelocity(-0.3, 0.0);
-
-				break;
+			else {
+				stateMachineState = STATE_MACHINE_TRANSFORM;
 			}
 
-			default: {
-			    break;
-			}
+			// FIXME: Need to replace setVelocity(), how???
+			// setVelocity(-0.3, 0.0);
+
+			break;
 		}
-	}
-
+        default: {
+            break;
+        }
+        } /* end of switch() */
+    }
     else { // mode is NOT auto
-
         // publish current state for the operator to see
-        stateMachineMsg.data = "WAITING";
-    }
-
-    // publish state machine string for user, only if it has changed, though
-    if (strcmp(stateMachineMsg.data.c_str(), prev_state_machine) != 0) {
-        stateMachinePublish.publish(stateMachineMsg);
-        sprintf(prev_state_machine, "%s", stateMachineMsg.data.c_str());
+    	Logger::chat("WAITING");
     }
 }
 
-void setVelocity(double linearVel, double angularVel) 
+void sendDriveCommand(double linearVel, double angularError)
 {
-  // Stopping and starting the timer causes it to start counting from 0 again.
-  // As long as this is called before the kill swith timer reaches killSwitchTimeout seconds
-  // the rover's kill switch wont be called.
-  killSwitchTimer.stop();
-  killSwitchTimer.start();
-  
-  velocity.linear.x = linearVel, // * 1.5;
-  velocity.angular.z = angularVel; // * 8; //scaling factor for sim; removed by aBridge node
-  velocityPublish.publish(velocity);
+    velocity.linear.x = linearVel,
+    velocity.angular.z = angularError;
+
+    // publish the drive commands
+    driveControlPublish.publish(velocity);
 }
 
-/***********************
- * ROS CALLBACK HANDLERS
- ************************/
+/*************************
+ * ROS CALLBACK HANDLERS *
+ *************************/
+
+
+void setGoalLocation(geometry_msgs::Pose2D location) {
+	goalLocation = location;
+	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
+	if(hypot(currentLocationTemp.x - location.x, currentLocationTemp.y - location.y) > 3) {
+		useOdom = false;
+	} else {
+		useOdom = true;
+	}
+	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
+}
+//overload function setGoalLocation
+void setGoalLocation(float x, float y, float theta){
+	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
+	goalLocation.x = x;
+	goalLocation.y = y;
+	goalLocation.theta = theta;
+	if(hypot(currentLocationTemp.x - goalLocation.x, currentLocationTemp.y - goalLocation.y) > 3) {
+		useOdom = false;
+	} else {
+		useOdom = true;
+	}
+	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
+}
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
 
-        // If in manual mode do not try to automatically pick up the target
-        if (currentMode == 1) return;
- 
-	if (message->detections.size() > 0) {
-		
-		geometry_msgs::PoseStamped tagPose = message->detections[0].pose;
-		
-		//if target is close enough
-		if (hypot(hypot(tagPose.pose.position.x, tagPose.pose.position.y), tagPose.pose.position.z) < 0.2) {
-			//assume target has been picked up by gripper
-			targetCollected = true;
-			
-			//lower wrist to avoid ultrasound sensors
-			std_msgs::Float32 angle;
-			angle.data = M_PI_2/4;
-			wristAnglePublish.publish(angle);
-		}
-		
-		else {
-			tagPose.header.stamp = ros::Time(0);
-			geometry_msgs::PoseStamped odomPose;
+    // If in manual mode do not try to automatically pick up the target
+    if (currentMode == 1 || currentMode == 0) return;
 
-			try {
-				tfListener->waitForTransform(publishedName + "/odom", publishedName + "/camera_link", ros::Time(0), ros::Duration(1.0));
-				tfListener->transformPose(publishedName + "/odom", tagPose, odomPose);
-			}
+    // if a target is detected and we are looking for center tags
+    if (message->detections.size() > 0 && !reachedCollectionPoint) {
+        float cameraOffsetCorrection = 0.020; //meters;
 
-			catch(tf::TransformException& ex) {
-				ROS_INFO("Received an exception trying to transform a point from \"odom\" to \"camera_link\": %s", ex.what());
-			}
+        centerSeen = false;
+        double count = 0;
+        double countRight = 0;
+        double countLeft = 0;
 
-			//if this is the goal target
-			if (message->detections[0].id == 256) {
-				//open fingers to drop off target
-				std_msgs::Float32 angle;
-				angle.data = M_PI_2;
-				fingerAnglePublish.publish(angle);
-			}
+        // this loop is to get the number of center tags
+        for (int i = 0; i < message->detections.size(); i++) {
+            if (message->detections[i].id == 256) {
+                geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
 
-			//Otherwise, if no target has been collected, set target pose as goal
-			else if (!targetCollected) {
-				//set goal heading
-				goalLocation.theta = atan2(odomPose.pose.position.y - currentLocation.y, odomPose.pose.position.x - currentLocation.x);
-				
-				//set goal position
-				goalLocation.x = odomPose.pose.position.x - (0.26 * cos(goalLocation.theta));
-				goalLocation.y = odomPose.pose.position.y - (0.26 * sin(goalLocation.theta));
-				
-				//set gripper
-				std_msgs::Float32 angle;
-				//open fingers
-				angle.data = M_PI_2;
-				fingerAnglePublish.publish(angle);
-				//lower wrist
-				angle.data = 0.8;
-				wristAnglePublish.publish(angle);
-				
-				//set state and timeout
-				targetDetected = true;
-				targetDetectedTimer.setPeriod(ros::Duration(5.0));
-				targetDetectedTimer.start();
-				
-				//switch to transform state to trigger return to center
-				stateMachineState = STATE_MACHINE_TRANSFORM;
-			}
-		}
-	}
+                // checks if tag is on the right or left side of the image
+                if (cenPose.pose.position.x + cameraOffsetCorrection > 0) {
+                    countRight++;
+
+                } else {
+                    countLeft++;
+                }
+
+                centerSeen = true;
+                count++;
+            }
+        }
+
+        if (centerSeen && targetCollected) {
+            stateMachineState = STATE_MACHINE_TRANSFORM;
+
+            setGoalLocation(getCurrentLocation());
+        }
+
+        dropOffController.setDataTargets(count,countLeft,countRight);
+
+        // if we see the center and we dont have a target collected
+        if (centerSeen && !targetCollected) {
+
+            float centeringTurn = 0.15; //radians
+            stateMachineState = STATE_MACHINE_TRANSFORM;
+
+            // FIXME: This is broken, right is not defined here...
+            //
+            // this code keeps the robot from driving over
+            // the center when searching for blocks
+            if (right) {
+                // turn away from the center to the left if just driving
+                // around/searching.
+
+            	setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
+                //goalLocation.theta += centeringTurn;
+            } else {
+                // turn away from the center to the right if just driving
+                // around/searching.
+
+            	setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
+                //goalLocation.theta -= centeringTurn;
+            }
+
+            // continues an interrupted search
+
+            setGoalLocation(searchController.continueInterruptedSearch(getCurrentLocation(), goalLocation));
+
+            targetDetected = false;
+            pickUpController.reset();
+
+            return;
+        }
+    }
+    // end found target and looking for center tags
+
+    // found a target april tag and looking for april cubes;
+    // with safety timer at greater than 5 seconds.
+    PickUpResult result;
+
+    if (message->detections.size() > 0 && !targetCollected && timerTimeElapsed > 5) {
+        targetDetected = true;
+
+        // pickup state so target handler can take over driving.
+        stateMachineState = STATE_MACHINE_PICKUP;
+        result = pickUpController.selectTarget(message);
+
+        std_msgs::Float32 angle;
+
+        if (result.fingerAngle != -1) {
+            angle.data = result.fingerAngle;
+            fingerAnglePublish.publish(angle);
+        }
+
+        if (result.wristAngle != -1) {
+            angle.data = result.wristAngle;
+            wristAnglePublish.publish(angle);
+        }
+    }
 }
 
 void modeHandler(const std_msgs::UInt8::ConstPtr& message) {
-	currentMode = message->data;
-	setVelocity(0.0, 0.0);
+    currentMode = message->data;
+    sendDriveCommand(0.0, 0.0);
 }
 
 void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
-	if (!targetDetected && (message->data > 0)) {
-		//obstacle on right side
-		if (message->data == 1) {
-			if(!targetCollected){
-				goalLocation.theta = currentLocation.theta + c_BOUNCE_CONST;
-			}else{
-			//select new heading 0.2 radians to the left
-			goalLocation.theta = currentLocation.theta + 0.2;
-			}
-		}
-		
-		//obstacle in front or on left side
-		else if (message->data == 2) {
-			if(!targetCollected){
-				goalLocation.theta = currentLocation.theta - c_BOUNCE_CONST;
-			}else {
-			//select new heading 0.2 radians to the right
-			goalLocation.theta = currentLocation.theta - 0.2;
-			}
-		}
-							
-		//select new position 50 cm from current location
-		goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-		goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
-		
-		//switch to transform state to trigger collision avoidance
-		backupCount = 20;
-		stateMachineState = STATE_MACHINE_TRANSFORM;
-	}
+    if ((!targetDetected || targetCollected) && (message->data > 0)) {
+        // obstacle on right side
+        if (message->data == 1) {
+            // select new heading 0.2 radians to the left
+
+        	// FIXME:
+        	// the line below is redundant:
+        	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
+
+            // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
+            if (targetCollected == true) {
+            	setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
+            }
+            else if (targetCollected == false){
+        		setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + 0.6);
+            }
+        }
+
+        // obstacle in front or on left side
+        else if (message->data == 2) {
+
+            // select new heading 0.2 radians to the right
+        	// FIXME:
+        	// the line below is redundant:
+        	setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
+
+            // select new heading 0.6 radians to the RIGHT.
+            if (targetCollected == true) {
+            	setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta - c_BOUNCE_CONST);
+            }
+            else if (targetCollected == false){
+        		setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta - 0.6);
+            }
+        }
+
+        // continues an interrupted search
+
+        setGoalLocation(searchController.continueInterruptedSearch(currentLocation, goalLocation));
+
+        // switch to transform state to trigger collision avoidance
+        stateMachineState = STATE_MACHINE_ROTATE;
+
+        avoidingObstacle = true;
+    }
+
+    // the front ultrasond is blocked very closely. 0.14m currently
+    if (message->data == 4) {
+        blockBlock = true;
+    } else {
+        blockBlock = false;
+    }
+}
+
+geometry_msgs::Pose2D& getCurrentLocation() {
+	if(useOdom)return currentLocation;
+	return currentLocationMap;
 }
 
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
+
+    //Get (x,y) location directly from pose
+
+    currentLocation.x = message->pose.pose.position.x;
+    currentLocation.y = message->pose.pose.position.y;
+
+    //Get theta rotation by converting quaternion orientation to pitch/roll/yaw
+    tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    currentLocation.theta = yaw;
+}
+
+void mapHandler(const nav_msgs::Odometry::ConstPtr& message) {
+
 	//Get (x,y) location directly from pose
-	currentLocation.x = message->pose.pose.position.x;
-	currentLocation.y = message->pose.pose.position.y;
-	
-	//Get theta rotation by converting quaternion orientation to pitch/roll/yaw
-	tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
-	tf::Matrix3x3 m(q);
-	double roll, pitch, yaw;
-	m.getRPY(roll, pitch, yaw);
-	currentLocation.theta = yaw;
+    currentLocationMap.x = message->pose.pose.position.x;
+    currentLocationMap.y = message->pose.pose.position.y;
+
+    //Get theta rotation by converting quaternion orientation to pitch/roll/yaw
+    tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    currentLocationMap.theta = yaw;
 }
 
 void joyCmdHandler(const sensor_msgs::Joy::ConstPtr& message) {
-	if (currentMode == 0 || currentMode == 1) {
-		setVelocity(abs(message->axes[4]) >= 0.1 ? message->axes[4] : 0, abs(message->axes[3]) >= 0.1 ? message->axes[3] : 0);
-	} 
+    if (currentMode == 0 || currentMode == 1) {
+        sendDriveCommand(abs(message->axes[4]) >= 0.1 ? message->axes[4] : 0, abs(message->axes[3]) >= 0.1 ? message->axes[3] : 0);
+    }
 }
 
 
-void publishStatusTimerEventHandler(const ros::TimerEvent&)
-{
-  std_msgs::String msg;
-  msg.data = "online";
-  status_publisher.publish(msg);
+void publishStatusTimerEventHandler(const ros::TimerEvent&) {
+    std_msgs::String msg;
+    msg.data = "online";
+    status_publisher.publish(msg);
 }
 
-// Safety precaution. No movement commands - might have lost contact with ROS. Stop the rover.
-// Also might no longer be receiving manual movement commands so stop the rover.
-void killSwitchTimerEventHandler(const ros::TimerEvent& t)
-{
-  // No movement commands for killSwitchTime seconds so stop the rover 
-  setVelocity(0,0);
-  double current_time = ros::Time::now().toSec();
-  ROS_INFO("In mobility.cpp:: killSwitchTimerEventHander(): Movement input timeout. Stopping the rover at %6.4f.", current_time);
-}
 
 void targetDetectedReset(const ros::TimerEvent& event) {
-	targetDetected = false;
-	
-	std_msgs::Float32 angle;
-	angle.data = 0;
-	fingerAnglePublish.publish(angle); //close fingers
-	wristAnglePublish.publish(angle); //raise wrist
+    targetDetected = false;
+
+    std_msgs::Float32 angle;
+    angle.data = 0;
+
+    // close fingers
+    fingerAnglePublish.publish(angle);
+
+    // raise wrist
+    wristAnglePublish.publish(angle);
 }
 
-void sigintEventHandler(int sig)
-{
-     // All the default sigint handler does is call shutdown()
-     ros::shutdown();
+void sigintEventHandler(int sig) {
+    // All the default sigint handler does is call shutdown()
+    ros::shutdown();
 }
+
+/*
+ * FIXME: This function is inefficient. It should use the filter technique
+ * for making a running average so that it doesn't have to iterate through
+ * this history list every call.
+ *
+ * Also: IMPORTANT the centerLocation variable is in the rover's odometry
+ * frame. That's makes odometry navigation to the center possible but
+ * we're switching to map navigation. The centerLocation variable should
+ * be changed to be in the Map frame.
+ *
+ * One more thing: This function is called from mobilityStateMachine() which
+ * is wasteful. The only time we need to put a new sample in the averager is
+ * when there's a new GPS sample given to mapHandler(). This function
+ * should be called from mapHandler()
+ *
+ */
+void mapAverage() {
+    // store currentLocation in the averaging array
+    mapLocation[mapCount] = currentLocationMap;
+    mapCount++;
+
+    if (mapCount >= mapHistorySize) {
+        mapCount = 0;
+    }
+
+    double x = 0;
+    double y = 0;
+    double theta = 0;
+
+    // add up all the positions in the array
+    for (int i = 0; i < mapHistorySize; i++) {
+        x += mapLocation[i].x;
+        y += mapLocation[i].y;
+        theta += mapLocation[i].theta;
+    }
+
+    // find the average
+    x = x/mapHistorySize;
+    y = y/mapHistorySize;
+    
+    // Get theta rotation by converting quaternion orientation to pitch/roll/yaw
+    theta = theta/100;
+    currentLocationAverage.x = x;
+    currentLocationAverage.y = y;
+    currentLocationAverage.theta = theta;
+
+
+    // only run below code if a centerLocation has been set by initilization
+    if (init) {
+        // map frame
+        geometry_msgs::PoseStamped mapPose;
+
+        // setup msg to represent the center location in map frame
+        mapPose.header.stamp = ros::Time::now();
+
+        mapPose.header.frame_id = publishedName + "/map";
+        mapPose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, centerLocationMap.theta);
+        mapPose.pose.position.x = centerLocationMap.x;
+        mapPose.pose.position.y = centerLocationMap.y;
+        geometry_msgs::PoseStamped odomPose;
+        string x = "";
+
+        try { //attempt to get the transform of the center point in map frame to odom frame.
+            tfListener->waitForTransform(publishedName + "/map", publishedName + "/odom", ros::Time::now(), ros::Duration(1.0));
+            tfListener->transformPose(publishedName + "/odom", mapPose, odomPose);
+        }
+
+        catch(tf::TransformException& ex) {
+            ROS_INFO("Received an exception trying to transform a point from \"map\" to \"odom\": %s", ex.what());
+            x = "Exception thrown " + (string)ex.what();
+            std_msgs::String msg;
+            stringstream ss;
+            ss << "Exception in mapAverage() " + (string)ex.what();
+            Logger::log(ss.str().c_str());
+        }
+
+        // Use the position and orientation provided by the ros transform.
+        centerLocation.x = odomPose.pose.position.x; //set centerLocation in odom frame
+        centerLocation.y = odomPose.pose.position.y;
+
+
+    }
+}
+
