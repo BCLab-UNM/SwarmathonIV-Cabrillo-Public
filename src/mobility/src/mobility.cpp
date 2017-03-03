@@ -879,6 +879,8 @@ void sigintEventHandler(int sig) {
  *
  */
 void mapAverage() {
+	//store previous location at mapLocation[mapCount]
+	geometry_msgs::Pose2D subMapLocation = mapLocation[mapCount];
     // store currentLocation in the averaging array
     mapLocation[mapCount] = currentLocationMap;
     mapCount++;
@@ -886,7 +888,7 @@ void mapAverage() {
     if (mapCount >= mapHistorySize) {
         mapCount = 0;
     }
-
+    /* old code
     double x = 0;
     double y = 0;
     double theta = 0;
@@ -907,6 +909,11 @@ void mapAverage() {
     currentLocationAverage.x = x;
     currentLocationAverage.y = y;
     currentLocationAverage.theta = theta;
+    */
+
+    currentLocationAverage.x += ((mapLocation[mapCount].x-subMapLocation.x)/mapHistorySize);
+    currentLocationAverage.y += ((mapLocation[mapCount].y-subMapLocation.y)/mapHistorySize);
+    currentLocationAverage.theta += ((mapLocation[mapCount].theta-subMapLocation.theta)/100);
 
 
     // only run below code if a centerLocation has been set by initilization
