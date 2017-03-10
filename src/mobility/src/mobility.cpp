@@ -612,10 +612,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_CIRCLE: {
         	Logger::chat("CIRCLING");
         	circleCount--;
-        	if(circleCount <= 0){
+        	if (circleCount <= 0) {
         		stateMachineState = STATE_MACHINE_TRANSFORM;
         	}
-        	sendDriveCommand(0.4,0.6);
+        	sendDriveCommand(0.4, 0.6);
 
         	break;
         }
@@ -674,24 +674,25 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     if (currentMode == 1 || currentMode == 0) return;
 
     //If a target is collected treat other blocks as obstacles
-    if (targetCollected && message->detections.size() > 0) {
+    if (targetCollected && message->detections.size() > 0 && !reachedCollectionPoint) {
     	Logger::chat("poop");
 
-    	for(int i = 0; i < message->detections.size(); i++){
+    	for(int i = 0; i < message->detections.size(); i++) {
     		geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
-    		if (cenPose.pose.position.z > .16 && message->detections[i].id != 256){
-    			if(cenPose.pose.position.x > 0){
+    		if (cenPose.pose.position.z > .16 && message->detections[i].id != 256) {
+    			if (cenPose.pose.position.x > 0) {
     				Logger::chat("pos");
-    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta - 0.6);
-    			}else{
+    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta - c_BOUNCE_CONST);
+    			} else {
     				Logger::chat("neg");
-    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
+    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + c_BOUNCE_CONST);
     			}
-    			// switch to transform(?) state to trigger collision avoidance
-    			stateMachineState = STATE_MACHINE_ROTATE;
+    			// switch to transform(rotate?) state to trigger collision avoidance
+    			stateMachineState = STATE_MACHINE_TRANSFORM;
     			avoidingObstacle = true;
     			return;
     		}
+
     	}
 
         //setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
