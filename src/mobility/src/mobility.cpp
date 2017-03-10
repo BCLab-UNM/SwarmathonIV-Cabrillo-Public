@@ -230,9 +230,9 @@ void targetDetectedReset(const ros::TimerEvent& event);
 //void setGoalLocation(geometry_msgs::Pose2D location);
 //void setGoalLocation(float, float, float);
 //Odom based
-void setRelativeGoal(double, double, double);
+void setRelativeGoal(double, double);
 //GPS based
-void setAbsoluteGoal(double, double, double);
+void setAbsoluteGoal(double, double);
 //function to return the currentLocation distinguishing between gps and odom
 geometry_msgs::Pose2D& getCurrentLocation();
 
@@ -621,7 +621,7 @@ void sendDriveCommand(double linearVel, double angularError)
  *************************/
 
 //Odometry related goal
-void setRelativeGoal(double x, double y, double theta) {
+void setRelativeGoal(double r, double theta) {
 	useOdom = true;
 	//geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
 	goalLocation.x = currentLocation.x + x;
@@ -630,12 +630,13 @@ void setRelativeGoal(double x, double y, double theta) {
 }
 
 //GPS related goal
-void setAbsoluteGoal(double x, double y, double theta){
+void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	//geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
 	goalLocation.x = x;
 	goalLocation.y =y;
-	goalLocation.theta = theta;
+	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+	//goalLocation.theta = theta;
 }
 
 
