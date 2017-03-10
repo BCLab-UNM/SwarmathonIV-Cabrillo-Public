@@ -22,6 +22,7 @@ geometry_msgs::Pose2D SearchController::search() {
   goalLocation.x = wanderDist * cos(goalLocation.theta);
   goalLocation.y = wanderDist * sin(goalLocation.theta);
 
+
   return goalLocation;
 }
 
@@ -36,10 +37,12 @@ geometry_msgs::Pose2D SearchController::continueInterruptedSearch(geometry_msgs:
   //double remainingGoalDist = hypot(oldGoalLocation.x - currentLocation.x, oldGoalLocation.y - currentLocation.y);
   //double remainingGoalDist = hypot(oldGoalLocation.x, oldGoalLocation.y);
   //this of course assumes random walk continuation. Change for diffrent search methods.
+
   //newGoalLocation.theta = oldGoalLocation.theta;
   //newGoalLocation.x = currentLocation.x + (wanderDist * cos(oldGoalLocation.theta)); //(remainingGoalDist * cos(oldGoalLocation.theta));
   //newGoalLocation.y = currentLocation.y + (wanderDist * sin(oldGoalLocation.theta)); //(remainingGoalDist * sin(oldGoalLocation.theta));
   //newGoalLocation.x = (wanderDist * cos(oldGoalLocation.theta));
   //newGoalLocation.y = (wanderDist * sin(oldGoalLocation.theta));
   return search();
+
 }

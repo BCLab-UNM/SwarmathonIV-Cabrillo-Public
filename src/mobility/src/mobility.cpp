@@ -114,6 +114,7 @@ geometry_msgs::Pose2D currentLocationAverage; // GPS frame
 geometry_msgs::Pose2D goalLocation;
 geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
+
 geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
 geometry_msgs::Pose2D centerLocationOdom;
@@ -125,6 +126,8 @@ float killSwitchTimeout = 10;
 bool targetDetected = false;
 bool targetCollected = false;
 int backupCount = 0;
+int circleCount = 0;
+int giveupCount = 0;
 
 //set true when the goal is less than 3 meters
 //set false when the goal is more than 3 meters
@@ -174,6 +177,7 @@ std_msgs::String msg;
 #define STATE_MACHINE_PICKUP     3
 #define STATE_MACHINE_DROPOFF    4
 #define STATE_MACHINE_BACKUP	 5
+#define STATE_MACHINE_CIRCLE	 6
 
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
@@ -241,8 +245,13 @@ int main(int argc, char **argv) {
     gethostname(host, sizeof (host));
     string hostname(host);
 
+    backupCount = 0;
+    circleCount = 0;
+    giveupCount = 0;
+
     foodLocation.x = 0;
     foodLocation.y = 0;
+
     // instantiate random number generator
     rng = new random_numbers::RandomNumberGenerator();
     //set initial random heading
@@ -375,8 +384,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_TRANSFORM: {
         	Logger::chat("TRANSFORMING");
 
+            //Should I circle?
+            if(circleCount > 0 && !targetCollected){
+            	stateMachineState = STATE_MACHINE_CIRCLE;
+            	break;
+            }
+
             // If returning with a target
-            if (targetCollected && !avoidingObstacle) {
+            else if (targetCollected && !avoidingObstacle) {
+            	circleCount = 0;
                 // calculate the euclidean distance between
                 // centerLocation and currentLocation
             	//currentLocationTemp = getCurrentLocation();
@@ -438,6 +454,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     break;
                 }
             }
+
             //If angle between current and goal is significant
             //if error in heading is greater than 0.4 radians
             else if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
@@ -451,7 +468,6 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             //Otherwise, drop off target and select new random uniform heading
             //If no targets have been detected, assign a new goal
             else if (!targetDetected && timerTimeElapsed > returnToSearchDelay) {
-
             	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
             	// behavior from the navigation updates. This code should be put back in when
             	// this feature is tested.
@@ -462,10 +478,14 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//	foodLocation.y = 0.0;
             	//}
             	//else {
+                	if(!targetCollected)
+                		circleCount = 55;
+
             	//geometry_msgs::Pose2D theGoal = searchController.search();
             	//double distanceR = sqrt(pow(theGoal.x, 2) + pow(theGoal.y, 2));
             	setRelativeGoal(2, rng->gaussian(0, 0.25));
             	//setGoalLocation(searchController.search(currentLocation));
+
             	//}
             }
 
@@ -566,10 +586,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                     stateMachineState = STATE_MACHINE_ROTATE;
 
-
-                    // set center as goal position: absolute ?????? should this be changed to map?
                     setAbsoluteGoal(0, centerLocationOdom.y);
                     //setAbsoluteGoal(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationMap.y, centerLocationOdom.x - currentLocationMap.x));
+
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
                     angle.data = 0.8;
@@ -591,6 +610,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         }
 
         case STATE_MACHINE_BACKUP: {
+        	Logger::chat("BACKING UP");
 			if(backupCount > 0){
 				backupCount--;
 			}
@@ -600,9 +620,21 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 			// FIXME: Need to replace setVelocity(), how???
 			// setVelocity(-0.3, 0.0);
+			sendDriveCommand(-0.3, 0.0);
 
 			break;
 		}
+
+        case STATE_MACHINE_CIRCLE: {
+        	Logger::chat("CIRCLING");
+        	circleCount--;
+        	if (circleCount <= 0) {
+        		stateMachineState = STATE_MACHINE_TRANSFORM;
+        	}
+        	sendDriveCommand(0.4, 0.6);
+
+        	break;
+        }
         default: {
             break;
         }
@@ -653,6 +685,38 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     // If in manual mode do not try to automatically pick up the target
     if (currentMode == 1 || currentMode == 0) return;
 
+    //If a target is collected treat other blocks as obstacles
+    if (targetCollected && message->detections.size() > 0) {
+    	bool is256 = false;
+    	for (int i = 0; i < message->detections.size(); i++) {
+    		if(message->detections[i].id == 256) {
+    			is256 = true;
+    			break;
+    		}
+    	}
+    	if (!is256) {
+    		for(int i = 0; i < message->detections.size(); i++) {
+    			geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
+    			if (cenPose.pose.position.z > .16) {
+    				if (cenPose.pose.position.x > 0) {
+    					Logger::chat("pos");
+    					setRelativeGoal(.75, M_PI_4);
+    				} else {
+    					Logger::chat("neg");
+    					setRelativeGoal(.75, -M_PI_4);
+    				}
+    				// switch to transform(rotate?) state to trigger collision avoidance
+    				stateMachineState = STATE_MACHINE_TRANSFORM;
+    				avoidingObstacle = true;
+    				return;
+    			}
+    		}
+    	}
+
+        //setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
+
+    }
+
     // if a target is detected and we are looking for center tags
     if (message->detections.size() > 0 && !reachedCollectionPoint) {
         float cameraOffsetCorrection = 0.020; //meters;
@@ -682,9 +746,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
         if (centerSeen && targetCollected) {
             stateMachineState = STATE_MACHINE_TRANSFORM;
-            //setRelativeGoal()
-            //setRelativeGoal(0.0,0.0,0.0);//????????????????????????????????????????????
-            //setGoalLocation(getCurrentLocation());
+            circleCount = 0;
         }
 
         dropOffController.setDataTargets(count,countLeft,countRight);
@@ -694,6 +756,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
             float centeringTurn = 0.15; //radians
             stateMachineState = STATE_MACHINE_TRANSFORM;
+            circleCount = 0;
 
             // FIXME: This is broken, right is not defined here...
             //
@@ -702,7 +765,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             if (right) {
                 // turn away from the center to the left if just driving
                 // around/searching.
-            	setRelativeGoal(0, centeringTurn);
+            	//setRelativeGoal(0, centeringTurn);
             	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
                 //goalLocation.theta += centeringTurn;
             } else {
@@ -804,6 +867,7 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
 
         // switch to transform state to trigger collision avoidance
         stateMachineState = STATE_MACHINE_ROTATE;
+        circleCount = 0;
 
         avoidingObstacle = true;
     }
