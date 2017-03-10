@@ -257,7 +257,9 @@ int main(int argc, char **argv) {
     //set initial random heading
 
     //select initial search position 50 cm from center (0,0)
-    setRelativeGoal(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
+    //double distanceR = sqrt(pow(0.5 * cos(goalLocation.theta+M_PI), 2) + pow(0.5 * sin(goalLocation.theta+M_PI), 2));
+    setRelativeGoal(.5, rng->uniformReal(0, 2 * M_PI));
+    //setRelativeGoal(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
     //setGoalLocation(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
     centerLocation.x = 0;
     centerLocation.y = 0;
@@ -433,7 +435,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
 //#################################
                 	geometry_msgs::Pose2D theGoal = result.centerGoal;
-                	setAbsoluteGoal(theGoal.x, theGoal.y, theGoal.theta);
+                	setAbsoluteGoal(theGoal.x, theGoal.y);
                     //setGoalLocation(result.centerGoal);
                     stateMachineState = STATE_MACHINE_ROTATE;
                     timerStartTime = time(0);
@@ -441,7 +443,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 // we are in precision/timed driving
                 else {
                 	//returning to the center: absolute
-                	setAbsoluteGoal(currentLocationTemp.x, currentLocationTemp.y, currentLocationTemp.theta);
+                	setAbsoluteGoal(currentLocationTemp.x, currentLocationTemp.y);
                     //setGoalLocation(getCurrentLocation());
                     sendDriveCommand(result.cmdVel,result.angleError);
                     stateMachineState = STATE_MACHINE_TRANSFORM;
@@ -473,11 +475,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//	foodLocation.y = 0.0;
             	//}
             	//else {
-
                 	if(!targetCollected)
                 		circleCount = 55;
-                	geometry_msgs::Pose2D theGoal = searchController.search();
-                	setRelativeGoal(theGoal.x, theGoal.y, theGoal.theta);
+
+            	//geometry_msgs::Pose2D theGoal = searchController.search();
+            	//double distanceR = sqrt(pow(theGoal.x, 2) + pow(theGoal.y, 2));
+            	setRelativeGoal(2, rng->gaussian(0, 0.25));
+            	//setGoalLocation(searchController.search(currentLocation));
 
             	//}
             }
@@ -579,9 +583,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                     stateMachineState = STATE_MACHINE_ROTATE;
 
-
-                    // set center as goal position: absolute ?????? should this be changed to map?
-                    setAbsoluteGoal(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationMap.y, centerLocationOdom.x - currentLocationMap.x));
+                    setAbsoluteGoal(0, centerLocationOdom.y);
+                    //setAbsoluteGoal(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationMap.y, centerLocationOdom.x - currentLocationMap.x));
 
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
@@ -656,46 +659,23 @@ void sendDriveCommand(double linearVel, double angularError)
 //Odometry related goal
 void setRelativeGoal(double r, double theta) {
 	useOdom = true;
-	//geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
-	goalLocation.x = currentLocation.x + x;
-	goalLocation.y = currentLocation.y + y;
-	goalLocation.theta = currentLocation.theta + theta;
+	goalLocation.x = currentLocation.x + r*sin(theta);
+	goalLocation.y = currentLocation.y + r*cos(theta);
+	goalLocation.theta = currentLocation.theta + theta; //should this be a minus sign
+	//goalLocation.x = currentLocation.x + x;
+	//goalLocation.y = currentLocation.y + y;
+	//goalLocation.theta = currentLocation.theta + theta;
 }
 
 //GPS related goal
 void setAbsoluteGoal(double x, double y){
 	useOdom = false;
-	//geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
 	goalLocation.x = x;
 	goalLocation.y =y;
-	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
-	//goalLocation.theta = theta;
+	goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
+	//absolute value??????
 }
 
-
-/**void setGoalLocation(geometry_msgs::Pose2D location) {
-	goalLocation = location;
-	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
-	if(hypot(currentLocationTemp.x - location.x, currentLocationTemp.y - location.y) > 3) {
-		useOdom = false;
-	} else {
-		useOdom = true;
-	}
-	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
-}
-//overload function setGoalLocation
-void setGoalLocation(float x, float y, float theta){
-	geometry_msgs::Pose2D currentLocationTemp = getCurrentLocation();
-	goalLocation.x = x;
-	goalLocation.y = y;
-	goalLocation.theta = theta;
-	if(hypot(currentLocationTemp.x - goalLocation.x, currentLocationTemp.y - goalLocation.y) > 3) {
-		useOdom = false;
-	} else {
-		useOdom = true;
-	}
-	Logger::chat("goal:x %f goal:y %f current:x %f cuurent:y %f odom %d", goalLocation.x, goalLocation.y,currentLocationTemp.x, currentLocationTemp.y, useOdom);
-}**/
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
 
@@ -759,10 +739,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
         if (centerSeen && targetCollected) {
             stateMachineState = STATE_MACHINE_TRANSFORM;
-
             circleCount = 0;
-            setRelativeGoal(0.0,0.0,0.0);//????????????????????????????????????????????
-
         }
 
         dropOffController.setDataTargets(count,countLeft,countRight);
@@ -781,13 +758,13 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             if (right) {
                 // turn away from the center to the left if just driving
                 // around/searching.
-            	setRelativeGoal(0, 0, centeringTurn);
+            	setRelativeGoal(0, centeringTurn);
             	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
                 //goalLocation.theta += centeringTurn;
             } else {
                 // turn away from the center to the right if just driving
                 // around/searching.
-            	setRelativeGoal(0, 0, -centeringTurn);
+            	setRelativeGoal(0, -centeringTurn);
             	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
                 //goalLocation.theta -= centeringTurn;
             }
@@ -848,11 +825,11 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
 
             // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
             if (targetCollected == true) {
-            	setRelativeGoal(0, 0, c_BOUNCE_CONST);
+            	setRelativeGoal(0, c_BOUNCE_CONST);
             	//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
             }
-            else if (targetCollected == false) {
-            	setRelativeGoal(0, 0, 0.6);
+            else if (targetCollected == false){
+            	setRelativeGoal(0, 0.6);
         		//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + 0.6);
             }
         }
@@ -867,18 +844,18 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
 
             // select new heading 0.6 radians to the RIGHT.
             if (targetCollected == true) {
-            	setRelativeGoal(0, 0, -c_BOUNCE_CONST);
+            	setRelativeGoal(0, -c_BOUNCE_CONST);
             	//setRelativeGoal(currentLocation.x, currentLocation.y, currentLocation.theta - c_BOUNCE_CONST);
             }
             else if (targetCollected == false){
-            	setRelativeGoal(0, 0, -0.6);
+            	setRelativeGoal(0, -0.6);
         		//setRelativeGoal(currentLocation.x, currentLocation.y, currentLocation.theta - 0.6);
             }
         }
 
         // continues an interrupted search
-        geometry_msgs::Pose2D theGoal = searchController.continueInterruptedSearch(goalLocation);
-        setRelativeGoal(theGoal.x, theGoal.y, theGoal.theta);
+        //geometry_msgs::Pose2D theGoal = searchController.continueInterruptedSearch(goalLocation);
+        //setRelativeGoal(theGoal.x, theGoal.y, theGoal.theta);
        // setGoalLocation(searchController.continueInterruptedSearch(currentLocation, goalLocation));
 
         // switch to transform state to trigger collision avoidance
