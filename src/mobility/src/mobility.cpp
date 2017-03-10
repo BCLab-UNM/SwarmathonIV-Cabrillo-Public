@@ -645,7 +645,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 void sendDriveCommand(double linearVel, double angularError)
 {
-    velocity.linear.x = linearVel,
+    velocity.linear.x = linearVel;
     velocity.angular.z = angularError;
 
     // publish the drive commands
@@ -659,9 +659,9 @@ void sendDriveCommand(double linearVel, double angularError)
 //Odometry related goal
 void setRelativeGoal(double r, double theta) {
 	useOdom = true;
+	goalLocation.theta = currentLocation.theta + theta;
 	goalLocation.x = currentLocation.x + r*sin(theta);
 	goalLocation.y = currentLocation.y + r*cos(theta);
-	goalLocation.theta = currentLocation.theta + theta; //should this be a minus sign
 	//goalLocation.x = currentLocation.x + x;
 	//goalLocation.y = currentLocation.y + y;
 	//goalLocation.theta = currentLocation.theta + theta;
@@ -673,7 +673,7 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y =y;
 	goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
-	//absolute value??????
+	//absolute value?????? should this still be added to current theta
 }
 
 
