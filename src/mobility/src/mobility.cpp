@@ -115,9 +115,9 @@ geometry_msgs::Pose2D goalLocation;
 geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
 
-geometry_msgs::Pose2D centerLocation;
+//geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
-geometry_msgs::Pose2D centerLocationOdom;
+//geometry_msgs::Pose2D centerLocationOdom;
 
 int currentMode = 0;
 float mobilityLoopTimeStep = 0.1; // time between the mobility loop calls
@@ -210,7 +210,7 @@ time_t timerStartTime;
 
 // An initial delay to allow the rover to gather enough position data to 
 // average its location.
-unsigned int startDelayInSeconds = 1;
+unsigned int startDelayInSeconds = 10;
 float timerTimeElapsed = 0;
 
 //Transforms
@@ -261,10 +261,10 @@ int main(int argc, char **argv) {
     setRelativeGoal(.5, rng->uniformReal(0, 2 * M_PI));
     //setRelativeGoal(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
     //setGoalLocation(0.5 * cos(goalLocation.theta+M_PI), 0.5 * sin(goalLocation.theta+M_PI), rng->uniformReal(0, 2 * M_PI));
-    centerLocation.x = 0;
-    centerLocation.y = 0;
-    centerLocationOdom.x = 0;
-    centerLocationOdom.y = 0;
+    //centerLocation.x = 0;
+    //centerLocation.y = 0;
+    //centerLocationOdom.x = 0;
+    //centerLocationOdom.y = 0;
 
     for (int i = 0; i < 100; i++) {
         mapLocation[i].x = 0;
@@ -397,7 +397,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 // centerLocation and currentLocation
             	//currentLocationTemp = getCurrentLocation();
             	//################################
-                dropOffController.setCenterDist(hypot(centerLocation.x - currentLocationMap.x, centerLocation.y - currentLocationMap.y));
+                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
                 dropOffController.setDataLocations(centerLocationMap, currentLocationMap, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
@@ -429,23 +429,29 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // move back to transform step
                     stateMachineState = STATE_MACHINE_TRANSFORM;
                     reachedCollectionPoint = false;;
-                    centerLocationOdom = getCurrentLocation();
+                    //centerLocationOdom = getCurrentLocation();
 
                     dropOffController.reset();
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
 //#################################
-                	//geometry_msgs::Pose2D theGoal = result.centerGoal;
-                	//setAbsoluteGoal(theGoal.x, theGoal.y);
+                	geometry_msgs::Pose2D theGoal = result.centerGoal;
+                	setAbsoluteGoal(theGoal.x, theGoal.y);
                     //setGoalLocation(result.centerGoal);
-                    //stateMachineState = STATE_MACHINE_TRANSFORM;
-                    //timerStartTime = time(0);
-                    //Logger::chat("timerTimeElapsed >= 5 wat do it do");
+                    stateMachineState = STATE_MACHINE_ROTATE;
+                    timerStartTime = time(0);
+                	//setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                	//stateMachineState = STATE_MACHINE_TRANSFORM;
+                	//circleCount = 100;
+                	//stateMachineState = STATE_MACHINE_CIRCLE;
+                    Logger::chat("timerTimeElapsed >= 5 wat do it do");
 
                 }
                 // we are in precision/timed driving
                 else {
                 	//returning to the center: absolute
-                	setAbsoluteGoal(currentLocationTemp.x, currentLocationTemp.y);
+                	//circleCount = 100;
+                	//stateMachineState = STATE_MACHINE_CIRCLE;
+                	setAbsoluteGoal(currentLocationMap.x, currentLocationMap.y);
                     //setGoalLocation(getCurrentLocation());
                     sendDriveCommand(result.cmdVel,result.angleError);
                     stateMachineState = STATE_MACHINE_TRANSFORM;
@@ -586,7 +592,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                     stateMachineState = STATE_MACHINE_ROTATE;
 
-                    setAbsoluteGoal(0, centerLocationOdom.y);
+                    setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+
                     //setAbsoluteGoal(0, centerLocationOdom.y, atan2(centerLocationOdom.y - currentLocationMap.y, centerLocationOdom.x - currentLocationMap.x));
 
                     // lower wrist to avoid ultrasound sensors
@@ -631,7 +638,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         	if (circleCount <= 0) {
         		stateMachineState = STATE_MACHINE_TRANSFORM;
         	}
-        	sendDriveCommand(0.4, 0.6);
+        	sendDriveCommand(0.4, 0.3);
 
         	break;
         }
@@ -663,8 +670,9 @@ void sendDriveCommand(double linearVel, double angularError)
 void setRelativeGoal(double r, double theta) {
 	useOdom = true;
 	goalLocation.theta = currentLocation.theta + theta;
-	goalLocation.x = currentLocation.x + r*sin(theta);
-	goalLocation.y = currentLocation.y + r*cos(theta);
+	goalLocation.x = currentLocation.x + r*cos(theta);
+	goalLocation.y = currentLocation.y + r*sin(theta);
+	Logger::chat("set relative goal x: %f y: %f", goalLocation.x, goalLocation.y);
 	//goalLocation.x = currentLocation.x + x;
 	//goalLocation.y = currentLocation.y + y;
 	//goalLocation.theta = currentLocation.theta + theta;
@@ -675,7 +683,9 @@ void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	goalLocation.x = x;
 	goalLocation.y =y;
-	goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
+	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+	Logger::chat("set absolute goal x: %f y: %f", goalLocation.x, goalLocation.y);
+	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
 }
 
@@ -1023,8 +1033,8 @@ void mapAverage() {
         }
 
         // Use the position and orientation provided by the ros transform.
-        centerLocation.x = odomPose.pose.position.x; //set centerLocation in odom frame
-        centerLocation.y = odomPose.pose.position.y;
+        //centerLocation.x = odomPose.pose.position.x; //set centerLocation in odom frame
+        //centerLocation.y = odomPose.pose.position.y;
 
 
     }
