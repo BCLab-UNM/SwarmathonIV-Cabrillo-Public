@@ -683,27 +683,31 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     if (currentMode == 1 || currentMode == 0) return;
 
     //If a target is collected treat other blocks as obstacles
-    if (targetCollected && message->detections.size() > 0 && !reachedCollectionPoint) {
-    	Logger::chat("poop");
-
-    	for(int i = 0; i < message->detections.size(); i++) {
-    		geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
-    		if (cenPose.pose.position.z > .16 && message->detections[i].id != 256) {
-    			if (cenPose.pose.position.x > 0) {
-    				Logger::chat("pos");
-    				setRelativeGoal(.75, c_BOUNCE_CONST);
-    				//setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta - c_BOUNCE_CONST);
-    			} else {
-    				Logger::chat("neg");
-    				setRelativeGoal(.75, c_BOUNCE_CONST);
-    				//setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + c_BOUNCE_CONST);
-    			}
-    			// switch to transform(rotate?) state to trigger collision avoidance
-    			stateMachineState = STATE_MACHINE_TRANSFORM;
-    			avoidingObstacle = true;
-    			return;
+    if (targetCollected && message->detections.size() > 0) {
+    	bool is256 = false;
+    	for (int i = 0; i < message->detections.size(); i++) {
+    		if(message->detections[i].id == 256) {
+    			is256 = true;
+    			break;
     		}
-
+    	}
+    	if (!is256) {
+    		for(int i = 0; i < message->detections.size(); i++) {
+    			geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
+    			if (cenPose.pose.position.z > .16) {
+    				if (cenPose.pose.position.x > 0) {
+    					Logger::chat("pos");
+    					setRelativeGoal(.75, M_PI_4);
+    				} else {
+    					Logger::chat("neg");
+    					setRelativeGoal(.75, -M_PI_4);
+    				}
+    				// switch to transform(rotate?) state to trigger collision avoidance
+    				stateMachineState = STATE_MACHINE_TRANSFORM;
+    				avoidingObstacle = true;
+    				return;
+    			}
+    		}
     	}
 
         //setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
@@ -758,7 +762,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             if (right) {
                 // turn away from the center to the left if just driving
                 // around/searching.
-            	setRelativeGoal(0, centeringTurn);
+            	//setRelativeGoal(0, centeringTurn);
             	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
                 //goalLocation.theta += centeringTurn;
             } else {
