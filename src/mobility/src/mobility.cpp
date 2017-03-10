@@ -418,11 +418,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     dropOffController.reset();
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
 //#################################
-                	geometry_msgs::Pose2D theGoal = result.centerGoal;
-                	setAbsoluteGoal(theGoal.x, theGoal.y);
+                	//geometry_msgs::Pose2D theGoal = result.centerGoal;
+                	//setAbsoluteGoal(theGoal.x, theGoal.y);
                     //setGoalLocation(result.centerGoal);
-                    stateMachineState = STATE_MACHINE_ROTATE;
-                    timerStartTime = time(0);
+                    //stateMachineState = STATE_MACHINE_TRANSFORM;
+                    //timerStartTime = time(0);
+                    //Logger::chat("timerTimeElapsed >= 5 wat do it do");
+
                 }
                 // we are in precision/timed driving
                 else {
@@ -431,6 +433,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     //setGoalLocation(getCurrentLocation());
                     sendDriveCommand(result.cmdVel,result.angleError);
                     stateMachineState = STATE_MACHINE_TRANSFORM;
+                    Logger::chat("the possibly useless goal setting??");
 
                     break;
                 }
