@@ -711,10 +711,12 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     		if (cenPose.pose.position.z > .16 && message->detections[i].id != 256) {
     			if (cenPose.pose.position.x > 0) {
     				Logger::chat("pos");
-    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta - c_BOUNCE_CONST);
+    				setRelativeGoal(.75, c_BOUNCE_CONST);
+    				//setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta - c_BOUNCE_CONST);
     			} else {
     				Logger::chat("neg");
-    				setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + c_BOUNCE_CONST);
+    				setRelativeGoal(.75, c_BOUNCE_CONST);
+    				//setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + c_BOUNCE_CONST);
     			}
     			// switch to transform(rotate?) state to trigger collision avoidance
     			stateMachineState = STATE_MACHINE_TRANSFORM;
@@ -849,7 +851,7 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
             	setRelativeGoal(0, 0, c_BOUNCE_CONST);
             	//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
             }
-            else if (targetCollected == false){
+            else if (targetCollected == false) {
             	setRelativeGoal(0, 0, 0.6);
         		//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + 0.6);
             }
