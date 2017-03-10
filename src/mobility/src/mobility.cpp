@@ -90,6 +90,7 @@ static const double c_SPEED_SLOPE                 = 0.5;
 static const double c_ROTATE_GIVEUP_SECONDS       = 4.0;
 static const double c_TRANSFORM_WAIT_SECONDS      = 0.1;
 static const double c_BOUNCE_CONST                = 1.8;
+static const int 	c_CIRCLE					  = 105;
 
 // Random number generator
 random_numbers::RandomNumberGenerator* rng;
@@ -485,7 +486,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//}
             	//else {
                 	if(!targetCollected)
-                		circleCount = 55;
+                		circleCount = c_CIRCLE;
 
             	//geometry_msgs::Pose2D theGoal = searchController.search();
             	//double distanceR = sqrt(pow(theGoal.x, 2) + pow(theGoal.y, 2));
@@ -696,7 +697,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     if (currentMode == 1 || currentMode == 0) return;
 
     //If a target is collected treat other blocks as obstacles
-    if (targetCollected && message->detections.size() > 0) {
+    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
     		if(message->detections[i].id == 256) {
@@ -716,7 +717,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     					setRelativeGoal(.75, -M_PI_4);
     				}
     				// switch to transform(rotate?) state to trigger collision avoidance
-    				stateMachineState = STATE_MACHINE_TRANSFORM;
+    				stateMachineState = STATE_MACHINE_ROTATE;
     				avoidingObstacle = true;
     				return;
     			}
@@ -841,11 +842,11 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
         	//setGoalLocation(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
 
             // select new heading. If carrying a block, turn c_BOUNCE_CONST (currently 1.8rad) to the LEFT; otherwise 0.6rad to the LEFT
-            if (targetCollected == true) {
+            if (!targetCollected) {
             	setRelativeGoal(0, c_BOUNCE_CONST);
             	//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + c_BOUNCE_CONST);
             }
-            else if (targetCollected == false){
+            else {
             	setRelativeGoal(0, 0.6);
         		//setGoalLocation(currentLocation.x, currentLocation.y, currentLocation.theta + 0.6);
             }
@@ -860,11 +861,11 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
         	//setRelativeGoal(goalLocation.x, goalLocation.y, currentLocation.theta + 0.6);
 
             // select new heading 0.6 radians to the RIGHT.
-            if (targetCollected == true) {
+            if (!targetCollected) {
             	setRelativeGoal(0, -c_BOUNCE_CONST);
             	//setRelativeGoal(currentLocation.x, currentLocation.y, currentLocation.theta - c_BOUNCE_CONST);
             }
-            else if (targetCollected == false){
+            else {
             	setRelativeGoal(0, -0.6);
         		//setRelativeGoal(currentLocation.x, currentLocation.y, currentLocation.theta - 0.6);
             }
