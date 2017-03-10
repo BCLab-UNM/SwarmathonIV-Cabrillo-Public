@@ -111,6 +111,7 @@ void mapAverage();  // constantly averages last 100 positions from map
 geometry_msgs::Pose2D currentLocation;
 geometry_msgs::Pose2D currentLocationMap;
 geometry_msgs::Pose2D currentLocationAverage;
+geometry_msgs::Pose2D currentLocationTotal;
 geometry_msgs::Pose2D goalLocation;
 geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
@@ -206,7 +207,7 @@ time_t timerStartTime;
 
 // An initial delay to allow the rover to gather enough position data to 
 // average its location.
-unsigned int startDelayInSeconds = 1;
+unsigned int startDelayInSeconds = 10;
 float timerTimeElapsed = 0;
 
 //Transforms
@@ -316,10 +317,6 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     float distance_to_goal = hypot(goalLocation.x - currentLocationTemp.x, goalLocation.y - currentLocationTemp.y);
     float angle_to_goal = angles::shortest_angular_distance(currentLocationTemp.theta, atan2(goalLocation.y - currentLocationTemp.y, goalLocation.x - currentLocationTemp.x));
     float desired_heading = angles::shortest_angular_distance(currentLocationTemp.theta, goalLocation.theta);
-
-    // calls the averaging function, also responsible for
-    // transform from Map frame to odom frame.
-    mapAverage();
 
     // Robot is in automode
     if (currentMode == 2 || currentMode == 3) {
@@ -828,6 +825,10 @@ void mapHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     currentLocationMap.theta = yaw;
+
+    // calls the averaging function, also responsible for
+    // transform from Map frame to odom frame.
+    mapAverage();
 }
 
 void joyCmdHandler(const sensor_msgs::Joy::ConstPtr& message) {
@@ -911,9 +912,13 @@ void mapAverage() {
     currentLocationAverage.theta = theta;
     */
 
-    currentLocationAverage.x += ((mapLocation[mapCount].x-subMapLocation.x)/mapHistorySize);
-    currentLocationAverage.y += ((mapLocation[mapCount].y-subMapLocation.y)/mapHistorySize);
-    currentLocationAverage.theta += ((mapLocation[mapCount].theta-subMapLocation.theta)/100);
+    //do running count of the average
+    currentLocationTotal.x += (mapLocation[mapCount].x-subMapLocation.x);
+    currentLocationTotal.y += (mapLocation[mapCount].y-subMapLocation.y);
+    currentLocationTotal.theta += (mapLocation[mapCount].theta-subMapLocation.theta);
+    currentLocationAverage.x = currentLocationTotal.x/mapHistorySize;
+    currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
+    currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
 
 
     // only run below code if a centerLocation has been set by initilization
