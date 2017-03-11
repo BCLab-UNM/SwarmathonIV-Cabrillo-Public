@@ -383,9 +383,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
         // If no adjustment needed, select new goal
         case STATE_MACHINE_TRANSFORM: {
-        	Logger::chat("TRANSFORMING");
 
-            //Should I circle?
+        	//Should I circle?
             if(circleCount > 0 && !targetCollected){
             	stateMachineState = STATE_MACHINE_CIRCLE;
             	break;
@@ -433,6 +432,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     //centerLocationOdom = getCurrentLocation();
 
                     dropOffController.reset();
+                	Logger::chat("Reset dropoffController.");
+
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
 //#################################
                 	geometry_msgs::Pose2D theGoal = result.centerGoal;
@@ -445,7 +446,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	//circleCount = 100;
                 	//stateMachineState = STATE_MACHINE_CIRCLE;
                     Logger::chat("timerTimeElapsed >= 5 wat do it do");
-
+                    break;
                 }
                 // we are in precision/timed driving
                 else {
@@ -495,6 +496,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	setRelativeGoal(2, rng->gaussian(0, 0.25));
             	//setGoalLocation(searchController.search(currentLocation));
             	//}
+            	Logger::chat("Picked new random goal.");
             }
 
             // Re-compute key quantities. The goal location may change inside the transform state.
@@ -510,10 +512,10 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Rotate left or right depending on sign of angle
         // Stay in this state until angle is minimized
         case STATE_MACHINE_ROTATE: {
-            Logger::chat("ROTATING");
-
             // If angle > 0.4 radians rotate but dont drive forward.
             if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
+                Logger::chat("ROT: Turning to meet desired_heading.");
+
                 // rotate but dont drive  0.05 is to prevent turning in reverse
                 sendDriveCommand(0.05, desired_heading);
                 break;
@@ -528,20 +530,22 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // Drive forward
         // Stay in this state until angle is at least PI/2
         case STATE_MACHINE_SKID_STEER: {
-        	Logger::chat("SKID_STEER");
 
             // goal not yet reached drive while maintaining proper heading.
             if (fabs(angle_to_goal) < M_PI_2) {
+                Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
             }
             // goal is reached but desired heading is still wrong turn only
             else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
+                Logger::chat("SKS: Rotating because desired_heading is big.");
                 sendDriveCommand(0.0, desired_heading);
             }
             else {
                 // stop
+                Logger::chat("SKS: Arrived.");
                 sendDriveCommand(0.0, 0.0);
                 avoidingObstacle = false;
 
@@ -669,9 +673,9 @@ void sendDriveCommand(double linearVel, double angularError)
 void setRelativeGoal(double r, double theta) {
 	useOdom = true;
 	goalLocation.theta = currentLocation.theta + theta;
-	goalLocation.x = currentLocation.x + r*cos(theta);
-	goalLocation.y = currentLocation.y + r*sin(theta);
-	Logger::chat("set relative goal x: %f y: %f", goalLocation.x, goalLocation.y);
+	goalLocation.x = currentLocation.x + r*cos(goalLocation.theta);
+	goalLocation.y = currentLocation.y + r*sin(goalLocation.theta);
+	Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocation.x, currentLocation.y, currentLocation.theta);
 	//goalLocation.x = currentLocation.x + x;
 	//goalLocation.y = currentLocation.y + y;
 	//goalLocation.theta = currentLocation.theta + theta;
@@ -683,7 +687,7 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y =y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
-	Logger::chat("set absolute goal x: %f y: %f", goalLocation.x, goalLocation.y);
+	Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
 }
@@ -695,7 +699,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     if (currentMode == 1 || currentMode == 0) return;
 
     //If a target is collected treat other blocks as obstacles
-    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle) {
+    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
     		if(message->detections[i].id == 256) {
