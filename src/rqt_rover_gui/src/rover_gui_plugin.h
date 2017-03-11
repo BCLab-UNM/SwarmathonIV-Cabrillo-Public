@@ -294,6 +294,7 @@ namespace rqt_rover_gui {
     bool rovers_started;
     unsigned long start_time;
     unsigned long last_time;
+    int score;
 
     std::mutex diag_update_mutex;
   };

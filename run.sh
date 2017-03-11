@@ -20,12 +20,13 @@ pkill roscore
 roscore &
 sleep 2
 
+defworld=~/rover_workspace/simulation/worlds/powerlaw_targets_example.world
 exe=$(basename $0)
 if [ "$exe" == "dev.sh" ]; then
   echo "Executing single rover test mode."
-  rqt -s rqt_rover_gui --args --startsim --single "$@"
+  rqt -s rqt_rover_gui --args --startsim --single --world $defworld "$@"
 elif [ "$exe" == "prelim.sh" ]; then
-  rqt -s rqt_rover_gui --args --startsim --prelim --powerlaw "$@"
+  rqt -s rqt_rover_gui --args --startsim --prelim --world $defworld "$@"
 elif [ "$exe" == "final.sh" ]; then
   rqt -s rqt_rover_gui --args --startsim --final --powerlaw "$@"  
 else

@@ -4,6 +4,8 @@
 #include <geometry_msgs/Pose2D.h>
 #include <random_numbers/random_numbers.h>
 
+#include "Logger.h"
+
 /**
  * This class implements the search control algorithm for the rovers. The code
  * here should be modified and enhanced to improve search performance.
