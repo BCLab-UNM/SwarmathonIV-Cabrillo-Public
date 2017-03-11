@@ -985,28 +985,6 @@ void mapAverage() {
     if (mapCount >= mapHistorySize) {
         mapCount = 0;
     }
-    /* old code
-    double x = 0;
-    double y = 0;
-    double theta = 0;
-
-    // add up all the positions in the array
-    for (int i = 0; i < mapHistorySize; i++) {
-        x += mapLocation[i].x;
-        y += mapLocation[i].y;
-        theta += mapLocation[i].theta;
-    }
-
-    // find the average
-    x = x/mapHistorySize;
-    y = y/mapHistorySize;
-    
-    // Get theta rotation by converting quaternion orientation to pitch/roll/yaw
-    theta = theta/100;
-    currentLocationAverage.x = x;
-    currentLocationAverage.y = y;
-    currentLocationAverage.theta = theta;
-    */
 
     //do running count of the average
     currentLocationTotal.x += (mapLocation[mapCount].x-subMapLocation.x);
@@ -1015,42 +993,5 @@ void mapAverage() {
     currentLocationAverage.x = currentLocationTotal.x/mapHistorySize;
     currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
-
-
-    // only run below code if a centerLocation has been set by initilization
-    if (init) {
-        // map frame
-        geometry_msgs::PoseStamped mapPose;
-
-        // setup msg to represent the center location in map frame
-        mapPose.header.stamp = ros::Time::now();
-
-        mapPose.header.frame_id = publishedName + "/map";
-        mapPose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, centerLocationMap.theta);
-        mapPose.pose.position.x = centerLocationMap.x;
-        mapPose.pose.position.y = centerLocationMap.y;
-        geometry_msgs::PoseStamped odomPose;
-        string x = "";
-
-        try { //attempt to get the transform of the center point in map frame to odom frame.
-            tfListener->waitForTransform(publishedName + "/map", publishedName + "/odom", ros::Time::now(), ros::Duration(1.0));
-            tfListener->transformPose(publishedName + "/odom", mapPose, odomPose);
-        }
-
-        catch(tf::TransformException& ex) {
-            ROS_INFO("Received an exception trying to transform a point from \"map\" to \"odom\": %s", ex.what());
-            x = "Exception thrown " + (string)ex.what();
-            std_msgs::String msg;
-            stringstream ss;
-            ss << "Exception in mapAverage() " + (string)ex.what();
-            Logger::log(ss.str().c_str());
-        }
-
-        // Use the position and orientation provided by the ros transform.
-        //centerLocation.x = odomPose.pose.position.x; //set centerLocation in odom frame
-        //centerLocation.y = odomPose.pose.position.y;
-
-
-    }
 }
 
