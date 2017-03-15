@@ -1,4 +1,5 @@
 #include "DropOffController.h"
+#include "Logger.h"
 
 DropOffController::DropOffController() {
     cameraOffsetCorrection = 0.020; //meters
@@ -54,6 +55,7 @@ void DropOffController::calculateDecision() {
         if (timerTimeElapsed >= 4)
         {
             result.reset = true; //tell mobility to reset to search parameters
+            Logger::chat("DOC: Telling mobility to reset search parameters.");
         }
         else if (timerTimeElapsed >= 1)
         {
@@ -66,6 +68,9 @@ void DropOffController::calculateDecision() {
 
             result.cmdVel = -0.3;
             result.angleError = 0.0;
+            Logger::chat("DOC: Dropping off block.");
+        }else{
+            Logger::chat("DOC: Reached collection point.");
         }
         return;
     }
@@ -103,7 +108,9 @@ void DropOffController::calculateDecision() {
 
 
     //reset timeWithoutSeeingEnoughCenterTags timout timer to current time
-    if ((!centerApproach && !seenEnoughCenterTags) || (count > 0 && !seenEnoughCenterTags)) timeWithoutSeeingEnoughCenterTags = time(0);
+    if ((!centerApproach && !seenEnoughCenterTags) || (count > 0 && !seenEnoughCenterTags)) {
+    	timeWithoutSeeingEnoughCenterTags = time(0);
+    }
 
     if (count > 0 || seenEnoughCenterTags || prevCount > 0) //if we have a target and the center is located drive towards it.
     {
@@ -192,6 +199,7 @@ void DropOffController::calculateDecision() {
         left = false;
         count = 0;
         centerSeen = false;
+        Logger::chat("DOC: Aborted center approach because I din't see enough tags.");
         return;
 
     }
