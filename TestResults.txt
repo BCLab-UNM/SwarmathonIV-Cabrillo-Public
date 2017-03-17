@@ -1,4 +1,4 @@
-02/10/2017 Jaime  Garcia --preliminary round--18 tags
+02/10/2017 Jaime  Garcia -preliminary round--18 tags
 02/17/2017 Arturo Cejudo -Preliminary round--17 tags but lost 5 
 02/17/2017 Arturo Cejudo -preliminary round--27 tags but lost 8
 02/17/2017 Arturo Cejudo -preliminary round--6  tags but lost 2
@@ -6,12 +6,14 @@
 02/24/2017 Arturo Cejudo -preliminary round--47 tags
 02/24/2017 Arturo Cejudo -preliminary round--37 tags but lost 2
 02/24/2017 Jaime  Garcia -preliminary round--16 tags lost two robots, it tried to pick up another tag and didn't recognize it already carried one
-02/24/2017 Jaime Garcia  -preliminary round--6 tags most of them pushed out
+02/24/2017 Jaime  Garcia -preliminary round--6 tags most of them pushed out
 03/03/2017 Arturo Cejudo -preliminary round-- 18 tags but lost 10
 03/03/2017 Arturo Cejudo -preliminary round-- 20 tags but lost 8
 03/03/2017 Arturo Cejudo -preliminary round-- 43 tags 
 03/03/2017 Satya  Zomer  -preliminary round-- 10 tags but lost 11
 03/10/2017 Arturo Cejudo -preliminary round-- 22 tags but lost 5
 03/10/2017 Arturo Cejduo -preliminary round-- 14 tags but lost 6
-03/10/2017 Jaime Garcia -preliminary round-- 25 tags lost a lot of tags but then the rover proved itself and pushed them back in luckily
-03/10/2017 Jaime Garcia -preliminary round-- 26 tags
+03/10/2017 Jaime  Garcia -preliminary round-- 25 tags lost a lot of tags but then the rover proved itself and pushed them back in luckily
+03/10/2017 Jaime  Garcia -preliminary round-- 26 tags
+03/10/2017 Arturo Cejudo -preliminary round-- 2 tags
+03/10/2017 Arturo Cejudo -preliminary round-- 3 tags
