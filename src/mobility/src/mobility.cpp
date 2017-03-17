@@ -699,7 +699,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     // XXX: Allee: this code gets triggered when we're in the center, with bad consequences.
     // Consider using reachedCollectionPoint to prevent that...
 
-    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE) {
+    float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
+
+    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE && distance_from_center >= 1) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
     		if(message->detections[i].id == 256) {
