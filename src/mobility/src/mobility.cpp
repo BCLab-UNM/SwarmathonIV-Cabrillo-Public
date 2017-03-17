@@ -160,10 +160,12 @@ bool init = false;
 int mapCount = 0;
 
 // How many points to use in calculating the map average position
-const unsigned int mapHistorySize = 500;
+#define MAP_HISTORY_SIZE 100
+unsigned int mapHistorySize = MAP_HISTORY_SIZE;
+
 
 // An array in which to store map positions
-geometry_msgs::Pose2D mapLocation[mapHistorySize];
+geometry_msgs::Pose2D mapLocation[MAP_HISTORY_SIZE];
 
 bool avoidingObstacle = false;
 
@@ -343,22 +345,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // init code goes here. (code that runs only once at start of
         // auto mode but wont work in main goes here)
         if (!init) {
-            if (timerTimeElapsed > startDelayInSeconds) {
-            	// XXX: Andrew: Correct centerLocation.x and y by taking into account that the rover is facing
-            	// the center but not in it.
-
-                // Set the location of the center circle location in the map
-                // frame based upon our current average location on the map.
-                centerLocationMap.x = currentLocationAverage.x;
-                centerLocationMap.y = currentLocationAverage.y;
-                centerLocationMap.theta = currentLocationAverage.theta;
-
-                // initialization has run
-                init = true;
-            } else {
-                return;
-            }
-
+        	return;
         }
 
         // If no collected or detected blocks set fingers
@@ -997,5 +984,16 @@ void mapAverage() {
     currentLocationAverage.x = currentLocationTotal.x/mapHistorySize;
     currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
+    if (mapCount == 99) {
+    	Logger::chat("center location: (%f, %f, %f) ", currentLocationAverage.x, currentLocationAverage.y, currentLocationAverage.theta);
+    	centerLocationMap.x = currentLocationAverage.x + .75 * sin(currentLocationAverage.theta);
+    	centerLocationMap.y = currentLocationAverage.y + .75 * cos(currentLocationAverage.theta);
+    	centerLocationMap.theta = currentLocationAverage.theta;
+
+    	// initialization has run
+    	init = true;
+    	mapHistorySize = 10;
+    	mapCount = 0;
+    }
 }
 
