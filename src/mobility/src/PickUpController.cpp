@@ -81,6 +81,7 @@ PickUpResult PickUpController::pickUpSelectedTarget(bool blockBlock) {
     }
     else if (Td > 1.7) //close the fingers and stop driving
     {
+    	// FIXME: This is why the rover backs up a litte.
         result.cmdVel = -0.1;
         result.angleError = 0.0;
         result.fingerAngle = 0;

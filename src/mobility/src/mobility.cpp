@@ -344,6 +344,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // auto mode but wont work in main goes here)
         if (!init) {
             if (timerTimeElapsed > startDelayInSeconds) {
+            	// XXX: Andrew: Correct centerLocation.x and y by taking into account that the rover is facing
+            	// the center but not in it.
+
                 // Set the location of the center circle location in the map
                 // frame based upon our current average location on the map.
                 centerLocationMap.x = currentLocationAverage.x;
@@ -446,15 +449,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 }
                 // we are in precision/timed driving
                 else {
-                	//returning to the center: absolute
-                	//circleCount = 100;
-                	//stateMachineState = STATE_MACHINE_CIRCLE;
-                	setAbsoluteGoal(currentLocationMap.x, currentLocationMap.y);
-                    //setGoalLocation(getCurrentLocation());
+                	// Set the goal to the current location. This seems to trick
+                	// the mobility state machine into staying in the TRANSFORM
+                	// state and is vital because this code is driving directly.
+                	goalLocation = currentLocation;
+                	useOdom = true;
                     sendDriveCommand(result.cmdVel,result.angleError);
                     stateMachineState = STATE_MACHINE_TRANSFORM;
-                    Logger::chat("the possibly useless goal setting??");
-
                     break;
                 }
             }
@@ -683,7 +684,7 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y =y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
-	Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
+	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
 }
@@ -695,6 +696,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     if (currentMode == 1 || currentMode == 0) return;
 
     //If a target is collected treat other blocks as obstacles
+    // XXX: Allee: this code gets triggered when we're in the center, with bad consequences.
+    // Consider using reachedCollectionPoint to prevent that...
+
     if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
@@ -708,10 +712,10 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     			geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
     			if (cenPose.pose.position.z > .16) {
     				if (cenPose.pose.position.x > 0) {
-    					Logger::chat("pos");
+    					Logger::chat("Turning %f because I see a block in my way!", M_PI_4);
     					setRelativeGoal(.75, M_PI_4);
     				} else {
-    					Logger::chat("neg");
+    					Logger::chat("Turning %f because I see a block in my way!", -M_PI_4);
     					setRelativeGoal(.75, -M_PI_4);
     				}
     				// switch to transform(rotate?) state to trigger collision avoidance
@@ -767,14 +771,14 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
 
-            // FIXME: This is broken, right is not defined here...
+            // FIXME: Make a better turn away from the center...
             //
             // this code keeps the robot from driving over
             // the center when searching for blocks
-            if (right) {
+            if (countRight) {
                 // turn away from the center to the left if just driving
                 // around/searching.
-            	//setRelativeGoal(0, centeringTurn);
+            	setRelativeGoal(0, centeringTurn);
             	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
                 //goalLocation.theta += centeringTurn;
             } else {
