@@ -453,7 +453,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
+            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
 
@@ -516,7 +516,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
+            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
                 Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
@@ -994,7 +994,7 @@ void mapAverage() {
 
     	// initialization has run
     	init = true;
-    	mapHistorySize = 10;
+    	mapHistorySize = 5;
     	mapCount = 0;
     }
 }
