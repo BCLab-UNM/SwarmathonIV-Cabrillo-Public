@@ -682,7 +682,7 @@ void setRelativeGoal(double r, double theta) {
 void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	goalLocation.x = x;
-	goalLocation.y =y;
+	goalLocation.y = y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
 	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
@@ -694,10 +694,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
     // If in manual mode do not try to automatically pick up the target
     if (currentMode == 1 || currentMode == 0) return;
-
-    //If a target is collected treat other blocks as obstacles
-    // XXX: Allee: this code gets triggered when we're in the center, with bad consequences.
-    // Consider using reachedCollectionPoint to prevent that...
 
     float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
 
@@ -737,9 +733,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         float cameraOffsetCorrection = 0.020; //meters;
 
         centerSeen = false;
-        double count = 0;
-        double countRight = 0;
-        double countLeft = 0;
+        int count = 0;
+        int countRight = 0;
+        int countLeft = 0;
 
         // this loop is to get the number of center tags
         for (int i = 0; i < message->detections.size(); i++) {
@@ -769,7 +765,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         // if we see the center and we dont have a target collected
         if (centerSeen && !targetCollected) {
 
-            float centeringTurn = 0.15; //radians
+            float centeringTurn = 0.3; //radians
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
 
@@ -777,18 +773,24 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             //
             // this code keeps the robot from driving over
             // the center when searching for blocks
-            if (countRight) {
-                // turn away from the center to the left if just driving
-                // around/searching.
-            	setRelativeGoal(0, centeringTurn);
-            	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
-                //goalLocation.theta += centeringTurn;
-            } else {
-                // turn away from the center to the right if just driving
-                // around/searching.
-            	setRelativeGoal(0, -centeringTurn);
-            	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
-                //goalLocation.theta -= centeringTurn;
+            if (!avoidingObstacle) {
+            	if (countRight > countLeft) {
+            		Logger::chat("Right");
+            		// turn away from the center to the left if just driving
+            		// around/searching.
+            		setRelativeGoal(.75, c_BOUNCE_CONST);
+            		avoidingObstacle = true;
+            		//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
+            		//goalLocation.theta += centeringTurn;
+            	} else {
+            		Logger::chat("Left");
+            		// turn away from the center to the right if just driving
+            		// around/searching.
+            		setRelativeGoal(.75, -c_BOUNCE_CONST);
+            		avoidingObstacle = true;
+            		//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
+            		//goalLocation.theta -= centeringTurn;
+            	}
             }
 
             // continues an interrupted search
