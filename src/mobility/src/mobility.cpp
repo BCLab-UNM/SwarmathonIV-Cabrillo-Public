@@ -133,6 +133,7 @@ int giveupCount = 0;
 //set true when the goal is less than 3 meters
 //set false when the goal is more than 3 meters
 bool useOdom = false;
+float heartbeat_publish_interval = 2;
 
 // Set true when the target block is less than targetDist so we continue
 // attempting to pick it up rather than switching to another block in view.
@@ -160,10 +161,12 @@ bool init = false;
 int mapCount = 0;
 
 // How many points to use in calculating the map average position
-const unsigned int mapHistorySize = 500;
+#define MAP_HISTORY_SIZE 100
+unsigned int mapHistorySize = MAP_HISTORY_SIZE;
+
 
 // An array in which to store map positions
-geometry_msgs::Pose2D mapLocation[mapHistorySize];
+geometry_msgs::Pose2D mapLocation[MAP_HISTORY_SIZE];
 
 bool avoidingObstacle = false;
 
@@ -192,6 +195,7 @@ ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
 ros::Publisher driveControlPublish;
+ros::Publisher heartbeatPublisher;
 
 // Subscribers
 ros::Subscriber joySubscriber;
@@ -205,6 +209,7 @@ ros::Subscriber mapSubscriber;
 ros::Timer stateMachineTimer;
 ros::Timer publish_status_timer;
 ros::Timer targetDetectedTimer;
+ros::Timer publish_heartbeat_timer;
 
 // records time for delays in sequanced actions, 1 second resolution.
 time_t timerStartTime;
@@ -230,6 +235,8 @@ void mapHandler(const nav_msgs::Odometry::ConstPtr& message);
 void mobilityStateMachine(const ros::TimerEvent&);
 void publishStatusTimerEventHandler(const ros::TimerEvent& event);
 void targetDetectedReset(const ros::TimerEvent& event);
+void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
+
 //function to set goal location and set odom bool
 //and overloaded funciton for x, y and theta components
 //void setGoalLocation(geometry_msgs::Pose2D location);
@@ -300,10 +307,13 @@ int main(int argc, char **argv) {
     fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
     wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
     driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
+    heartbeatPublisher = mNH.advertise<std_msgs::String>((publishedName + "/mobility/heartbeat"), 1, true);
 
     publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
     stateMachineTimer = mNH.createTimer(ros::Duration(mobilityLoopTimeStep), mobilityStateMachine);
     targetDetectedTimer = mNH.createTimer(ros::Duration(0), targetDetectedReset, true);
+
+    publish_heartbeat_timer = mNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
 
     tfListener = new tf::TransformListener();
 
@@ -343,22 +353,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // init code goes here. (code that runs only once at start of
         // auto mode but wont work in main goes here)
         if (!init) {
-            if (timerTimeElapsed > startDelayInSeconds) {
-            	// XXX: Andrew: Correct centerLocation.x and y by taking into account that the rover is facing
-            	// the center but not in it.
-
-                // Set the location of the center circle location in the map
-                // frame based upon our current average location on the map.
-                centerLocationMap.x = currentLocationAverage.x;
-                centerLocationMap.y = currentLocationAverage.y;
-                centerLocationMap.theta = currentLocationAverage.theta;
-
-                // initialization has run
-                init = true;
-            } else {
-                return;
-            }
-
+        	return;
         }
 
         // If no collected or detected blocks set fingers
@@ -466,7 +461,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angle_to_goal) < M_PI_2) {
+            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
 
@@ -529,17 +524,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angle_to_goal) < M_PI_2) {
+            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
                 Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
             }
+
             // goal is reached but desired heading is still wrong turn only
             else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
                 Logger::chat("SKS: Rotating because desired_heading is big.");
                 sendDriveCommand(0.0, desired_heading);
             }
+
             else {
                 // stop
                 Logger::chat("SKS: Arrived.");
@@ -1001,5 +998,21 @@ void mapAverage() {
     currentLocationAverage.x = currentLocationTotal.x/mapHistorySize;
     currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
+    if (mapCount == 99) {
+    	Logger::chat("center location: (%f, %f, %f) ", currentLocationAverage.x, currentLocationAverage.y, currentLocationAverage.theta);
+    	centerLocationMap.x = currentLocationAverage.x + .75 * sin(currentLocationAverage.theta);
+    	centerLocationMap.y = currentLocationAverage.y + .75 * cos(currentLocationAverage.theta);
+    	centerLocationMap.theta = currentLocationAverage.theta;
+
+    	// initialization has run
+    	init = true;
+    	mapHistorySize = 10;
+    	mapCount = 0;
+    }
 }
 
+void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {
+    std_msgs::String msg;
+    msg.data = "";
+    heartbeatPublisher.publish(msg);
+}
