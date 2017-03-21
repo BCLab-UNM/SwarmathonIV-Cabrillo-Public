@@ -694,7 +694,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
     float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
 
-    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE && distance_from_center >= 1) {
+    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState == STATE_MACHINE_SKID_STEER) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
     		if(message->detections[i].id == 256) {
@@ -753,6 +753,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         }
 
         if (centerSeen && targetCollected) {
+        	Logger::chat("Center seen and target collected");
+        	goalLocation = currentLocation;
+        	useOdom = true;
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
         }
