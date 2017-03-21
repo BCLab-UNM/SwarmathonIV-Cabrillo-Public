@@ -133,6 +133,7 @@ int giveupCount = 0;
 //set true when the goal is less than 3 meters
 //set false when the goal is more than 3 meters
 bool useOdom = false;
+float heartbeat_publish_interval = 2;
 
 // Set true when the target block is less than targetDist so we continue
 // attempting to pick it up rather than switching to another block in view.
@@ -160,10 +161,12 @@ bool init = false;
 int mapCount = 0;
 
 // How many points to use in calculating the map average position
-const unsigned int mapHistorySize = 500;
+#define MAP_HISTORY_SIZE 100
+unsigned int mapHistorySize = MAP_HISTORY_SIZE;
+
 
 // An array in which to store map positions
-geometry_msgs::Pose2D mapLocation[mapHistorySize];
+geometry_msgs::Pose2D mapLocation[MAP_HISTORY_SIZE];
 
 bool avoidingObstacle = false;
 
@@ -192,6 +195,7 @@ ros::Publisher status_publisher;
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
 ros::Publisher driveControlPublish;
+ros::Publisher heartbeatPublisher;
 
 // Subscribers
 ros::Subscriber joySubscriber;
@@ -205,6 +209,7 @@ ros::Subscriber mapSubscriber;
 ros::Timer stateMachineTimer;
 ros::Timer publish_status_timer;
 ros::Timer targetDetectedTimer;
+ros::Timer publish_heartbeat_timer;
 
 // records time for delays in sequanced actions, 1 second resolution.
 time_t timerStartTime;
@@ -230,6 +235,8 @@ void mapHandler(const nav_msgs::Odometry::ConstPtr& message);
 void mobilityStateMachine(const ros::TimerEvent&);
 void publishStatusTimerEventHandler(const ros::TimerEvent& event);
 void targetDetectedReset(const ros::TimerEvent& event);
+void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
+
 //function to set goal location and set odom bool
 //and overloaded funciton for x, y and theta components
 //void setGoalLocation(geometry_msgs::Pose2D location);
@@ -300,10 +307,13 @@ int main(int argc, char **argv) {
     fingerAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/fingerAngle/cmd"), 1, true);
     wristAnglePublish = mNH.advertise<std_msgs::Float32>((publishedName + "/wristAngle/cmd"), 1, true);
     driveControlPublish = mNH.advertise<geometry_msgs::Twist>((publishedName + "/driveControl"), 10);
+    heartbeatPublisher = mNH.advertise<std_msgs::String>((publishedName + "/mobility/heartbeat"), 1, true);
 
     publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
     stateMachineTimer = mNH.createTimer(ros::Duration(mobilityLoopTimeStep), mobilityStateMachine);
     targetDetectedTimer = mNH.createTimer(ros::Duration(0), targetDetectedReset, true);
+
+    publish_heartbeat_timer = mNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
 
     tfListener = new tf::TransformListener();
 
@@ -343,22 +353,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         // init code goes here. (code that runs only once at start of
         // auto mode but wont work in main goes here)
         if (!init) {
-            if (timerTimeElapsed > startDelayInSeconds) {
-            	// XXX: Andrew: Correct centerLocation.x and y by taking into account that the rover is facing
-            	// the center but not in it.
-
-                // Set the location of the center circle location in the map
-                // frame based upon our current average location on the map.
-                centerLocationMap.x = currentLocationAverage.x;
-                centerLocationMap.y = currentLocationAverage.y;
-                centerLocationMap.theta = currentLocationAverage.theta;
-
-                // initialization has run
-                init = true;
-            } else {
-                return;
-            }
-
+        	return;
         }
 
         // If no collected or detected blocks set fingers
@@ -467,7 +462,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angle_to_goal) < M_PI_2) {
+            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
 
@@ -536,17 +531,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angle_to_goal) < M_PI_2) {
+            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
                 Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
             }
+
             // goal is reached but desired heading is still wrong turn only
             else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
                 Logger::chat("SKS: Rotating because desired_heading is big.");
                 sendDriveCommand(0.0, desired_heading);
             }
+
             else {
                 // stop
                 Logger::chat("SKS: Arrived.");
@@ -691,8 +688,13 @@ void setRelativeGoal(double r, double theta) {
 void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	goalLocation.x = x;
+<<<<<<< HEAD
 	goalLocation.y =y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationAverage.y, goalLocation.x - currentLocationAverage.x);
+=======
+	goalLocation.y = y;
+	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+>>>>>>> d56187ed0ebaa8b154a84758545e34d94178eacb
 	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
@@ -704,11 +706,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     // If in manual mode do not try to automatically pick up the target
     if (currentMode == 1 || currentMode == 0) return;
 
-    //If a target is collected treat other blocks as obstacles
-    // XXX: Allee: this code gets triggered when we're in the center, with bad consequences.
-    // Consider using reachedCollectionPoint to prevent that...
+    float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
 
-    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState != STATE_MACHINE_ROTATE) {
+    if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState == STATE_MACHINE_SKID_STEER) {
     	bool is256 = false;
     	for (int i = 0; i < message->detections.size(); i++) {
     		if(message->detections[i].id == 256) {
@@ -744,9 +744,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         float cameraOffsetCorrection = 0.020; //meters;
 
         centerSeen = false;
-        double count = 0;
-        double countRight = 0;
-        double countLeft = 0;
+        int count = 0;
+        int countRight = 0;
+        int countLeft = 0;
 
         // this loop is to get the number of center tags
         for (int i = 0; i < message->detections.size(); i++) {
@@ -767,6 +767,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         }
 
         if (centerSeen && targetCollected) {
+        	Logger::chat("Center seen and target collected");
+        	goalLocation = currentLocation;
+        	useOdom = true;
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
         }
@@ -776,7 +779,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         // if we see the center and we dont have a target collected
         if (centerSeen && !targetCollected) {
 
-            float centeringTurn = 0.15; //radians
+            float centeringTurn = 0.3; //radians
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
 
@@ -784,18 +787,24 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             //
             // this code keeps the robot from driving over
             // the center when searching for blocks
-            if (countRight) {
-                // turn away from the center to the left if just driving
-                // around/searching.
-            	setRelativeGoal(0, centeringTurn);
-            	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
-                //goalLocation.theta += centeringTurn;
-            } else {
-                // turn away from the center to the right if just driving
-                // around/searching.
-            	setRelativeGoal(0, -centeringTurn);
-            	//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
-                //goalLocation.theta -= centeringTurn;
+            if (!avoidingObstacle) {
+            	if (countRight > countLeft) {
+            		Logger::chat("Right");
+            		// turn away from the center to the left if just driving
+            		// around/searching.
+            		setRelativeGoal(.75, c_BOUNCE_CONST);
+            		avoidingObstacle = true;
+            		//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta + centeringTurn);
+            		//goalLocation.theta += centeringTurn;
+            	} else {
+            		Logger::chat("Left");
+            		// turn away from the center to the right if just driving
+            		// around/searching.
+            		setRelativeGoal(.75, -c_BOUNCE_CONST);
+            		avoidingObstacle = true;
+            		//setGoalLocation(goalLocation.x, goalLocation.y, goalLocation.theta - centeringTurn);
+            		//goalLocation.theta -= centeringTurn;
+            	}
             }
 
             // continues an interrupted search
@@ -1006,5 +1015,21 @@ void mapAverage() {
     currentLocationAverage.x = currentLocationTotal.x/mapHistorySize;
     currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
+    if (mapCount == 99) {
+    	Logger::chat("center location: (%f, %f, %f) ", currentLocationAverage.x, currentLocationAverage.y, currentLocationAverage.theta);
+    	centerLocationMap.x = currentLocationAverage.x + .75 * sin(currentLocationAverage.theta);
+    	centerLocationMap.y = currentLocationAverage.y + .75 * cos(currentLocationAverage.theta);
+    	centerLocationMap.theta = currentLocationAverage.theta;
+
+    	// initialization has run
+    	init = true;
+    	mapHistorySize = 10;
+    	mapCount = 0;
+    }
 }
 
+void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {
+    std_msgs::String msg;
+    msg.data = "";
+    heartbeatPublisher.publish(msg);
+}
