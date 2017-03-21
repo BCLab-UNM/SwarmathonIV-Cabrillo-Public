@@ -396,7 +396,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 // centerLocation and currentLocation
             	//currentLocationTemp = getCurrentLocation();
             	//################################
-                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
+            	//SHOULD I ALSO USE AVERAGES HERE???????????????????????????????????????????????/
+                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationAverage.x, centerLocationMap.y - currentLocationAverage.y));
                 dropOffController.setDataLocations(centerLocationMap, currentLocationMap, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
@@ -427,7 +428,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                     // move back to transform step
                     stateMachineState = STATE_MACHINE_TRANSFORM;
-                    reachedCollectionPoint = false;;
+                    reachedCollectionPoint = false;
                     //centerLocationOdom = getCurrentLocation();
 
                     dropOffController.reset();
@@ -477,22 +478,28 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
             	// behavior from the navigation updates. This code should be put back in when
             	// this feature is tested.
-            	//if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
+            	int foodSearchCount = 0;
+            	//setAbsoluteGoal(foodLocation.x, foodLocation.y);
+            	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
+            		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+            		Logger::chat("returning to food (%f %f)", foodLocation.x, foodLocation.y);
+            		foodSearchCount++;
+            		if(foodSearchCount > 3) { //search spot for food and then give up
+            			foodLocation.x = 0.0;
+            			foodLocation.y = 0.0;//this definitely does not work
+            		}
+            	}
+            	else {
             	//
-            	//	setGoalLocation(foodLocation);
-            	//	foodLocation.x = 0.0;
-            	//	foodLocation.y = 0.0;
-            	//}
-            	//else {
-            	//
-                	if(!targetCollected)
+                	if(!targetCollected){
                 		circleCount = c_CIRCLE;
 
             	//geometry_msgs::Pose2D theGoal = searchController.search();
             	//double distanceR = sqrt(pow(theGoal.x, 2) + pow(theGoal.y, 2));
-            	setRelativeGoal(2, rng->gaussian(0, 0.25));
+                		setRelativeGoal(2, rng->gaussian(0, 0.25));
+                	}
             	//setGoalLocation(searchController.search(currentLocation));
-            	//}
+            	}
             	Logger::chat("Picked new random goal.");
             }
 
@@ -585,13 +592,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                 if (result.pickedUp) {
                     pickUpController.reset();
-                    currentLocationTemp = getCurrentLocation();
+                    //currentLocationTemp = getCurrentLocation();
                     // assume target has been picked up by gripper
                     targetCollected = true;
                     result.pickedUp = false;
                     // store coordinates of last pickup for return
-                    foodLocation.x = currentLocationTemp.x;
-                    foodLocation.y = currentLocationTemp.y;
+                    foodLocation.x = currentLocationMap.x;
+                    foodLocation.y = currentLocationMap.y;
+        			Logger::chat("setting foodLocation (%f %f)", foodLocation.x, foodLocation.y);
+
 
                     stateMachineState = STATE_MACHINE_ROTATE;
                     setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
@@ -683,7 +692,7 @@ void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	goalLocation.x = x;
 	goalLocation.y =y;
-	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+	goalLocation.theta = atan2(goalLocation.y - currentLocationAverage.y, goalLocation.x - currentLocationAverage.x);
 	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
