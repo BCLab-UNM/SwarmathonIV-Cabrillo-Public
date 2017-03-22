@@ -52,7 +52,7 @@ void DropOffController::calculateDecision() {
         //timerStartTime was reset before we entered reachedCollectionPoint so
         //we can now use it for our timeing of 2 seconds
 
-        if (timerTimeElapsed >= 4)
+        if (timerTimeElapsed >= 6)
         {
             result.reset = true; //tell mobility to reset to search parameters
             Logger::chat("DOC: Telling mobility to reset search parameters.");
@@ -119,11 +119,13 @@ void DropOffController::calculateDecision() {
 
         if (seenEnoughCenterTags) //if we have seen enough tags
         {
-            if ((countLeft-5) > countRight) //and there are too many on the left
+        	// XXX: Tuneable
+            if ((countLeft/2) > countRight) //and there are too many on the left
             {
                 right = false; //then we say non on the right to cause us to turn right
             }
-            else if ((countRight-5) > countLeft)
+        	// XXX: Tuneable
+            else if ((countRight/2) > countLeft)
             {
                 left = false; //or left in this case
             }
@@ -145,7 +147,7 @@ void DropOffController::calculateDecision() {
             result.angleError = -centeringTurn*turnDirection;
         }
         else if (left){
-            result.cmdVel = -0.1 * turnDirection;
+        	result.cmdVel = -0.1 * turnDirection;
             result.angleError = centeringTurn*turnDirection;
         }
         else
@@ -155,8 +157,13 @@ void DropOffController::calculateDecision() {
         }
 
         //must see greater than this many tags before assuming we are driving into the center and not along an edge.
-        if (count > seenEnoughCenterTagsCount)
+    	// XXX: Tuneable was:
+        //if (count > seenEnoughCenterTagsCount)
+        if (count > seenEnoughCenterTagsCount && countLeft >= count/2 && countRight >= count/2)
         {
+            if (!seenEnoughCenterTags) {
+            	Logger::chat("Triggered approach. seen: %d l: %d r: %d", count, countLeft, countRight);
+            }
             seenEnoughCenterTags = true; //we have driven far enough forward to be in the circle.
             timeWithoutSeeingEnoughCenterTags = time(0);
         }
@@ -250,7 +257,7 @@ void DropOffController::reset() {
 
 }
 
-void DropOffController::setDataTargets(int ccount, double lleft, double rright)
+void DropOffController::setDataTargets(int ccount, int lleft, int rright)
 {
     count = ccount;
     if (rright > 0)
