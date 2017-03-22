@@ -32,7 +32,7 @@ public:
 
     void setDataTargets(int ccount, int lleft, int rright);
     void setCenterDist(float dist) {distanceToCenter = dist;}
-    void setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D current, float sync);
+    void setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D currentOdom, geometry_msgs::Pose2D currentMap, bool useOdom, float sync);
 
 private:
 
@@ -67,7 +67,9 @@ private:
     float collectionPointVisualDistance;
     float distanceToCenter;
     geometry_msgs::Pose2D centerLocation;
-    geometry_msgs::Pose2D currentLocation;
+    geometry_msgs::Pose2D currentLocationOdom;
+    geometry_msgs::Pose2D currentLocationMap;
+    bool useOdom;
     float timerTimeElapsed;
     time_t timerStartTime;
     float timeElapsedSinceTimeSinceSeeingEnoughCenterTags;

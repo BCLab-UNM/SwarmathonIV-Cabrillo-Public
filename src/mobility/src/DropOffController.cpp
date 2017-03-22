@@ -33,6 +33,8 @@ DropOffController::DropOffController() {
     prevCount = 0;
 
     searchVelocity = 0.15;
+
+    useOdom = false;
 }
 
 
@@ -224,10 +226,12 @@ void DropOffController::calculateDecision() {
 }
 
 
-void DropOffController::setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D current, float sync) {
+void DropOffController::setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D currentOdom, geometry_msgs::Pose2D currentMap, bool odom, float sync) {
 
     centerLocation = center;
-    currentLocation = current;
+    currentLocationOdom = currentOdom;
+    currentLocationMap = currentMap;
+    useOdom = odom;
     timerTimeElapsed = sync;
     calculateDecision();
 
@@ -255,6 +259,7 @@ void DropOffController::reset() {
     seenEnoughCenterTags = false;
     circularCenterSearching = false;
 
+    useOdom = false;
 }
 
 void DropOffController::setDataTargets(int ccount, int lleft, int rright)
