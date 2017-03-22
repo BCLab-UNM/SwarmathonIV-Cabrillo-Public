@@ -15,6 +15,7 @@ struct DropOffResult {
     geometry_msgs::Pose2D centerGoal;
     bool reset;
     bool timer;
+    bool useOdom;
 };
 
 class DropOffController

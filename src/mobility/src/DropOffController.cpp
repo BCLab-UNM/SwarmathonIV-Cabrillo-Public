@@ -18,6 +18,7 @@ DropOffController::DropOffController() {
     result.centerGoal; //goal that is center location or based upon the center location.
     result.reset = false;
     result.timer = false;
+    result.useOdom = false;
 
     left = false;
     right = false;
