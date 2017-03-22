@@ -160,6 +160,9 @@ bool init = false;
 // used to remember place in mapAverage array
 int mapCount = 0;
 
+//Used to decide to give up on searching for food
+int foodSearchCount = 0;
+
 // How many points to use in calculating the map average position
 #define MAP_HISTORY_SIZE 100
 unsigned int mapHistorySize = MAP_HISTORY_SIZE;
@@ -392,7 +395,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//currentLocationTemp = getCurrentLocation();
             	//################################
             	//SHOULD I ALSO USE AVERAGES HERE???????????????????????????????????????????????/
-                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationAverage.x, centerLocationMap.y - currentLocationAverage.y));
+                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
                 dropOffController.setDataLocations(centerLocationMap, currentLocationMap, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
@@ -462,7 +465,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
+            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
 
@@ -473,11 +476,16 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	// FIXME: From Mike: Take this out of Kiley's branch to separate the food return
             	// behavior from the navigation updates. This code should be put back in when
             	// this feature is tested.
-            	int foodSearchCount = 0;
+            	//int foodSearchCount = 0;
             	//setAbsoluteGoal(foodLocation.x, foodLocation.y);
             	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
             		setAbsoluteGoal(foodLocation.x, foodLocation.y);
-            		Logger::chat("returning to food (%f %f)", foodLocation.x, foodLocation.y);
+            		Logger::chat("returning to food (%f %f %f)", foodLocation.x, foodLocation.y, foodSearchCount);
+            		if(foodSearchCount >= 2) {
+            			stateMachineState = STATE_MACHINE_CIRCLE;
+            			circleCount = c_CIRCLE;
+            		}
+
             		foodSearchCount++;
             		if(foodSearchCount > 3) { //search spot for food and then give up
             			foodLocation.x = 0.0;
@@ -531,7 +539,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > 0.5) {
+            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
                 Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
@@ -596,6 +604,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // store coordinates of last pickup for return
                     foodLocation.x = currentLocationMap.x;
                     foodLocation.y = currentLocationMap.y;
+                    foodSearchCount = 0;
         			Logger::chat("setting foodLocation (%f %f)", foodLocation.x, foodLocation.y);
 
 
@@ -644,7 +653,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         	if (circleCount <= 0) {
         		stateMachineState = STATE_MACHINE_TRANSFORM;
         	}
-        	sendDriveCommand(0.4, 0.3);
+        	sendDriveCommand(0.1, 0.3);
 
         	break;
         }
@@ -688,13 +697,8 @@ void setRelativeGoal(double r, double theta) {
 void setAbsoluteGoal(double x, double y){
 	useOdom = false;
 	goalLocation.x = x;
-<<<<<<< HEAD
-	goalLocation.y =y;
-	goalLocation.theta = atan2(goalLocation.y - currentLocationAverage.y, goalLocation.x - currentLocationAverage.x);
-=======
 	goalLocation.y = y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
->>>>>>> d56187ed0ebaa8b154a84758545e34d94178eacb
 	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
@@ -808,7 +812,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             }
 
             // continues an interrupted search
-            geometry_msgs::Pose2D theGoal = searchController.continueInterruptedSearch(goalLocation);
+          //  geometry_msgs::Pose2D theGoal = searchController.continueInterruptedSearch(goalLocation);
 
             //setGoalLocation(searchController.continueInterruptedSearch(getCurrentLocation(), goalLocation));
 
@@ -1017,8 +1021,8 @@ void mapAverage() {
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
     if (mapCount == 99) {
     	Logger::chat("center location: (%f, %f, %f) ", currentLocationAverage.x, currentLocationAverage.y, currentLocationAverage.theta);
-    	centerLocationMap.x = currentLocationAverage.x + .75 * sin(currentLocationAverage.theta);
-    	centerLocationMap.y = currentLocationAverage.y + .75 * cos(currentLocationAverage.theta);
+    	centerLocationMap.x = currentLocationAverage.x + 1.1 * cos(currentLocationAverage.theta);
+    	centerLocationMap.y = currentLocationAverage.y + 1.1 * sin(currentLocationAverage.theta);
     	centerLocationMap.theta = currentLocationAverage.theta;
 
     	// initialization has run
