@@ -431,6 +431,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
                     dropOffController.reset();
                 	Logger::chat("Reset dropoffController.");
+                	// XXX: Kiley: This is where the robot freezes after dropping off a target.
+                	// I think it should start going back to food here.
 
                 } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
 //#################################
