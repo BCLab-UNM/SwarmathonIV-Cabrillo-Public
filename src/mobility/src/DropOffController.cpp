@@ -57,11 +57,13 @@ void DropOffController::calculateDecision() {
 
         if (timerTimeElapsed >= 6)
         {
+        	// Do this 6 seconds after detecting we're in the center (and ready to dropp off a block.).
             result.reset = true; //tell mobility to reset to search parameters
             Logger::chat("DOC: Telling mobility to reset search parameters.");
         }
         else if (timerTimeElapsed >= 1)
         {
+        	// Do this 1 second after detecting we're in the center.
             //open fingers
             float angle;
             angle = M_PI_2;
@@ -80,6 +82,10 @@ void DropOffController::calculateDecision() {
 
     //check to see if we are driving to the center location or if we need to drive in a circle and look.
     if (distanceToCenter > collectionPointVisualDistance && !circularCenterSearching && count == 0) {
+    	// XXX: Kiley: if we're here the rover is trying to drive back to
+    	// the nest. In this case we should report back to mobility an absolute goal
+    	// in result.centerGoal and tell mobility that it's absolute by setting result.useOdom = false.
+    	//
 
         //set angle to center as goal heading
         result.centerGoal.theta = atan2(centerLocation.y - currentLocation.y, centerLocation.x - currentLocation.x);
@@ -91,6 +97,12 @@ void DropOffController::calculateDecision() {
     }
     else if (timerTimeElapsed >=5)//spin search for center
     {
+    	// XXX: Kiley: If we're here the rover is trying to find the center after going to it's GPS
+    	// coordinates and not finding it. That seems like it'll happen a lot! Return a relative goal
+    	// in result.centerGoal. Remember, setRelativeGoal() takes r, theta. You can "abuse" the member
+    	// variable in result.centerGoal to be used this way. If you look closely at the code below
+    	// you can figure out what term is "r" and what term is "theta".
+    	//
         //sets a goal that is 60cm from the centerLocation and spinner
         //radians counterclockwise from being purly along the x-axis.
         result.centerGoal.x = centerLocation.x + (spinSize + addSpinSize) * cos(spinner);

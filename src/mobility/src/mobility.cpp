@@ -394,9 +394,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 // centerLocation and currentLocation
             	//currentLocationTemp = getCurrentLocation();
             	//################################
-            	//SHOULD I ALSO USE AVERAGES HERE???????????????????????????????????????????????/
+            	//SHOULD I ALSO USE AVERAGES HERE???????????????????????????????????????????????
                 dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
-                dropOffController.setDataLocations(centerLocationMap, currentLocationMap, timerTimeElapsed);
+                dropOffController.setDataLocations(centerLocationMap, currentLocation, currentLocationMap, timerTimeElapsed, useOdom);
 
                 DropOffResult result = dropOffController.getState();
 
@@ -438,13 +438,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 //#################################
                 	geometry_msgs::Pose2D theGoal = result.centerGoal;
                 	setAbsoluteGoal(theGoal.x, theGoal.y);
-                    //setGoalLocation(result.centerGoal);
                     stateMachineState = STATE_MACHINE_ROTATE;
                     timerStartTime = time(0);
-                	//setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
-                	//stateMachineState = STATE_MACHINE_TRANSFORM;
-                	//circleCount = 100;
-                	//stateMachineState = STATE_MACHINE_CIRCLE;
                     Logger::chat("timerTimeElapsed >= 5 wat do it do");
                     break;
                 }
