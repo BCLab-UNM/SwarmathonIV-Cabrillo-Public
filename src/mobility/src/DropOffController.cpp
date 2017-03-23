@@ -73,7 +73,7 @@ void DropOffController::calculateDecision() {
 
             result.cmdVel = -0.3;
             result.angleError = 0.0;
-            Logger::chat("DOC: Dropping off block.");
+            Logger::chat("DOC: Dropping off block. %d", timerTimeElapsed);
         }else{
             Logger::chat("DOC: Reached collection point.");
         }
@@ -87,8 +87,9 @@ void DropOffController::calculateDecision() {
     	// in result.centerGoal and tell mobility that it's absolute by setting result.useOdom = false.
     	//
 
+    	result.useOdom = false;
         //set angle to center as goal heading
-        result.centerGoal.theta = atan2(centerLocation.y - currentLocation.y, centerLocation.x - currentLocation.x);
+        result.centerGoal.theta = atan2(centerLocation.y - currentLocationMap.y, centerLocation.x - currentLocationMap.x);
 
         //set center as goal position
         result.centerGoal.x = centerLocation.x;
@@ -105,9 +106,12 @@ void DropOffController::calculateDecision() {
     	//
         //sets a goal that is 60cm from the centerLocation and spinner
         //radians counterclockwise from being purly along the x-axis.
-        result.centerGoal.x = centerLocation.x + (spinSize + addSpinSize) * cos(spinner);
-        result.centerGoal.y = centerLocation.y + (spinSize + addSpinSize) * sin(spinner);
-        result.centerGoal.theta = atan2(result.centerGoal.y - currentLocation.y, result.centerGoal.x - currentLocation.x);
+    	result.useOdom = true;
+    	result.centerGoal.x = spinSize + addSpinSize;
+    	result.centerGoal.theta = spinner;
+        //result.centerGoal.x = centerLocation.x + (spinSize + addSpinSize) * cos(spinner);
+        //result.centerGoal.y = centerLocation.y + (spinSize + addSpinSize) * sin(spinner);
+        //result.centerGoal.theta = atan2(result.centerGoal.y - currentLocation.y, result.centerGoal.x - currentLocation.x);
 
         spinner += 45*(M_PI/180); //add 45 degrees in radians to spinner.
         if (spinner > 2*M_PI)

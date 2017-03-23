@@ -394,9 +394,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 // centerLocation and currentLocation
             	//currentLocationTemp = getCurrentLocation();
             	//################################
-            	//SHOULD I ALSO USE AVERAGES HERE???????????????????????????????????????????????
+
                 dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
-                dropOffController.setDataLocations(centerLocationMap, currentLocation, currentLocationMap, timerTimeElapsed, useOdom);
+                dropOffController.setDataLocations(centerLocationMap, currentLocation, currentLocationMap, useOdom, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
 
@@ -433,16 +433,35 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	Logger::chat("Reset dropoffController.");
                 	// XXX: Kiley: This is where the robot freezes after dropping off a target.
                 	// I think it should start going back to food here.
+                	foodSearchCount = 0;
+                	if (!targetDetected && foodLocation.x != 0.0 && foodLocation.y != 0.0){
+                		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+                	}
+                }
+                else if(result.goalDriving && timerTimeElapsed >= 30) {
+                	timerStartTime = time(0);
+                	Logger::chat("LOST");
+                	setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                }
 
-                } else if (result.goalDriving && timerTimeElapsed >= 5 ) {
-//#################################
-                	geometry_msgs::Pose2D theGoal = result.centerGoal;
-                	setAbsoluteGoal(theGoal.x, theGoal.y);
-                    stateMachineState = STATE_MACHINE_ROTATE;
-                    timerStartTime = time(0);
-                    Logger::chat("timerTimeElapsed >= 5 wat do it do");
+                else if (result.goalDriving && timerTimeElapsed >= 1 ) {
+                	if(!result.useOdom) {
+                		geometry_msgs::Pose2D theGoal = result.centerGoal;
+                		setAbsoluteGoal(theGoal.x, theGoal.y);
+                		Logger::chat("Going to center");
+                	}
+                	else {
+                		setRelativeGoal(result.centerGoal.x, result.centerGoal.theta);
+                		Logger::chat("Searching for center");
+                	}
+                	stateMachineState = STATE_MACHINE_ROTATE;
+                    //timerStartTime = time(0);
                     break;
                 }
+                else if(result.goalDriving && timerTimeElapsed >= 60) {
+
+                }
+
                 // we are in precision/timed driving
                 else {
                 	// Set the goal to the current location. This seems to trick
@@ -450,8 +469,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	// state and is vital because this code is driving directly.
                 	goalLocation = currentLocation;
                 	useOdom = true;
-                    sendDriveCommand(result.cmdVel,result.angleError);
-                    stateMachineState = STATE_MACHINE_TRANSFORM;
+                	sendDriveCommand(result.cmdVel,result.angleError);
+                	stateMachineState = STATE_MACHINE_TRANSFORM;
                     break;
                 }
             }
@@ -601,7 +620,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                     // store coordinates of last pickup for return
                     foodLocation.x = currentLocationMap.x;
                     foodLocation.y = currentLocationMap.y;
-                    foodSearchCount = 0;
+                    //foodSearchCount = 0;
         			Logger::chat("setting foodLocation (%f %f)", foodLocation.x, foodLocation.y);
 
 
