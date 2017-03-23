@@ -7,8 +7,8 @@ DropOffController::DropOffController() {
     seenEnoughCenterTagsCount = 10;
     collectionPointVisualDistance = 0.5; //in meters
     reachedCollectionPoint = false;
-    spinSize = 0.10; //in meters aka 10cm 
-    addSpinSizeAmmount = 0.10; //in meters
+    spinSize = 0.20; //in meters aka 10cm 
+    addSpinSizeAmmount = 0.20; //in meters
 
     result.cmdVel = 0;
     result.angleError = 0;
