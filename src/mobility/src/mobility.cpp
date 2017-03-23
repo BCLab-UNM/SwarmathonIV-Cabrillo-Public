@@ -739,7 +739,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     	if (!is256) {
     		for(int i = 0; i < message->detections.size(); i++) {
     			geometry_msgs::PoseStamped cenPose = message->detections[i].pose;
-    			if (cenPose.pose.position.z > .16) {
+    			if (cenPose.pose.position.z > .18) {
     				if (cenPose.pose.position.x > 0) {
     					Logger::chat("Turning %f because I see a block in my way!", M_PI_4);
     					setRelativeGoal(.75, M_PI_4);
