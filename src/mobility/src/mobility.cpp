@@ -118,7 +118,7 @@ geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
 //geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
-//geometry_msgs::Pose2D centerLocationOdom;
+geometry_msgs::Pose2D centerLocationOdom;
 
 int currentMode = 0;
 float mobilityLoopTimeStep = 0.1; // time between the mobility loop calls
@@ -251,7 +251,7 @@ void setRelativeGoal(double, double);
 void setAbsoluteGoal(double, double);
 //function to return the currentLocation distinguishing between gps and odom
 geometry_msgs::Pose2D& getCurrentLocation();
-
+geometry_msgs::Pose2D& getCenterLocation();
 int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
@@ -396,8 +396,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//currentLocationTemp = getCurrentLocation();
             	//################################
 
-                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
-                dropOffController.setDataLocations(centerLocationMap, currentLocation, currentLocationMap, useOdom, timerTimeElapsed);
+                dropOffController.setCenterDist(hypot(getCenterLocation().x - getCurrentLocation().x, getCenterLocation().y - getCurrentLocation().y));
+                dropOffController.setDataLocations(getCenterLocation(), currentLocation, currentLocationMap, useOdom, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
 
@@ -437,13 +437,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	foodSearchCount = 0;
                 	if (!targetDetected && foodLocation.x != 0.0 && foodLocation.y != 0.0){
                 		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+                		//??????????
+                		stateMachineState = STATE_MACHINE_ROTATE;
                 	}
                 }
                 else if(result.goalDriving && centerSearchCount > 24) {
                 	timerStartTime = time(0);
                 	centerSearchCount = 0;
                 	Logger::chat("LOST");
-                	setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                	setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
                 	stateMachineState = STATE_MACHINE_ROTATE;
                 	dropOffController.resetSpiral(rng->gaussian(M_PI_4, 0.25));
                 }
@@ -507,7 +509,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//setAbsoluteGoal(foodLocation.x, foodLocation.y);
             	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
             		setAbsoluteGoal(foodLocation.x, foodLocation.y);
-            		//statemachine rotate ??
+            		//?????????????????
+            		stateMachineState = STATE_MACHINE_ROTATE;
             		Logger::chat("returning to food (%f %f %f)", foodLocation.x, foodLocation.y, foodSearchCount);
             		if(foodSearchCount >= 2) {
             			stateMachineState = STATE_MACHINE_CIRCLE;
@@ -637,7 +640,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 
                     stateMachineState = STATE_MACHINE_ROTATE;
-                    setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                    setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
 
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
@@ -738,7 +741,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     // If in manual mode do not try to automatically pick up the target
     if (currentMode == 1 || currentMode == 0) return;
 
-    float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
+    //float distance_from_center = hypot(getCenterLocation().x - getCurrentLocation().x, getCenterLocation().y - currentLocation.y);
 
     if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState == STATE_MACHINE_SKID_STEER) {
     	bool is256 = false;
@@ -948,6 +951,10 @@ geometry_msgs::Pose2D& getCurrentLocation() {
 	return currentLocationMap;
 }
 
+geometry_msgs::Pose2D& getCenterLocation() {
+	return centerLocationOdom;
+
+}
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 
     //Get (x,y) location directly from pose
