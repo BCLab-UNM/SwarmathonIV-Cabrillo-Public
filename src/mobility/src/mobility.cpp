@@ -507,6 +507,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//setAbsoluteGoal(foodLocation.x, foodLocation.y);
             	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
             		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+            		//statemachine rotate ??
             		Logger::chat("returning to food (%f %f %f)", foodLocation.x, foodLocation.y, foodSearchCount);
             		if(foodSearchCount >= 2) {
             			stateMachineState = STATE_MACHINE_CIRCLE;
@@ -715,9 +716,7 @@ void setRelativeGoal(double r, double theta) {
 	goalLocation.x = currentLocation.x + r*cos(goalLocation.theta);
 	goalLocation.y = currentLocation.y + r*sin(goalLocation.theta);
 	//Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocation.x, currentLocation.y, currentLocation.theta);
-	//goalLocation.x = currentLocation.x + x;
-	//goalLocation.y = currentLocation.y + y;
-	//goalLocation.theta = currentLocation.theta + theta;
+
 }
 
 //GPS related goal
@@ -726,9 +725,11 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y = y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+
+	useOdom = true;
+	setRelativeGoal(hypot(y - currentLocationMap.y, x - currentLocationMap.x),
+			angles::shortest_angular_distance(currentLocationMap.theta, atan2(y - currentLocationMap.y, x - currentLocationMap.x)));
 	//Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
-	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
-	//absolute value?????? should this still be added to current theta
 }
 
 
