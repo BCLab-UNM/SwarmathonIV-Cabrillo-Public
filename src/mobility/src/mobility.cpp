@@ -438,10 +438,11 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 		setAbsoluteGoal(foodLocation.x, foodLocation.y);
                 	}
                 }
-                else if(result.goalDriving && timerTimeElapsed >= 30) {
+                else if(result.goalDriving && timerTimeElapsed >= 90) {
                 	timerStartTime = time(0);
                 	Logger::chat("LOST");
                 	setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+			stateMachineState = STATE_MACHINE_ROTATE;
                 }
 
                 else if (result.goalDriving && timerTimeElapsed >= 1 ) {

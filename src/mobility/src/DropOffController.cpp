@@ -8,7 +8,7 @@ DropOffController::DropOffController() {
     collectionPointVisualDistance = 0.5; //in meters
     reachedCollectionPoint = false;
     spinSize = 0.20; //in meters aka 10cm 
-    addSpinSizeAmmount = 0.20; //in meters
+    addSpinSizeAmmount = 0.50; //in meters
 
     result.cmdVel = 0;
     result.angleError = 0;
@@ -108,7 +108,7 @@ void DropOffController::calculateDecision() {
         //radians counterclockwise from being purly along the x-axis.
     	result.useOdom = true;
     	result.centerGoal.x = spinSize + addSpinSize;
-    	result.centerGoal.theta = spinner;
+    	result.centerGoal.theta = M_PI_4;
         //result.centerGoal.x = centerLocation.x + (spinSize + addSpinSize) * cos(spinner);
         //result.centerGoal.y = centerLocation.y + (spinSize + addSpinSize) * sin(spinner);
         //result.centerGoal.theta = atan2(result.centerGoal.y - currentLocation.y, result.centerGoal.x - currentLocation.x);
