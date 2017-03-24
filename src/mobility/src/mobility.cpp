@@ -448,7 +448,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	dropOffController.resetSpiral(rng->gaussian(M_PI_4, 0.25));
                 }
 
-                else if (result.goalDriving && timerTimeElapsed >= 1 ) {
+                else if (result.goalDriving && timerTimeElapsed >= 20 ) {
                 	if(!result.useOdom) {
                 		geometry_msgs::Pose2D theGoal = result.centerGoal;
                 		setAbsoluteGoal(theGoal.x, theGoal.y);
@@ -468,9 +468,6 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	}
                     //timerStartTime = time(0);
                     break;
-                }
-                else if(result.goalDriving && timerTimeElapsed >= 60) {
-
                 }
 
                 // we are in precision/timed driving

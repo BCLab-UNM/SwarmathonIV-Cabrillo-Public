@@ -13,7 +13,7 @@
       <param name="magnetic_declination_radians" value="0.0"/>
       <param name="yaw_offset" value="1.57079632679"/>
       <param name="world_frame" value="map"/>
-      <param name="frequency" value="10"/>
+      <param name="frequency" value="2"/>
 
       <remap from="/imu/data" to="/$(arg name)/imu" />
       <remap from="/gps/fix" to="/$(arg name)/fix" />
@@ -50,11 +50,15 @@
   <node pkg="robot_localization" type="ekf_localization_node" name="$(arg name)_MAP">
 
       <param name="odom0" value="/$(arg name)/odom/navsat" />
-      <param name="odom1" value="/$(arg name)/odom/filtered" />
+      <param name="odom1" value="/$(arg name)/odom" />
+      <param name="imu0" value="/$(arg name)/imu" />
+
+  <!--    <param name="odom1" value="/$(arg name)/odom/filtered" /> -->
+
       <param name="imu0" value="/$(arg name)/imu" />
       <param name="two_d_mode" value="true" />
       <param name="world_frame" value="map" />
-      <param name="frequency" value="10" />
+      <param name="frequency" value="2" />
 
       <rosparam param="odom0_config">[true, true, false,
                                 false, false, false,
@@ -62,17 +66,17 @@
                                 false, false, false,
                                 false, false, false]</rosparam>
 
+      <rosparam param="odom1_config">[false, false, false,
+                                false, false, false, 
+                                true, false, false,
+                                false, false, true,
+                                false, false, false]</rosparam>
+
       <rosparam param="imu0_config">[false, false, false,
                                false, false, true,
                                false, false, false,
                                false, false, true,
                                false, false, false]</rosparam>
-
-      <rosparam param="odom1_config">[false, false, false,
-                                false, false, false,
-                                true, false, false,
-                                false, false, false,
-                                false, false, false]</rosparam>
 
 <rosparam param="initial_estimate_covariance">[1e-9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                                0, 1e-9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
