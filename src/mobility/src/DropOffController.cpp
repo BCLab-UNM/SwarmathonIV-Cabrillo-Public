@@ -8,7 +8,7 @@ DropOffController::DropOffController() {
     collectionPointVisualDistance = 0.5; //in meters
     reachedCollectionPoint = false;
     spinSize = 0.20; //in meters aka 10cm 
-    addSpinSizeAmmount = 0.50; //in meters
+    addSpinSizeAmmount = 0.20; //in meters
 
     result.cmdVel = 0;
     result.angleError = 0;
@@ -24,7 +24,7 @@ DropOffController::DropOffController() {
     right = false;
 
     circularCenterSearching = false;
-    spinner = 0;
+    spinner = M_PI_4;
     centerApproach = false;
     timeWithoutSeeingEnoughCenterTags = time(0);
     seenEnoughCenterTags = false;
@@ -108,17 +108,17 @@ void DropOffController::calculateDecision() {
         //radians counterclockwise from being purly along the x-axis.
     	result.useOdom = true;
     	result.centerGoal.x = spinSize + addSpinSize;
-    	result.centerGoal.theta = M_PI_4;
+    	result.centerGoal.theta = spinner;
         //result.centerGoal.x = centerLocation.x + (spinSize + addSpinSize) * cos(spinner);
         //result.centerGoal.y = centerLocation.y + (spinSize + addSpinSize) * sin(spinner);
         //result.centerGoal.theta = atan2(result.centerGoal.y - currentLocation.y, result.centerGoal.x - currentLocation.x);
 
-        spinner += 45*(M_PI/180); //add 45 degrees in radians to spinner.
-        if (spinner > 2*M_PI)
-        {
-            spinner -= 2*M_PI;
+//        spinner += 45*(M_PI/180); //add 45 degrees in radians to spinner.
+//        if (spinner > 2*M_PI)
+//        {
+//            spinner -= 2*M_PI;
 	    addSpinSize += addSpinSizeAmmount;
-        }
+//        }
         circularCenterSearching = true;
         //safety flag to prevent us trying to drive back to the
         //center since we have a block with us and the above point is
@@ -263,7 +263,7 @@ void DropOffController::reset() {
     result.goalDriving = false; //set true for when driving is goal location oriented and false when it is target or time oriented
     result.centerGoal; //goal that is center location or based upon the center location.
     result.reset = false;
-    spinner = 0;
+    spinner = M_PI_4;
     addSpinSize = 0;
     prevCount = 0;
 

@@ -162,6 +162,7 @@ int mapCount = 0;
 
 //Used to decide to give up on searching for food
 int foodSearchCount = 0;
+int centerSearchCount = 0;
 
 // How many points to use in calculating the map average position
 #define MAP_HISTORY_SIZE 100
@@ -438,11 +439,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 		setAbsoluteGoal(foodLocation.x, foodLocation.y);
                 	}
                 }
-                else if(result.goalDriving && timerTimeElapsed >= 90) {
+                else if(result.goalDriving && centerSearchCount > 24) {
                 	timerStartTime = time(0);
+                	centerSearchCount = 0;
                 	Logger::chat("LOST");
                 	setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
-			stateMachineState = STATE_MACHINE_ROTATE;
+                	stateMachineState = STATE_MACHINE_ROTATE;
+                	dropOffController.resetSpiral(rng->gaussian(M_PI_4, 0.25));
                 }
 
                 else if (result.goalDriving && timerTimeElapsed >= 1 ) {
@@ -450,12 +453,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 		geometry_msgs::Pose2D theGoal = result.centerGoal;
                 		setAbsoluteGoal(theGoal.x, theGoal.y);
                 		Logger::chat("Going to center");
+                    	stateMachineState = STATE_MACHINE_ROTATE;
                 	}
                 	else {
-                		setRelativeGoal(result.centerGoal.x, result.centerGoal.theta);
-                		Logger::chat("Searching for center");
+                		if (centerSearchCount % 2 == 0) {
+                			circleCount = c_CIRCLE;
+                			stateMachineState = STATE_MACHINE_CIRCLE;
+                		}else{
+                			setRelativeGoal(result.centerGoal.x, result.centerGoal.theta);
+                        	stateMachineState = STATE_MACHINE_ROTATE;
+                		}
+                		Logger::chat("Searching for center (%d)", centerSearchCount);
+                		centerSearchCount++;
                 	}
-                	stateMachineState = STATE_MACHINE_ROTATE;
                     //timerStartTime = time(0);
                     break;
                 }
@@ -538,7 +548,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_ROTATE: {
             // If angle > 0.4 radians rotate but dont drive forward.
             if (fabs(desired_heading) > rotateOnlyAngleTolerance) {
-                Logger::chat("ROT: Turning to meet desired_heading.");
+                //Logger::chat("ROT: Turning to meet desired_heading.");
 
                 // rotate but dont drive  0.05 is to prevent turning in reverse
                 sendDriveCommand(0.05, desired_heading);
@@ -557,7 +567,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
             // goal not yet reached drive while maintaining proper heading.
             if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
-                Logger::chat("SKS: Driving becaue ange_to_goal is small.");
+                //Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
             }
@@ -565,13 +575,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             // goal is reached but desired heading is still wrong turn only
             else if (fabs(desired_heading) > 0.1) {
                  // rotate but dont drive
-                Logger::chat("SKS: Rotating because desired_heading is big.");
+                //Logger::chat("SKS: Rotating because desired_heading is big.");
                 sendDriveCommand(0.0, desired_heading);
             }
 
             else {
                 // stop
-                Logger::chat("SKS: Arrived.");
+                //Logger::chat("SKS: Arrived.");
                 sendDriveCommand(0.0, 0.0);
                 avoidingObstacle = false;
 
@@ -704,7 +714,7 @@ void setRelativeGoal(double r, double theta) {
 	goalLocation.theta = currentLocation.theta + theta;
 	goalLocation.x = currentLocation.x + r*cos(goalLocation.theta);
 	goalLocation.y = currentLocation.y + r*sin(goalLocation.theta);
-	Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocation.x, currentLocation.y, currentLocation.theta);
+	//Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocation.x, currentLocation.y, currentLocation.theta);
 	//goalLocation.x = currentLocation.x + x;
 	//goalLocation.y = currentLocation.y + y;
 	//goalLocation.theta = currentLocation.theta + theta;
@@ -716,7 +726,7 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y = y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
-	Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
+	//Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
 	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
 	//absolute value?????? should this still be added to current theta
 }
