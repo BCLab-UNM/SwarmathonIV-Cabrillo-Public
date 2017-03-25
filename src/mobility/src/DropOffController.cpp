@@ -4,7 +4,7 @@
 DropOffController::DropOffController() {
     cameraOffsetCorrection = 0.020; //meters
     centeringTurn = 0.15; //radians
-    seenEnoughCenterTagsCount = 10;
+    seenEnoughCenterTagsCount = 8;
     collectionPointVisualDistance = 0.5; //in meters
     reachedCollectionPoint = false;
     spinSize = 0.20; //in meters aka 10cm 
@@ -131,6 +131,7 @@ void DropOffController::calculateDecision() {
     	timeWithoutSeeingEnoughCenterTags = time(0);
     }
 
+    //Logger::chat("count: %d countLeft: %d countRight: %d timerTimeElapsed: %f", count, countLeft, countRight, timerTimeElapsed);
     if (count > 0 || seenEnoughCenterTags || prevCount > 0) //if we have a target and the center is located drive towards it.
     {
         centerSeen = true;
@@ -139,7 +140,7 @@ void DropOffController::calculateDecision() {
         if (seenEnoughCenterTags) //if we have seen enough tags
         {
         	// XXX: Tuneable
-            if ((countLeft/2) > countRight) //and there are too many on the left
+            if ((countLeft/2) > countRight ) //and there are too many on the left
             {
                 right = false; //then we say non on the right to cause us to turn right
             }
@@ -150,35 +151,98 @@ void DropOffController::calculateDecision() {
             }
         }
 
+//        if (seenEnoughCenterTags) {
+//        	Logger::chat("in");
+//            result.angleError = -sumCog * 20;
+//            result.cmdVel = searchVelocity * .75;
+//        } else {
+//        if (!seenEnoughCenterTags){
+//        	Logger::chat("!seenEnough");
+//        	result.angleError = sumCog * 20;
+//        	result.cmdVel = searchVelocity * .75;
+//        }
+
+        float turnMax = .2;
+        float turnMult = 20;
         float turnDirection = 1;
         //reverse tag rejection when we have seen enough tags that we are on a
         //trajectory in to the square we dont want to follow an edge.
-        if (seenEnoughCenterTags) turnDirection = -1;
-
+        if (seenEnoughCenterTags) {
+//        	Logger::chat("Seen Enough Center Tags, turn=-1");
+        	turnDirection = -1;
+        	turnMax = .1;
+        	turnMult = 5;
+        }
+//        centeringTurn = -sumCog * 10;
 
         //otherwise turn till tags on both sides of image then drive straight
         if (left && right) {
+        	Logger::chat("Straight on");
             result.cmdVel = searchVelocity;
             result.angleError = 0.0;
         }
-        else if (right) {
-            result.cmdVel = -0.1 * turnDirection;
-            result.angleError = -centeringTurn*turnDirection;
+        else if (sumCog > 0) {
+        	Logger::chat("COG: to the right");
+        	result.angleError = -sumCog * turnMult * turnDirection;
+        	result.cmdVel = searchVelocity * .5;
+        } else if (sumCog < 0) {
+        	Logger::chat("COG: to the left");
+        	result.angleError = -sumCog * turnMult * turnDirection;
+        	result.cmdVel = searchVelocity * .5;
         }
-        else if (left){
-        	result.cmdVel = -0.1 * turnDirection;
-            result.angleError = centeringTurn*turnDirection;
-        }
-        else
-        {
-            result.cmdVel = searchVelocity;
-            result.angleError = 0.0;
-        }
+
+        if (result.angleError > turnMax)
+        	result.angleError = turnMax;
+        else if (result.angleError < -turnMax)
+        	result.angleError = -turnMax;
+
+
+//        } else if (right && left) {
+//        	Logger::chat("Straight on");
+//        	result.cmdVel = searchVelocity;
+//        	result.angleError = 0.0;
+//        }
+//        else if (right) {
+//            result.cmdVel = -0.1 * turnDirection;
+//            result.angleError = -centeringTurn*turnDirection;
+//        }
+//        else if (left){
+//        	result.cmdVel = -0.1 * turnDirection;
+//            result.angleError = centeringTurn*turnDirection;
+//        }
+//        else
+//        {
+//            result.cmdVel = searchVelocity;
+//            result.angleError = 0.0;
+//        }
+
+
+//        else if (sumCog > 0) {
+//        	Logger::chat("COG: to the right");
+//        	result.angleError = -sumCog * 10 * turnDirection;
+//        	result.cmdVel = searchVelocity * .75;
+//        } else if (sumCog < 0) {
+//        	Logger::chat("COG: to the left");
+//        	result.angleError = -sumCog * 10 * turnDirection;
+//        	result.cmdVel = searchVelocity * .75;
+//        }
+
+//        if (seenEnoughCenterTags) {
+//        	result.angleError = sumCog * 15;
+//        	result.cmdVel = searchVelocity * .75;
+//        } else {
+//        	result.angleError = -sumCog * 15;
+//        	result.cmdVel = searchVelocity * .75;
+//        }
+
+
+
+
 
         //must see greater than this many tags before assuming we are driving into the center and not along an edge.
     	// XXX: Tuneable was:
         //if (count > seenEnoughCenterTagsCount)
-        if (count > seenEnoughCenterTagsCount && countLeft >= count/2 && countRight >= count/2)
+        if (count > seenEnoughCenterTagsCount && countLeft >= count/3 && countRight >= count/3)
         {
             if (!seenEnoughCenterTags) {
             	Logger::chat("Triggered approach. seen: %d l: %d r: %d", count, countLeft, countRight);
@@ -279,9 +343,10 @@ void DropOffController::reset() {
     useOdom = false;
 }
 
-void DropOffController::setDataTargets(int ccount, int lleft, int rright)
+void DropOffController::setDataTargets(int ccount, int lleft, int rright, double ssumCog)
 {
     count = ccount;
+    sumCog = ssumCog;
     if (rright > 0)
     {
         right = true;
