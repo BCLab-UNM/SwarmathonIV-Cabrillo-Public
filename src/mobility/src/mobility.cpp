@@ -76,7 +76,7 @@ using namespace std;
  *c_BOUNCE_CONST (radians)
  *		The angle the rover turns from the wall when not holding a target
  */
-static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
+static const double c_GOAL_THRESHOLD_DISTANCE     = 0.01;
 static const double c_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
 static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
 static const double c_WANDER_RANDOM_ANGLE         = 0.25;
@@ -442,15 +442,15 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	}
                 }
                 else if(result.goalDriving && centerSearchCount > 24) {
-                	timerStartTime = time(0);
                 	centerSearchCount = 0;
                 	Logger::chat("LOST");
                 	setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
                 	stateMachineState = STATE_MACHINE_ROTATE;
-                	dropOffController.resetSpiral(rng->gaussian(M_PI_4, 0.25));
+                	dropOffController.resetSpiral(rng->gaussian(M_PI_4 + (M_PI_4/2), 0.25));
                 }
 
-                else if (result.goalDriving && timerTimeElapsed >= 20 ) {
+                else if (result.goalDriving && timerTimeElapsed >= 5 ) {
+                	timerStartTime = time(0);
                 	if(!result.useOdom) {
                 		geometry_msgs::Pose2D theGoal = result.centerGoal;
                 		setAbsoluteGoal(theGoal.x, theGoal.y);
@@ -797,7 +797,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                 centerSeen = true;
                 count++;
                 sumCog /= count;
-                //Logger::chat("count: %d sumCog: %f", count, sumCog);
             }
         }
 

@@ -36,6 +36,7 @@ public:
     void resetSpiral(float s) {
     	spinner = s;
     	addSpinSize = 0;
+    	circularCenterSearching = false;
     }
     void setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D currentOdom, geometry_msgs::Pose2D currentMap, bool useOdom, float sync);
 

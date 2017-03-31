@@ -8,7 +8,7 @@ DropOffController::DropOffController() {
     collectionPointVisualDistance = 0.5; //in meters
     reachedCollectionPoint = false;
     spinSize = 0.20; //in meters aka 10cm 
-    addSpinSizeAmmount = 0.20; //in meters
+    addSpinSizeAmmount = 0.10; //in meters
 
     result.cmdVel = 0;
     result.angleError = 0;
@@ -24,7 +24,7 @@ DropOffController::DropOffController() {
     right = false;
 
     circularCenterSearching = false;
-    spinner = M_PI_4;
+    spinner = M_PI_4 + (M_PI_4 / 2);
     centerApproach = false;
     timeWithoutSeeingEnoughCenterTags = time(0);
     seenEnoughCenterTags = false;
