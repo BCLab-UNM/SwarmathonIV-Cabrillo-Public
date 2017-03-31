@@ -779,6 +779,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         int count = 0;
         int countRight = 0;
         int countLeft = 0;
+        double sumCog = 0.0;
 
         // this loop is to get the number of center tags
         for (int i = 0; i < message->detections.size(); i++) {
@@ -788,13 +789,15 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                 // checks if tag is on the right or left side of the image
                 if (cenPose.pose.position.x + cameraOffsetCorrection > 0) {
                     countRight++;
-
+                    sumCog += cenPose.pose.position.x + cameraOffsetCorrection;
                 } else {
                     countLeft++;
+                    sumCog += cenPose.pose.position.x + cameraOffsetCorrection;
                 }
-
                 centerSeen = true;
                 count++;
+                sumCog /= count;
+                //Logger::chat("count: %d sumCog: %f", count, sumCog);
             }
         }
 
@@ -806,7 +809,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
             circleCount = 0;
         }
 
-        dropOffController.setDataTargets(count,countLeft,countRight);
+        dropOffController.setDataTargets(count,countLeft,countRight,sumCog);
 
         // if we see the center and we dont have a target collected
         if (centerSeen && !targetCollected) {
