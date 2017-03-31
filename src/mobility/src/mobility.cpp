@@ -802,7 +802,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         }
 
         if (centerSeen && targetCollected) {
-        	Logger::chat("Center seen and target collected");
         	goalLocation = currentLocation;
         	useOdom = true;
             stateMachineState = STATE_MACHINE_TRANSFORM;

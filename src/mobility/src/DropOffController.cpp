@@ -71,7 +71,7 @@ void DropOffController::calculateDecision() {
             angle= 0;
             result.wristAngle = angle; //raise wrist
 
-            result.cmdVel = -0.3;
+            result.cmdVel = -0.2;
             result.angleError = 0.0;
             Logger::chat("DOC: Dropping off block. %d", timerTimeElapsed);
         }else{
@@ -182,11 +182,9 @@ void DropOffController::calculateDecision() {
             result.angleError = 0.0;
         }
         else if (sumCog > 0) {
-        	Logger::chat("COG: to the right");
         	result.angleError = -sumCog * turnMult * turnDirection;
         	result.cmdVel = searchVelocity * .5;
         } else if (sumCog < 0) {
-        	Logger::chat("COG: to the left");
         	result.angleError = -sumCog * turnMult * turnDirection;
         	result.cmdVel = searchVelocity * .5;
         }
