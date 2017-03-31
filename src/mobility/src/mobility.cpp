@@ -76,7 +76,7 @@ using namespace std;
  *c_BOUNCE_CONST (radians)
  *		The angle the rover turns from the wall when not holding a target
  */
-static const double c_GOAL_THRESHOLD_DISTANCE     = 0.1;
+static const double c_GOAL_THRESHOLD_DISTANCE     = 0.01;
 static const double c_TRANSLATE_THRESHOLD_ANGLE   = M_PI / 4.0;
 static const double c_ROTATE_THRESHOLD_ANGLE      = 0.2;
 static const double c_WANDER_RANDOM_ANGLE         = 0.25;
@@ -118,7 +118,7 @@ geometry_msgs::Pose2D foodLocation; //Where cube was last picked up
 
 //geometry_msgs::Pose2D centerLocation;
 geometry_msgs::Pose2D centerLocationMap;
-//geometry_msgs::Pose2D centerLocationOdom;
+geometry_msgs::Pose2D centerLocationOdom;
 
 int currentMode = 0;
 float mobilityLoopTimeStep = 0.1; // time between the mobility loop calls
@@ -251,7 +251,7 @@ void setRelativeGoal(double, double);
 void setAbsoluteGoal(double, double);
 //function to return the currentLocation distinguishing between gps and odom
 geometry_msgs::Pose2D& getCurrentLocation();
-
+geometry_msgs::Pose2D& getCenterLocation();
 int main(int argc, char **argv) {
 
     gethostname(host, sizeof (host));
@@ -396,8 +396,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//currentLocationTemp = getCurrentLocation();
             	//################################
 
-                dropOffController.setCenterDist(hypot(centerLocationMap.x - currentLocationMap.x, centerLocationMap.y - currentLocationMap.y));
-                dropOffController.setDataLocations(centerLocationMap, currentLocation, currentLocationMap, useOdom, timerTimeElapsed);
+                dropOffController.setCenterDist(hypot(getCenterLocation().x - getCurrentLocation().x, getCenterLocation().y - getCurrentLocation().y));
+                dropOffController.setDataLocations(getCenterLocation(), currentLocation, currentLocationMap, useOdom, timerTimeElapsed);
 
                 DropOffResult result = dropOffController.getState();
 
@@ -437,18 +437,20 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	foodSearchCount = 0;
                 	if (!targetDetected && foodLocation.x != 0.0 && foodLocation.y != 0.0){
                 		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+                		//??????????
+                		stateMachineState = STATE_MACHINE_ROTATE;
                 	}
                 }
                 else if(result.goalDriving && centerSearchCount > 24) {
-                	timerStartTime = time(0);
                 	centerSearchCount = 0;
                 	Logger::chat("LOST");
-                	setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                	setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
                 	stateMachineState = STATE_MACHINE_ROTATE;
-                	dropOffController.resetSpiral(rng->gaussian(M_PI_4, 0.25));
+                	dropOffController.resetSpiral(rng->gaussian(M_PI_4 + (M_PI_4/2), 0.25));
                 }
 
-                else if (result.goalDriving && timerTimeElapsed >= 1 ) {
+                else if (result.goalDriving && timerTimeElapsed >= 5 ) {
+                	timerStartTime = time(0);
                 	if(!result.useOdom) {
                 		geometry_msgs::Pose2D theGoal = result.centerGoal;
                 		setAbsoluteGoal(theGoal.x, theGoal.y);
@@ -468,9 +470,6 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 	}
                     //timerStartTime = time(0);
                     break;
-                }
-                else if(result.goalDriving && timerTimeElapsed >= 60) {
-
                 }
 
                 // we are in precision/timed driving
@@ -507,6 +506,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             	//setAbsoluteGoal(foodLocation.x, foodLocation.y);
             	if (foodLocation.x != 0.0 && foodLocation.y != 0.0){
             		setAbsoluteGoal(foodLocation.x, foodLocation.y);
+            		//?????????????????
+            		stateMachineState = STATE_MACHINE_ROTATE;
             		Logger::chat("returning to food (%f %f %f)", foodLocation.x, foodLocation.y, foodSearchCount);
             		if(foodSearchCount >= 2) {
             			stateMachineState = STATE_MACHINE_CIRCLE;
@@ -636,7 +637,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 
                     stateMachineState = STATE_MACHINE_ROTATE;
-                    setAbsoluteGoal(centerLocationMap.x, centerLocationMap.y);
+                    setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
 
                     // lower wrist to avoid ultrasound sensors
                     std_msgs::Float32 angle;
@@ -715,9 +716,7 @@ void setRelativeGoal(double r, double theta) {
 	goalLocation.x = currentLocation.x + r*cos(goalLocation.theta);
 	goalLocation.y = currentLocation.y + r*sin(goalLocation.theta);
 	//Logger::chat("set relative goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocation.x, currentLocation.y, currentLocation.theta);
-	//goalLocation.x = currentLocation.x + x;
-	//goalLocation.y = currentLocation.y + y;
-	//goalLocation.theta = currentLocation.theta + theta;
+
 }
 
 //GPS related goal
@@ -726,9 +725,11 @@ void setAbsoluteGoal(double x, double y){
 	goalLocation.x = x;
 	goalLocation.y = y;
 	goalLocation.theta = atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x);
+
+	useOdom = true;
+	setRelativeGoal(hypot(y - currentLocationMap.y, x - currentLocationMap.x),
+			angles::shortest_angular_distance(currentLocationMap.theta, atan2(y - currentLocationMap.y, x - currentLocationMap.x)));
 	//Logger::chat("set absolute goal to (%f, %f, %f) current location (%f, %f, %f)", goalLocation.x, goalLocation.y, goalLocation.theta, currentLocationMap.x, currentLocationMap.y, currentLocationMap.theta);
-	//goalLocation.theta = angles::shortest_angular_distance(currentLocationMap.theta, atan2(goalLocation.y - currentLocationMap.y, goalLocation.x - currentLocationMap.x));
-	//absolute value?????? should this still be added to current theta
 }
 
 
@@ -737,7 +738,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
     // If in manual mode do not try to automatically pick up the target
     if (currentMode == 1 || currentMode == 0) return;
 
-    float distance_from_center = hypot(centerLocationMap.x - currentLocation.x, centerLocationMap.y - currentLocation.y);
+    //float distance_from_center = hypot(getCenterLocation().x - getCurrentLocation().x, getCenterLocation().y - currentLocation.y);
 
     if (targetCollected && message->detections.size() > 0 && !avoidingObstacle && stateMachineState == STATE_MACHINE_SKID_STEER) {
     	bool is256 = false;
@@ -778,6 +779,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         int count = 0;
         int countRight = 0;
         int countLeft = 0;
+        double sumCog = 0.0;
 
         // this loop is to get the number of center tags
         for (int i = 0; i < message->detections.size(); i++) {
@@ -787,25 +789,25 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                 // checks if tag is on the right or left side of the image
                 if (cenPose.pose.position.x + cameraOffsetCorrection > 0) {
                     countRight++;
-
+                    sumCog += cenPose.pose.position.x + cameraOffsetCorrection;
                 } else {
                     countLeft++;
+                    sumCog += cenPose.pose.position.x + cameraOffsetCorrection;
                 }
-
                 centerSeen = true;
                 count++;
+                sumCog /= count;
             }
         }
 
         if (centerSeen && targetCollected) {
-        	Logger::chat("Center seen and target collected");
         	goalLocation = currentLocation;
         	useOdom = true;
             stateMachineState = STATE_MACHINE_TRANSFORM;
             circleCount = 0;
         }
 
-        dropOffController.setDataTargets(count,countLeft,countRight);
+        dropOffController.setDataTargets(count,countLeft,countRight,sumCog);
 
         // if we see the center and we dont have a target collected
         if (centerSeen && !targetCollected) {
@@ -947,6 +949,10 @@ geometry_msgs::Pose2D& getCurrentLocation() {
 	return currentLocationMap;
 }
 
+geometry_msgs::Pose2D& getCenterLocation() {
+	return centerLocationOdom;
+
+}
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 
     //Get (x,y) location directly from pose

@@ -31,11 +31,12 @@ public:
     float getCentX() { return centerLocation.x;}
     float getCount() { return count;}
 
-    void setDataTargets(int ccount, int lleft, int rright);
+    void setDataTargets(int ccount, int lleft, int rright, double ssumCog);
     void setCenterDist(float dist) {distanceToCenter = dist;}
     void resetSpiral(float s) {
     	spinner = s;
     	addSpinSize = 0;
+    	circularCenterSearching = false;
     }
     void setDataLocations(geometry_msgs::Pose2D center, geometry_msgs::Pose2D currentOdom, geometry_msgs::Pose2D currentMap, bool useOdom, float sync);
 
@@ -69,6 +70,7 @@ private:
     int prevCount;
     int countLeft;
     int countRight;
+    double sumCog;
     float collectionPointVisualDistance;
     float distanceToCenter;
     geometry_msgs::Pose2D centerLocation;
