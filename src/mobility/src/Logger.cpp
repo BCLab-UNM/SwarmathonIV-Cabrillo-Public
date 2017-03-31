@@ -9,7 +9,7 @@ Logger *Logger::_instance = NULL;
 Logger::Logger(const std::string &rover) {
 	ros::NodeHandle mNH;
 	_log = mNH.advertise<std_msgs::String>(rover + "/infoLog", 1, true);
-	_chat = mNH.advertise<std_msgs::String>(rover + "/state_machine", 1, true);
+	_chat = mNH.advertise<std_msgs::String>(rover + "/state_machine", 10, true);
 }
 
 Logger::~Logger() {

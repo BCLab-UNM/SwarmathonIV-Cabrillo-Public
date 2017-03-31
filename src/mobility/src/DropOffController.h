@@ -31,7 +31,7 @@ public:
     float getCentX() { return centerLocation.x;}
     float getCount() { return count;}
 
-    void setDataTargets(int ccount, int lleft, int rright);
+    void setDataTargets(int ccount, int lleft, int rright, double ssumCog);
     void setCenterDist(float dist) {distanceToCenter = dist;}
     void resetSpiral(float s) {
     	spinner = s;
@@ -69,6 +69,7 @@ private:
     int prevCount;
     int countLeft;
     int countRight;
+    double sumCog;
     float collectionPointVisualDistance;
     float distanceToCenter;
     geometry_msgs::Pose2D centerLocation;
