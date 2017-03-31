@@ -4,8 +4,8 @@
 DropOffController::DropOffController() {
     cameraOffsetCorrection = 0.020; //meters
     centeringTurn = 0.15; //radians
-    seenEnoughCenterTagsCount = 8;
-    collectionPointVisualDistance = 0.5; //in meters
+    seenEnoughCenterTagsCount = 9;
+    collectionPointVisualDistance = 0.1; //in meters
     reachedCollectionPoint = false;
     spinSize = 0.20; //in meters aka 10cm 
     addSpinSizeAmmount = 0.10; //in meters
@@ -71,7 +71,7 @@ void DropOffController::calculateDecision() {
             angle= 0;
             result.wristAngle = angle; //raise wrist
 
-            result.cmdVel = -0.2;
+            result.cmdVel = -0.6;
             result.angleError = 0.0;
             Logger::chat("DOC: Dropping off block. %d", timerTimeElapsed);
         }else{
@@ -162,15 +162,15 @@ void DropOffController::calculateDecision() {
 //        	result.cmdVel = searchVelocity * .75;
 //        }
 
-        float turnMax = .2;
-        float turnMult = 20;
+        float turnMax = .5;
+        float turnMult = 10;
         float turnDirection = 1;
         //reverse tag rejection when we have seen enough tags that we are on a
         //trajectory in to the square we dont want to follow an edge.
         if (seenEnoughCenterTags) {
 //        	Logger::chat("Seen Enough Center Tags, turn=-1");
-        	turnDirection = -1;
-        	turnMax = .1;
+        	turnDirection = -turnDirection;
+        	turnMax = .3;
         	turnMult = 5;
         }
 //        centeringTurn = -sumCog * 10;
@@ -182,11 +182,13 @@ void DropOffController::calculateDecision() {
             result.angleError = 0.0;
         }
         else if (sumCog > 0) {
-        	result.angleError = -sumCog * turnMult * turnDirection;
-        	result.cmdVel = searchVelocity * .5;
+        	Logger::chat("cog: to the right %f", sumCog);
+		result.angleError = -sumCog * turnMult * turnDirection;
+        	result.cmdVel = searchVelocity * 0.5;  // XXX TUNE
         } else if (sumCog < 0) {
+		Logger::chat("cog: to the left %f", sumCog);
         	result.angleError = -sumCog * turnMult * turnDirection;
-        	result.cmdVel = searchVelocity * .5;
+        	result.cmdVel = searchVelocity * 0.5;  // XXX TUNE
         }
 
         if (result.angleError > turnMax)
@@ -240,7 +242,7 @@ void DropOffController::calculateDecision() {
         //must see greater than this many tags before assuming we are driving into the center and not along an edge.
     	// XXX: Tuneable was:
         //if (count > seenEnoughCenterTagsCount)
-        if (count > seenEnoughCenterTagsCount && countLeft >= count/3 && countRight >= count/3)
+        if (count > seenEnoughCenterTagsCount && countLeft >= count/2 && countRight >= count/2)
         {
             if (!seenEnoughCenterTags) {
             	Logger::chat("Triggered approach. seen: %d l: %d r: %d", count, countLeft, countRight);

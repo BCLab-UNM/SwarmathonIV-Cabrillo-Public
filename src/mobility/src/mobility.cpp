@@ -441,12 +441,13 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 		stateMachineState = STATE_MACHINE_ROTATE;
                 	}
                 }
-                else if(result.goalDriving && centerSearchCount > 24) {
+                else if(result.goalDriving && centerSearchCount > 5) {
                 	centerSearchCount = 0;
                 	Logger::chat("LOST");
                 	setAbsoluteGoal(getCenterLocation().x, getCenterLocation().y);
                 	stateMachineState = STATE_MACHINE_ROTATE;
                 	dropOffController.resetSpiral(rng->gaussian(M_PI_4 + (M_PI_4/2), 0.25));
+			//timerStartTime = time(0);
                 }
 
                 else if (result.goalDriving && timerTimeElapsed >= 5 ) {
@@ -491,7 +492,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
                 stateMachineState = STATE_MACHINE_ROTATE;
             }
             //If goal has not yet been reached drive and maintane heading
-            else if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
+            else if (fabs(angle_to_goal) < M_PI_2) {
                 stateMachineState = STATE_MACHINE_SKID_STEER;
             }
 
@@ -567,7 +568,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
         case STATE_MACHINE_SKID_STEER: {
 
             // goal not yet reached drive while maintaining proper heading.
-            if (fabs(angle_to_goal) < M_PI_2 && distance_to_goal > c_GOAL_THRESHOLD_DISTANCE) {
+            if (fabs(angle_to_goal) < M_PI_2) {
                 //Logger::chat("SKS: Driving becaue ange_to_goal is small.");
                 // drive and turn simultaniously
                 sendDriveCommand(searchVelocity, desired_heading/2);
@@ -797,6 +798,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                 centerSeen = true;
                 count++;
                 sumCog /= count;
+		centerLocationMap = currentLocationMap;
             }
         }
 
@@ -862,6 +864,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
         // pickup state so target handler can take over driving.
         stateMachineState = STATE_MACHINE_PICKUP;
+	circleCount = 0;
         result = pickUpController.selectTarget(message);
 
         std_msgs::Float32 angle;
@@ -1053,10 +1056,10 @@ void mapAverage() {
     currentLocationAverage.y = currentLocationTotal.y/mapHistorySize;
     currentLocationAverage.theta = currentLocationTotal.theta/mapHistorySize;
     if (mapCount == 99) {
-    	Logger::chat("center location: (%f, %f, %f) ", currentLocationAverage.x, currentLocationAverage.y, currentLocationAverage.theta);
-    	centerLocationMap.x = currentLocationAverage.x + 1.1 * cos(currentLocationAverage.theta);
-    	centerLocationMap.y = currentLocationAverage.y + 1.1 * sin(currentLocationAverage.theta);
+    	centerLocationMap.x = currentLocationAverage.x + 1.0 * cos(currentLocation.theta);
+    	centerLocationMap.y = currentLocationAverage.y + 1.0 * sin(currentLocation.theta);
     	centerLocationMap.theta = currentLocationAverage.theta;
+        Logger::chat("center location: (%f, %f, %f) ", centerLocationMap.x, centerLocationMap.y, centerLocationMap.theta);
 
     	// initialization has run
     	init = true;

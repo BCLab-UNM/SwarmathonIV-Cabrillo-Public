@@ -98,7 +98,7 @@ PickUpResult PickUpController::pickUpSelectedTarget(bool blockBlock) {
         {
             lockTarget = false;
             // XXX: Tuneable
-            result.cmdVel = -0.5;
+            result.cmdVel = -0.75;
             result.angleError = 0.0;
             //set gripper
             result.fingerAngle = M_PI_2;
