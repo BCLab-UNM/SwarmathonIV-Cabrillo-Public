@@ -22,7 +22,7 @@ Swarmathon-ROS is designed and tested exclusively on the 64 bit version of Ubunt
 
 ##### 1. Install ROS Kinetic
 
-Follow the detailed instructions for installing ROS Indigo under Ubuntu 14.04 [here](http://wiki.ros.org/kinetic/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo simulator.
+Follow the detailed instructions for installing ROS Kinetic under Ubuntu 16.04 [here](http://wiki.ros.org/kinetic/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo simulator.
 
 ##### 2. Install additional ROS plugins
 
