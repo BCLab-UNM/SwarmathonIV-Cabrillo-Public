@@ -75,7 +75,7 @@ sudo apt-get install git
   cd ~/rover_workspace
   ```
 
-3. Set up [ublox](http://wiki.ros.org/ublox) GPS submodule:
+3. Set up [ublox](http://wiki.ros.org/ublox) and the [apriltags-ros](https://github.com/RIVeR-Lab/apriltags_ros) submodules:
 
   ```
   git submodule init
