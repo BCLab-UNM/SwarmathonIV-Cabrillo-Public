@@ -18,11 +18,11 @@ This repository contains:
 
 ### Quick Start Installation Guide
 
-Swarmathon-ROS is designed and tested exclusively on the 64 bit version of Ubuntu 14.04 LTS (Trusty Tahr) and ROS Indigo Igloo. This framework may compile and run correctly under other versions of Ubuntu and ROS, but **NOTE** that these other systems are untested and are therefore not supported at this time.
+Swarmathon-ROS is designed and tested exclusively on the 64 bit version of Ubuntu 16.04 LTS (Xenial Xerus) and ROS Kinetic Kame. **NOTE** You must upgrade your swarmies and development machines to the new LTS version of Ubuntu.
 
-##### 1. Install ROS Indigo
+##### 1. Install ROS Kinetic
 
-Follow the detailed instructions for installing ROS Indigo under Ubuntu 14.04 [here](http://wiki.ros.org/indigo/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo 2 simulator.
+Follow the detailed instructions for installing ROS Indigo under Ubuntu 14.04 [here](http://wiki.ros.org/kinetic/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo simulator.
 
 ##### 2. Install additional ROS plugins
 
@@ -35,19 +35,7 @@ sudo apt-get install python-catkin-tools
 Our simulated and physical Swarmies use existing ROS plugins, external to this repo, to facilitate non-linear state estimation through sensor fusion and frame transforms. These plugins are contained in the [robot_localization](http://wiki.ros.org/robot_localization) package, which should be installed using the apt-get package management tool:
 
 ```
-sudo apt-get install ros-indigo-robot-localization
-```
-
-We additionally make use of an AprilTag detection plugin to decode tags within images, as well as provide pose estimates for tag positions relative to the lens of the camera. This plugin is contained in the [apriltags_ros](http://wiki.ros.org/apriltags_ros) package, which should be installed using apt-get:
-
-```
-sudo apt-get install ros-indigo-apriltags-ros
-```
-
-Finally, our physical Swarmies use a USB camera driver, contained in the [usb_cam](http://wiki.ros.org/usb_cam) package, to interface with the built-in Logitech C170 webcam:
-
-```
-sudo apt-get install ros-indigo-usb-cam
+sudo apt-get install ros-kinetic-robot-localization
 ```
 
 ##### 3. Install additional Gazebo plugins
@@ -55,13 +43,13 @@ sudo apt-get install ros-indigo-usb-cam
 Our simulated Swarmies use existing Gazebo plugins, external to this repo, to replicate sonar, IMU, and GPS sensors. These plugins are contained in the [hector_gazebo_plugins](http://wiki.ros.org/hector_gazebo_plugins) package, which should be installed using the apt-get package management tool:
 
 ```
-sudo apt-get install ros-indigo-hector-gazebo-plugins
+sudo apt-get install ros-kinetic-hector-gazebo-plugins
 ```
 
 Our Swarmies can receive mobility commands from the right thumb stick on a Microsoft Xbox 360 controller. The ROS [joystick_drivers](http://wiki.ros.org/joystick_drivers) package, which contains a generic Linux joystick driver compatible with this controller, should also be installed using the apt-get tool:
 
 ```
- sudo apt-get install ros-indigo-joystick-drivers
+ sudo apt-get install ros-kinetic-joystick-drivers
 ```
 
 Joystick commands can also be simulated using the direction keys (Up=I, Down=K, Left=J, Right=L) on the keyboard. The Rover GUI window must have focus for keyboard control to work.
@@ -98,9 +86,9 @@ sudo apt-get install git
  
   Make sure bash is aware of the location of the ROS environment:
   ```
-  if ! grep -q "source /opt/ros/indigo/setup.bash" ~/.bashrc
+  if ! grep -q "source /opt/ros/kinetic/setup.bash" ~/.bashrc
   then 
-    echo "source /opt/ros/indigo/setup.bash" >> ~/.bashrc
+    echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
   fi
   source ~/.bashrc
   ```
