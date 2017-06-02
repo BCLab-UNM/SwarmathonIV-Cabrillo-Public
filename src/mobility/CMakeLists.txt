@@ -9,10 +9,20 @@ find_package(catkin REQUIRED COMPONENTS
   random_numbers
   tf
   apriltags_ros
+  rospy
+  message_generation
 )
 
+catkin_python_setup()
+
+add_service_files (
+	FILES Command.srv
+)
+
+generate_messages()
+
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs random_numbers tf apriltags_ros
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs random_numbers tf apriltags_ros rospy message_runtime
 )
 
 include_directories(
@@ -33,4 +43,3 @@ target_link_libraries(
   mobility
   ${catkin_LIBRARIES}
 )
-
