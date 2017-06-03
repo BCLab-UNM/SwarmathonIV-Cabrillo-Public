@@ -11,8 +11,9 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose2D
 from twisted.positioning.base import Satellite
 import tf
-from Queue import Queue 
 from mobility.srv import Command 
+from task import Task, TaskState
+from Queue import Queue 
 
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
@@ -38,12 +39,6 @@ class Location:
                           goal.y - self.Odometry.pose.pose.position.y);
         return (dist < 0.1)
         
-class Task : 
-    '''A robot relative place to navigate to. Expressed as r and theta''' 
-    def __init__(self, r, theta):
-        self.r = r 
-        self.theta = theta
-            
 class PubSub: 
     '''Keep track of the publishers in this package''' 
     def __init__(self, rover):        
@@ -57,39 +52,44 @@ class PubSub:
         # Services 
         rospy.Service(rover + '/cmd', Command, Debugger)
     
-        self.status = rospy.Publisher(rover + '/status', String, queue_size=1)
-        self.infoLog = rospy.Publisher(rover + '/infoLog', String, queue_size=1)
-        self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=1)
-        self.fingerAngle = rospy.Publisher(rover + '/fingerAngle', Float32, queue_size=1)
-        self.wristAngle = rospy.Publisher(rover + '/wristAngle', Float32, queue_size=1)
-        self.driveControl = rospy.Publisher(rover + '/driveControl', Twist, queue_size=1)
-        self.heartbeat = rospy.Publisher(rover + '/mobility/heartbeat', String, queue_size=1)
+        self.status = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
+        self.infoLog = rospy.Publisher(rover + '/infoLog', String, queue_size=1, latch=True)
+        self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=1, latch=True)
+        self.fingerAngle = rospy.Publisher(rover + '/fingerAngle', Float32, queue_size=1, latch=True)
+        self.wristAngle = rospy.Publisher(rover + '/wristAngle', Float32, queue_size=1, latch=True)
+        self.driveControl = rospy.Publisher(rover + '/driveControl', Twist, queue_size=10)
+        self.heartbeat = rospy.Publisher(rover + '/mobility/heartbeat', String, queue_size=1, latch=True)
 
+        self.t = Twist() 
+        
     def drive(self, speed, yawerr):
-        t = Twist()
-        t.linear.x = speed
-        t.angular.z = yawerr
-        self.driveControl.publish(t)
+        self.t.linear.x = speed
+        self.t.angular.z = yawerr
+        self.driveControl.publish(self.t)
         
 class State: 
     '''Global robot state variables''' 
     
-    MODE_MANUAL   = 1 
-    MODE_AUTO     = 2
-    MODE_ALL_AUTO = 3 
+    MODE_MANUAL     = 1 
+    MODE_AUTO       = 2
+    MODE_ALL_AUTO   = 3 
 
-    STATE_INIT    = 0
-    STATE_WAIT    = 1
-    STATE_TURN    = 2
-    STATE_DRIVE   = 3 
-           
+    STATE_INIT      = 0
+    STATE_WAIT      = 1
+    STATE_TURN      = 2
+    STATE_DRIVE     = 3 
+    STATE_REVERSE   = 4 
+    STATE_PAUSE     = 5 
+
     def __init__(self):
         self.Mode = State.MODE_MANUAL
         self.MapLocation = Location(None)
         self.OdomLocation =  Location(None)
         self.CurrentState = State.STATE_INIT
-        self.TaskList = Queue()
         self.Goal = None
+        self.PauseCnt = 0
+        self.Controller = TaskState()
+        self.Work = Queue()
         
 def run(event) :
     global state, pub
@@ -103,16 +103,35 @@ def run(event) :
 
     elif state.CurrentState == State.STATE_WAIT : 
         pub.drive(0,0)
-        if not state.TaskList.empty() : 
-            task = state.TaskList.get(False)
-            # Compute the goal.
-            cur = state.OdomLocation.getPose2D()
-            state.Goal = Pose2D()
-            state.Goal.theta = cur.theta + task.theta
-            state.Goal.x = cur.x + task.r * math.cos(state.Goal.theta)
-            state.Goal.y = cur.y + task.r * math.sin(state.Goal.theta)
-            state.CurrentState = State.STATE_TURN
-            
+        if not state.Work.empty() : 
+            task = state.Work.get(False)
+            print "executing task:", task
+
+            if task.delay > 0 :
+                state.PauseCnt = task.delay
+                state.CurrentState = State.STATE_PAUSE
+            else :                       
+                if task.r < 0 :
+                    task.theta = 0
+    
+                cur = state.OdomLocation.getPose2D()
+                state.Goal = Pose2D()
+                state.Goal.theta = cur.theta + task.theta
+                state.Goal.x = cur.x + task.r * math.cos(state.Goal.theta)
+                state.Goal.y = cur.y + task.r * math.sin(state.Goal.theta)
+    
+                if task.r < 0 :
+                    state.CurrentState = State.STATE_REVERSE
+                else:
+                    state.CurrentState = State.STATE_TURN
+
+        else:
+            pass
+            #places = state.Controller.request()
+            #if places is not None : 
+            #    for t in places : 
+            #        state.Work.put(t, False)
+
     elif state.CurrentState == State.STATE_TURN :
         cur = state.OdomLocation.getPose2D()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
@@ -126,17 +145,38 @@ def run(event) :
         cur = state.OdomLocation.getPose2D()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
-        if not state.OdomLocation.atGoal(state.Goal) :
-            if abs(goal_angle) > math.pi / 2 : 
-                pub.drive(0.05, heading_error)
-                state.CurrentState = State.STATE_TURN
-            else:
-                pub.drive(0.3, heading_error/2)
+        if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 :
+            print "Arrived"
+            pub.drive(0,0)
+            state.Goal = None
+            state.CurrentState = State.STATE_WAIT            
+        elif abs(heading_error) > math.pi / 2 :
+            print "Turn Error"
+            pub.drive(0.05, heading_error)
+            state.CurrentState = State.STATE_TURN
         else:
+            print "Driving"
+            pub.drive(0.3, heading_error/2)
+
+    elif state.CurrentState == State.STATE_REVERSE :
+        print "Reverse"
+        cur = state.OdomLocation.getPose2D()
+        goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
+        if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 : 
             pub.drive(0,0)
             state.Goal = None
             state.CurrentState = State.STATE_WAIT
+        else:
+            pub.drive(-0.2, 0)
 
+    elif state.CurrentState == State.STATE_PAUSE : 
+        print "Wait"
+        pub.drive(0,0)
+        if state.PauseCnt == 0 :
+            state.CurrentState = State.STATE_WAIT
+        else:
+            state.PauseCnt = state.PauseCnt - 1
+            
 def ping(event):
     global pub
     pub.heartbeat.publish("")
@@ -157,7 +197,7 @@ def obstacleHandler(msg) :
 def odometryHandler(msg) : 
     global state 
     state.OdomLocation = Location(msg)
-
+        
 def mapHandler(msg) : 
     global state 
     state.MapLocation = Location(msg)
@@ -173,7 +213,7 @@ def goto(r, theta):
     '''Debugging programmed move.'''
     global state
     t = Task(r, theta)
-    state.TaskList.put(t)
+    state.Work.put(t, False)
     
 def stop():
     global state 

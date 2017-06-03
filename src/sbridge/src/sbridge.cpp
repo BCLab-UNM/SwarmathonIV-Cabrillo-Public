@@ -21,6 +21,13 @@ sbridge::sbridge(std::string publishedName) {
 void sbridge::cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
     double linearVel = (message->linear.x);
     double angularVel = (message->angular.z);
+    velocity.linear.x = linearVel;
+    velocity.angular.z = angularVel;
+    skidsteerPublish.publish(velocity);
+
+	/*
+    double linearVel = (message->linear.x);
+    double angularVel = (message->angular.z);
     int sat = 255;
     int Kpv = 255;
     int Kpa = 200;
@@ -55,15 +62,18 @@ void sbridge::cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
     {
         forward = 0;
     }
+    */
     /*std_msgs::String msg;
    stringstream ss;
    ss << "";
    msg.data = ss.str();
    infoLogPublisher.publish(msg);*/
 
+	/*
     velocity.linear.x = forward,
             velocity.angular.z = turn;
     skidsteerPublish.publish(velocity);
+    */
 }
 
 void sbridge::publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
