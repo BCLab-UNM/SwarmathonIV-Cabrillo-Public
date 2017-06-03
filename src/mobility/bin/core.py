@@ -126,11 +126,10 @@ def run(event) :
                     state.CurrentState = State.STATE_TURN
 
         else:
-            pass
-            #places = state.Controller.request()
-            #if places is not None : 
-            #    for t in places : 
-            #        state.Work.put(t, False)
+            places = state.Controller.request()
+            if places is not None : 
+                for t in places : 
+                    state.Work.put(t, False)
 
     elif state.CurrentState == State.STATE_TURN :
         cur = state.OdomLocation.getPose2D()
