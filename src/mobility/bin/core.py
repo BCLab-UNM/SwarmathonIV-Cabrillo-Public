@@ -116,7 +116,7 @@ def run(event) :
     elif state.CurrentState == State.STATE_TURN :
         cur = state.OdomLocation.getPose2D()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
-        if heading_error > math.pi / 4 :
+        if abs(heading_error) > math.pi / 4 :
             pub.drive(0.05, heading_error)
         else:
             pub.drive(0,0)
@@ -127,7 +127,7 @@ def run(event) :
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
         if not state.OdomLocation.atGoal(state.Goal) :
-            if goal_angle > math.pi / 2 : 
+            if abs(goal_angle) > math.pi / 2 : 
                 pub.drive(0.05, heading_error)
                 state.CurrentState = State.STATE_TURN
             else:
