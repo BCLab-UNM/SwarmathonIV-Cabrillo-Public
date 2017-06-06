@@ -7,25 +7,26 @@ import rospy
 import angles
 import math
 import copy
+import StringIO 
+import threading
+from Queue import Queue 
+
+import tf
 from sensor_msgs.msg import Joy
 from apriltags_ros.msg import AprilTagDetectionArray 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
-from twisted.positioning.base import Satellite
-import tf
+
 from mobility.srv import Command 
 from task import Task, TaskState
-from Queue import Queue 
-import StringIO 
-import threading
 
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
     def __init__(self, odo):
         self.Odometry = odo 
     
-    def getPose2D(self):
+    def get_pose(self):
         quat = [self.Odometry.pose.pose.orientation.x, 
                 self.Odometry.pose.pose.orientation.y, 
                 self.Odometry.pose.pose.orientation.z, 
@@ -38,7 +39,7 @@ class Location:
         pose.theta = y 
         return pose
 
-    def atGoal(self, goal):
+    def at_goal(self, goal):
         '''Determine if the pose is within accepable distance of this location''' 
         dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
                           goal.y - self.Odometry.pose.pose.position.y);
@@ -95,11 +96,12 @@ class State:
     MODE_ALL_AUTO   = 3 
 
     STATE_INIT      = 0
-    STATE_WAIT      = 1
+    STATE_IDLE      = 1
     STATE_TURN      = 2
     STATE_DRIVE     = 3 
     STATE_REVERSE   = 4 
     STATE_PAUSE     = 5 
+    STATE_HAZARD    = 6 
 
     def __init__(self):
         self.Mode = State.MODE_MANUAL
@@ -109,8 +111,8 @@ class State:
         self.Goal = None
         self.PauseCnt = 0
         self.Controller = TaskState()
-        self.Work = Queue()
         self.Lock = threading.Lock()
+        self.Work = Queue()
      
 def state_sync(state_func) :
     def wrapper(*args, **kwargs):
@@ -131,10 +133,10 @@ def run(event) :
         return
     
     if state.CurrentState == State.STATE_INIT : 
-        state.CurrentState = State.STATE_WAIT
+        state.CurrentState = State.STATE_IDLE
         pub.drive(0,0)
 
-    elif state.CurrentState == State.STATE_WAIT : 
+    elif state.CurrentState == State.STATE_IDLE : 
         pub.printSM('WAIT')
         pub.drive(0,0)
         if not state.Work.empty() : 
@@ -147,7 +149,7 @@ def run(event) :
                 if task.r < 0 :
                     task.theta = 0
     
-                cur = state.OdomLocation.getPose2D()
+                cur = state.OdomLocation.get_pose()
                 state.Goal = Pose2D()
                 state.Goal.theta = cur.theta + task.theta
                 state.Goal.x = cur.x + task.r * math.cos(state.Goal.theta)
@@ -158,15 +160,9 @@ def run(event) :
                 else:
                     state.CurrentState = State.STATE_TURN
 
-        else:
-            places = state.Controller.request()
-            if places is not None : 
-                for t in places : 
-                    state.Work.put(t, False)
-
     elif state.CurrentState == State.STATE_TURN :
         pub.printSM('TURN')
-        cur = state.OdomLocation.getPose2D()
+        cur = state.OdomLocation.get_pose()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         if abs(heading_error) > math.pi / 4 :
             pub.drive(0.05, heading_error)
@@ -176,13 +172,13 @@ def run(event) :
             
     elif state.CurrentState == State.STATE_DRIVE :
         pub.printSM('DRIVE')
-        cur = state.OdomLocation.getPose2D()
+        cur = state.OdomLocation.get_pose()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
-        if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 :
+        if state.OdomLocation.at_goal(state.Goal) or abs(goal_angle) > math.pi / 2 :
             pub.drive(0,0)
             state.Goal = None
-            state.CurrentState = State.STATE_WAIT            
+            state.CurrentState = State.STATE_IDLE            
         elif abs(heading_error) > math.pi / 2 :
             pub.drive(0.05, heading_error)
             state.CurrentState = State.STATE_TURN
@@ -191,12 +187,12 @@ def run(event) :
 
     elif state.CurrentState == State.STATE_REVERSE :
         pub.printSM('REVERSE')
-        cur = state.OdomLocation.getPose2D()
+        cur = state.OdomLocation.get_pose()
         goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
-        if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 : 
+        if state.OdomLocation.at_goal(state.Goal) or abs(goal_angle) > math.pi / 2 : 
             pub.drive(0,0)
             state.Goal = None
-            state.CurrentState = State.STATE_WAIT
+            state.CurrentState = State.STATE_IDLE
         else:
             pub.drive(-0.2, 0)
 
@@ -204,7 +200,7 @@ def run(event) :
         pub.printSM('PAUSE')
         pub.drive(0,0)
         if state.PauseCnt == 0 :
-            state.CurrentState = State.STATE_WAIT
+            state.CurrentState = State.STATE_IDLE
         else:
             state.PauseCnt = state.PauseCnt - 1
             
