@@ -1,9 +1,12 @@
 #! /usr/bin/env python 
 
+from __future__ import print_function
+
 import sys
 import rospy 
 import angles
 import math
+import copy
 from sensor_msgs.msg import Joy
 from apriltags_ros.msg import AprilTagDetectionArray 
 from std_msgs.msg import UInt8, String, Float32
@@ -14,6 +17,8 @@ import tf
 from mobility.srv import Command 
 from task import Task, TaskState
 from Queue import Queue 
+import StringIO 
+import threading
 
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
@@ -67,6 +72,21 @@ class PubSub:
         self.t.angular.z = yawerr
         self.driveControl.publish(self.t)
         
+    def printInfoLog(self, msg):
+        s = String()
+        s.data = msg 
+        self.infoLog.publish(s)
+
+    def printSM(self, msg):
+        s = String()
+        s.data = msg 
+        self.state_machine.publish(s)
+
+    def printStatus(self, msg):
+        s = String()
+        s.data = msg 
+        self.status.publish(s)
+
 class State: 
     '''Global robot state variables''' 
     
@@ -90,9 +110,22 @@ class State:
         self.PauseCnt = 0
         self.Controller = TaskState()
         self.Work = Queue()
-        
+        self.Lock = threading.Lock()
+     
+def state_sync(state_func) :
+    def wrapper(*args, **kwargs):
+        global state
+        try:
+            state.Lock.acquire()
+            return state_func(*args, **kwargs)
+        finally:
+            state.Lock.release()
+    return wrapper
+
+@state_sync
 def run(event) :
     global state, pub
+        
     if state.Mode == State.MODE_MANUAL :
         pub.drive(0,0)
         return
@@ -102,10 +135,10 @@ def run(event) :
         pub.drive(0,0)
 
     elif state.CurrentState == State.STATE_WAIT : 
+        pub.printSM('WAIT')
         pub.drive(0,0)
         if not state.Work.empty() : 
             task = state.Work.get(False)
-            print "executing task:", task
 
             if task.delay > 0 :
                 state.PauseCnt = task.delay
@@ -132,6 +165,7 @@ def run(event) :
                     state.Work.put(t, False)
 
     elif state.CurrentState == State.STATE_TURN :
+        pub.printSM('TURN')
         cur = state.OdomLocation.getPose2D()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         if abs(heading_error) > math.pi / 4 :
@@ -141,24 +175,22 @@ def run(event) :
             state.CurrentState = State.STATE_DRIVE
             
     elif state.CurrentState == State.STATE_DRIVE :
+        pub.printSM('DRIVE')
         cur = state.OdomLocation.getPose2D()
         heading_error = angles.shortest_angular_distance(cur.theta, state.Goal.theta)
         goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
         if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 :
-            print "Arrived"
             pub.drive(0,0)
             state.Goal = None
             state.CurrentState = State.STATE_WAIT            
         elif abs(heading_error) > math.pi / 2 :
-            print "Turn Error"
             pub.drive(0.05, heading_error)
             state.CurrentState = State.STATE_TURN
         else:
-            print "Driving"
             pub.drive(0.3, heading_error/2)
 
     elif state.CurrentState == State.STATE_REVERSE :
-        print "Reverse"
+        pub.printSM('REVERSE')
         cur = state.OdomLocation.getPose2D()
         goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(state.Goal.y - cur.y, state.Goal.x - cur.x))
         if state.OdomLocation.atGoal(state.Goal) or abs(goal_angle) > math.pi / 2 : 
@@ -169,7 +201,7 @@ def run(event) :
             pub.drive(-0.2, 0)
 
     elif state.CurrentState == State.STATE_PAUSE : 
-        print "Wait"
+        pub.printSM('PAUSE')
         pub.drive(0,0)
         if state.PauseCnt == 0 :
             state.CurrentState = State.STATE_WAIT
@@ -183,6 +215,7 @@ def ping(event):
 def joyCmdHandler(msg) :
     pass 
 
+@state_sync
 def modeHandler(msg) :
     global state 
     state.Mode = msg
@@ -193,20 +226,33 @@ def targetHandler(msg) :
 def obstacleHandler(msg) :
     pass 
 
+@state_sync
 def odometryHandler(msg) : 
     global state 
     state.OdomLocation = Location(msg)
         
+@state_sync
 def mapHandler(msg) : 
     global state 
     state.MapLocation = Location(msg)
 
 def Debugger(req):
+    redir = StringIO.StringIO()
+    save = sys.stdout
+    sys.stdout = redir
+    err = None
     try :
         exec(req.str)
     except Exception as e :
-        return str(e)
-    return "OK"
+        err = e
+
+    sys.stdout = save
+    if err is not None : 
+        return str(err) + "\n"
+
+    rval = redir.getvalue()
+    redir.close()
+    return str(rval)
 
 def goto(r, theta):
     '''Debugging programmed move.'''
@@ -223,7 +269,7 @@ def main() :
     global state 
     
     if len(sys.argv) < 2 :
-        print 'ussage:', sys.argv[0], '<rovername>'
+        print('usage:', sys.argv[0], '<rovername>')
         exit (-1)
     
     rover = sys.argv[1]
