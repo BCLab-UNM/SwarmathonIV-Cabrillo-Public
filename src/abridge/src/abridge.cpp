@@ -323,8 +323,8 @@ void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
   //only use integral when error is larger than presumed noise.
   if (yawError[0] > yawIntegralDeadspace || yawError[0] < -yawIntegralDeadspace)
   {
-    evArray[stepV] = velError[0]; //add error into the error Array.
-    stepV++;
+    eyArray[stepY] = yawError[0]; //add error into the error Array.
+    stepY++;
     
     if (stepY >= histArrayLength) stepY = 0;
     
