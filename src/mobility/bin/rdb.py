@@ -4,15 +4,24 @@ from __future__ import print_function
 
 import rospy 
 import sys
+import signal
+import os
 from std_msgs.msg import String
 from mobility.srv import Command 
 import readline
 import rlcompleter
 
 def logHandler(source, msg): 
-    print (source, msg.data)
+    if not quiet : 
+        print (source, msg.data)
+
+def handle(signum, frame):
+    global quiet 
+    quiet = not quiet
 
 def main() :
+    global quiet 
+    
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
@@ -22,11 +31,13 @@ def main() :
 
     print ("Waiting to connect to rover.")
     rospy.wait_for_service(rover + '/cmd')
-    
+
+    quiet = False   
     rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('status:', msg))
     rospy.Subscriber(rover + '/infoLog', String, lambda msg : logHandler('infoLog:', msg))
     rospy.Subscriber(rover + '/state_machine', String, lambda msg : logHandler('state_machine:', msg))
-    
+
+    signal.signal(signal.SIGQUIT, handle)    
     print ('Ready.')
     readline.parse_and_bind("tab: complete")
     
