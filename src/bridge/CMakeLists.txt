@@ -19,11 +19,11 @@ include_directories(
 )
 
 add_executable(
-  sbridge src/sbridge.cpp
+  sbridge src/sbridge.cpp src/pid.cpp
 )
 
 add_executable(
-  abridge src/abridge.cpp src/usbSerial.cpp
+  abridge src/abridge.cpp src/usbSerial.cpp src/pid.cpp
 )
 
 target_link_libraries(
