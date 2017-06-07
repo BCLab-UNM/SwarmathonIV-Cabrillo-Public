@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>sbridge</name>
+  <name>bridge</name>
   <version>0.0.1</version>
-  <description>Gazebo interface to provide formatted drive control</description>
+  <description>Interfaces to the real or simulated worlds.</description>
 
   <maintainer email="swarmathon@cs.unm.edu">NASA Swarmathon</maintainer>
 

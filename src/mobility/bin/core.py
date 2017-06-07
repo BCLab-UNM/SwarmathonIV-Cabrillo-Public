@@ -21,6 +21,17 @@ from geometry_msgs.msg import Twist, Pose2D
 from mobility.srv import Command 
 from task import Task, TaskState
 
+def sync(func) :
+    '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
+    def wrapper(self, *args, **kwargs):
+        global StateLock
+        try:
+            StateLock.acquire()
+            return func(self, *args, **kwargs)
+        finally:
+            StateLock.release()
+    return wrapper
+
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
     def __init__(self, odo):
@@ -239,17 +250,6 @@ def goto(r, theta):
     t = Task(r, theta)
     state.Work.put(t, False)
         
-def sync(func) :
-    '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
-    def wrapper(self, *args, **kwargs):
-        global StateLock
-        try:
-            StateLock.acquire()
-            return func(self, *args, **kwargs)
-        finally:
-            StateLock.release()
-    return wrapper
-
 def main() :     
     global StateLock 
     global state
