@@ -17,7 +17,6 @@ ros::Publisher skidsteerPublisher;
 ros::Publisher infoLogPublisher;
 
 ros::Subscriber driveControlSubscriber;
-ros::Subscriber robotPositionSubscriber;
 ros::Subscriber odomSubscriber;
 
 ros::Timer heartbeatTimer;
@@ -42,33 +41,6 @@ void cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
 	sp_angular = message->angular.z;
 }
 
-/*
-void positionHandler(const gazebo_msgs::ModelStates::ConstPtr& message) {
-	int rover_pos = -1;
-
-	for (int i=0; i < message->name.size(); i++) {
-		if (message->name[i] == rover) {
-			rover_pos = i;
-			break;
-		}
-	}
-
-	if (rover_pos < 0)
-		return;
-
-	geometry_msgs::Point position = message->pose[rover_pos].position;
-	geometry_msgs::Quaternion orientation = message->pose[rover_pos].orientation;
-
-    double roll, pitch, yaw;
-    tf::Matrix3x3 m(tf::Quaternion(orientation.x, orientation.y, orientation.z, orientation.w));
-    m.getRPY(roll, pitch, yaw);
-
-    pos_x = position.x;
-    pos_y = position.y;
-    pos_theta = yaw;
-}
-*/
-
 void odomHandler(const nav_msgs::Odometry::ConstPtr& message) {
 	static double lastx = 0;
 	static double lasty = 0;
@@ -87,7 +59,6 @@ void doPIDs(const ros::TimerEvent& event) {
     velocity.linear.x = linear_out;
     velocity.angular.z = angular_out;
 
-    cout << "l: " << linear_out << " a: " << angular_out << endl;
     skidsteerPublisher.publish(velocity);
 }
 
@@ -112,7 +83,6 @@ int main(int argc, char **argv) {
 
     driveControlSubscriber = sNH.subscribe((rover + "/driveControl"), 10, &cmdHandler);
     odomSubscriber = sNH.subscribe((rover + "/odom"), 1, &odomHandler);
-    //robotPositionSubscriber = sNH.subscribe("/gazebo/model_states", 1, &positionHandler);
 
     heartbeatPublisher = sNH.advertise<std_msgs::String>((rover + "/sbridge/heartbeat"), 1, false);
     skidsteerPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/skidsteer"), 10);
