@@ -77,6 +77,7 @@ class State:
         self.OdomLocation =  Location(None)
         self.CurrentState = State.STATE_INIT
         self.Goal = None
+        self.Start = None
         self.PauseCnt = 0
         self.Controller = TaskState()
         self.Work = Queue()
@@ -179,7 +180,8 @@ class State:
                     self.Goal.theta = cur.theta + task.theta
                     self.Goal.x = cur.x + task.r * math.cos(self.Goal.theta)
                     self.Goal.y = cur.y + task.r * math.sin(self.Goal.theta)
-        
+                    self.Start = cur
+                    
                     if task.r < 0 :
                         self.CurrentState = State.STATE_REVERSE
                     else:
@@ -189,7 +191,7 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > math.pi / 4 :
-                self.drive(0.05, heading_error)
+                self.drive(0, get_turn(self.Start, self.Goal, cur))
             else:
                 self.drive(0,0)
                 self.CurrentState = State.STATE_DRIVE
@@ -203,10 +205,9 @@ class State:
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE            
             elif abs(heading_error) > math.pi / 2 :
-                self.drive(0.05, heading_error)
                 self.CurrentState = State.STATE_TURN
             else:
-                self.drive(0.3, heading_error/2)
+                self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2)
     
         elif self.CurrentState == State.STATE_REVERSE :
             cur = self.OdomLocation.get_pose()
@@ -224,6 +225,48 @@ class State:
                 self.CurrentState = State.STATE_IDLE
             else:
                 self.PauseCnt = self.PauseCnt - 1
+
+def get_turn(start, end, current):
+    dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
+    dist_to_end = angles.shortest_angular_distance(current.theta, end.theta)
+    
+    def dist_to_turn(dist):
+        gain = 2
+        max = 0.7
+        min = 0.1
+        speed = dist * gain
+        if speed > 0 : 
+            if speed > max : 
+                speed = max
+            elif speed < min : 
+                speed = min
+        else :
+            if speed < -max :
+                speed = -max
+            elif speed > -min :
+                speed = -min
+                         
+        return speed
+
+    return min(dist_to_turn(dist_from_start), dist_to_turn(dist_to_end))    
+
+def get_speed(start, end, current):
+    dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
+    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y))
+    
+    def dist_to_speed(dist):
+        gain = 1 
+        max = 0.5
+        min = 0.1
+        speed = dist * gain
+        if speed > max :
+            speed = max
+        elif speed < min :
+            speed = min 
+        
+        return speed
+
+    return min(dist_to_speed(dist_from_start), dist_to_speed(dist_to_end))    
      
 def debug(req):
     global state

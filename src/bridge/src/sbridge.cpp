@@ -79,8 +79,9 @@ void odomHandler(const nav_msgs::Odometry::ConstPtr& message) {
 }
 
 void doPIDs(const ros::TimerEvent& event) {
-    double linear_out = linear.step(sp_linear, linear_velocity);
-    double angular_out = angular.step(sp_angular, angular_velocity);
+	double now = event.current_real.toSec();
+    double linear_out = linear.step(sp_linear, linear_velocity, now);
+    double angular_out = angular.step(sp_angular, angular_velocity, now);
 
 	geometry_msgs::Twist velocity;
     velocity.linear.x = linear_out;

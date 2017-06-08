@@ -16,7 +16,7 @@ public:
 	PID(double p, double i, double d, double db, double hi, double lo);
 	~PID();
 
-	double step(double setpoint, double feeback);
+	double step(double setpoint, double feeback, double now=0);
 
 private:
 

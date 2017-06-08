@@ -35,7 +35,7 @@ double PID::getNow() {
 	return (double(n.tv_sec) * 10e9 + n.tv_nsec) / 10e9;
 }
 
-double PID::step(double setpoint, double feedback) {
+double PID::step(double setpoint, double feedback, double now) {
 
 	double err = setpoint - feedback;
 
@@ -43,9 +43,10 @@ double PID::step(double setpoint, double feedback) {
 	double I = 0;
 	double D = 0;
 
-	double now = getNow();
+	if (now == 0)
+		now = getNow();
 
-	if (_lasttime != 0) {
+	if ( _lasttime != 0) {
 		double elapsed = now - _lasttime;
 
 		_sum += _ki * err * elapsed;
