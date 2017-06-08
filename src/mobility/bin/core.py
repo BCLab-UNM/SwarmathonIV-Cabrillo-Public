@@ -259,7 +259,11 @@ def get_turn(start, end, current):
                          
         return speed
 
-    return min(dist_to_turn(dist_from_start), dist_to_turn(dist_to_end))    
+    to = dist_to_turn(dist_to_end)
+    if to > 0 :
+        return min(to, dist_to_turn(dist_from_start))
+    else:
+        return max(to, dist_to_turn(dist_from_start))
 
 def get_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
