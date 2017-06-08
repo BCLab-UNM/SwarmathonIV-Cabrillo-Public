@@ -18,7 +18,11 @@ def logHandler(source, msg):
 def handle(signum, frame):
     global quiet 
     quiet = not quiet
-
+    if quiet : 
+        print ('Topic echo is OFF')
+    else:
+        print ('Topic echo is ON') 
+        
 def main() :
     global quiet 
     
@@ -33,12 +37,18 @@ def main() :
     rospy.wait_for_service(rover + '/cmd')
 
     quiet = False   
-    rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('status:', msg))
-    rospy.Subscriber(rover + '/infoLog', String, lambda msg : logHandler('infoLog:', msg))
-    rospy.Subscriber(rover + '/state_machine', String, lambda msg : logHandler('state_machine:', msg))
+    rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('/status:', msg))
+    print ("Subscribed to", rover + '/status')
+
+    rospy.Subscriber(rover + '/infoLog', String, lambda msg : logHandler('/infoLog:', msg))
+    print ("Subscribed to", rover + '/infoLog')
+    
+    rospy.Subscriber(rover + '/state_machine', String, lambda msg : logHandler('/state_machine:', msg))
+    print ("Subscribed to", rover + '/state_machine')
 
     signal.signal(signal.SIGQUIT, handle)    
     print ('Ready.')
+    print ('Topic data will be displayed. Press CTRL-\ to hide output.')
     readline.parse_and_bind("tab: complete")
     
     try :

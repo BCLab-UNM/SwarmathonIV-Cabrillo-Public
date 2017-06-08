@@ -20,6 +20,7 @@ from geometry_msgs.msg import Twist, Pose2D
 
 from mobility.srv import Command 
 from task import Task, TaskState
+from mercurial.subrepo import state
 
 def sync(func) :
     '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
@@ -81,7 +82,8 @@ class State:
         self.PauseCnt = 0
         self.Controller = TaskState()
         self.Work = Queue()
-
+        self.dbg_msg = None
+        
         # Subscribers
         #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
         rospy.Subscriber(rover + '/mode', UInt8, self._mode)
@@ -138,17 +140,19 @@ class State:
         t.angular.z = yawerr
         self.driveControl.publish(t)
         
-    def printInfoLog(self, msg):
+    def print_info_log(self, msg):
         s = String()
         s.data = msg 
         self.infoLog.publish(s)
 
-    def printSM(self, msg):
-        s = String()
-        s.data = msg 
-        self.state_machine.publish(s)
-
-    def printStatus(self, msg):
+    def print_debug(self, msg):
+        if self.dbg_msg is None or self.dbg_msg != msg: 
+            s = String()
+            s.data = msg 
+            self.state_machine.publish(s)
+        self.dbg_msg = msg 
+        
+    def print_status(self, msg):
         s = String()
         s.data = msg 
         self.status.publish(s)
@@ -156,14 +160,17 @@ class State:
     @sync    
     def run(self, event) :            
         if self.Mode == State.MODE_MANUAL :
+            self.print_debug('Manual Mode')
             self.drive(0,0)
             return
         
         if self.CurrentState == State.STATE_INIT : 
+            self.print_debug('INIT')
             self.CurrentState = State.STATE_IDLE
             self.drive(0,0)
     
         elif self.CurrentState == State.STATE_IDLE : 
+            self.print_debug('IDLE')
             self.drive(0,0)
             if not self.Work.empty() : 
                 task = self.Work.get(False)
@@ -188,6 +195,7 @@ class State:
                         self.CurrentState = State.STATE_TURN
     
         elif self.CurrentState == State.STATE_TURN :
+            self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > math.pi / 4 :
@@ -197,6 +205,7 @@ class State:
                 self.CurrentState = State.STATE_DRIVE
                 
         elif self.CurrentState == State.STATE_DRIVE :
+            self.print_debug('DRIVE')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
@@ -210,6 +219,7 @@ class State:
                 self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2)
     
         elif self.CurrentState == State.STATE_REVERSE :
+            self.print_debug('REVERSE')
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 : 
@@ -220,6 +230,7 @@ class State:
                 self.drive(-0.2, 0)
     
         elif self.CurrentState == State.STATE_PAUSE : 
+            self.print_debug('PAUSE')
             self.drive(0,0)
             if self.PauseCnt == 0 :
                 self.CurrentState = State.STATE_IDLE
@@ -286,6 +297,14 @@ def debug(req):
     rval = redir.getvalue()
     redir.close()
     return str(rval)
+
+def stop():
+    global state
+    state.Mode = State.MODE_MANUAL
+
+def go():
+    global state
+    state.Mode = State.MODE_AUTO
 
 def goto(r, theta):
     '''Debugging programmed move.'''
