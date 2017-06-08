@@ -392,7 +392,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
             // If angle > 0.4 radians rotate but dont drive forward.
             if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > rotateOnlyAngleTolerance) {
                 // rotate but dont drive  0.05 is to prevent turning in reverse
-                sendDriveCommand(0.05, errorYaw);
+                sendDriveCommand(0.0, errorYaw);
                 break;
             } else {
                 // move to differential drive step
