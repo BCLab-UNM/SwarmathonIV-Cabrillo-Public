@@ -94,8 +94,5 @@ source ~/.bashrc
 ```
 Now install catkin and other ROS tools and libraries:
 ```
-sudo apt-get install python-catkin-tools
-sudo apt-get install ros-kinetic-robot-localization
-sudo apt-get install ros-kinetic-hector-gazebo-plugins
-sudo apt-get install ros-kinetic-joystick-drivers
+sudo apt-get install python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers avahi-daemon ros-kinetic-zeroconf-avahi
 ```
