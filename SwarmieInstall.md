@@ -89,10 +89,50 @@ rosdep update
 ```
 Now make sure that the robot user knows where to find ROS files:
 ```
-echo "source /opt/ros/indigo/setup.bash" >> ~/.bashrc
+echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 Now install catkin and other ROS tools and libraries:
 ```
 sudo apt-get install python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers avahi-daemon ros-kinetic-zeroconf-avahi
+```
+
+# Install Cryptographic Secrets
+Talk to Mike about how to download the SSH identity onto the new rover. 
+
+# Setup the Swarmathon Repo 
+When you have the secrets installed you can connect to the Cabrillo private repo. 
+
+Clone this GitHub repository to your home directory (~), renaming the repo so ROS and catkin can properly identify it:
+
+```
+cd ~
+git clone https://github.com/BCLab-UNM/Swarmathon-ROS.git rover_workspace
+```
+
+Change your current working directory to the root directory of the downloaded repo:
+
+```
+cd ~/rover_workspace
+```
+
+Check out the master-next branch for Xenial. 
+```
+git checkout master-next
+```
+
+Set up [ublox](http://wiki.ros.org/ublox) GPS submodule:
+
+```
+git submodule init
+git submodule update
+```
+Build the project:
+```
+catkin build
+```
+Make sure that the project is in your path:
+```
+echo "source ~/rover_workspace/devel/setup.bash" >> ~/.bashrc
+source ~/.bashrc
 ```
