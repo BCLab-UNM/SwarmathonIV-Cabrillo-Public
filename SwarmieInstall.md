@@ -20,7 +20,12 @@ Here are some noatble things to watch for:
 5. Write changes to disk: YES
 6. Software selection: Select OpenSSH server and continue
 
-After installation is complete the NUC will reboot. Login with the robot user. 
+After installation is complete the NUC will reboot. Login with the robot user. Now update the software on the system:
+```
+sudo apt-get update
+sudo apt-get dist-upgrade
+```
+After the process completes reboot again. 
 
 # Connect the WiFi
 
@@ -77,4 +82,20 @@ Now you can install all of ROS:
 ```
 sudo apt-get install ros-indigo-desktop-full
 ```
-This will take a while! 
+This will take a while! After it's done you need to initizlize ROS:
+```
+sudo rosdep init
+rosdep update
+```
+Now make sure that the robot user knows where to find ROS files:
+```
+echo "source /opt/ros/indigo/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```
+Now install catkin and other ROS tools and libraries:
+```
+sudo apt-get install python-catkin-tools
+sudo apt-get install ros-kinetic-robot-localization
+sudo apt-get install ros-kinetic-hector-gazebo-plugins
+sudo apt-get install ros-kinetic-joystick-drivers
+```
