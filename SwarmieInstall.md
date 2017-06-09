@@ -139,7 +139,7 @@ source ~/.bashrc
 # Setup Hardware Permissions 
 You must give the robot user access to the hardware peripherals that drive the robtot. Adding the user to the dialout 
 gives them permission to modem-like things. The two Arduinos on the rover appear to be modems. 
-````
+```
 sudo usermod -a -G dialout robot
 ```
 You will have to logout and back in again for this change to take effect. 
