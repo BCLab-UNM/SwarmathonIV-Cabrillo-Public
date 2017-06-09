@@ -69,8 +69,9 @@ class State:
     STATE_TURN      = 2
     STATE_DRIVE     = 3 
     STATE_REVERSE   = 4 
-    STATE_PAUSE     = 5 
-    STATE_HAZARD    = 6 
+    STATE_STOP      = 5 
+    STATE_PAUSE     = 6 
+    STATE_HAZARD    = 7 
 
     def __init__(self, rover):
         self.Mode = State.MODE_MANUAL
@@ -80,6 +81,7 @@ class State:
         self.Goal = None
         self.Start = None
         self.PauseCnt = 0
+        self.Hold = True;
         self.Controller = TaskState()
         self.Work = Queue()
         self.dbg_msg = None
@@ -188,6 +190,7 @@ class State:
                     self.Goal.x = cur.x + task.r * math.cos(self.Goal.theta)
                     self.Goal.y = cur.y + task.r * math.sin(self.Goal.theta)
                     self.Start = cur
+                    self.Hold = task.hold
                     
                     if task.r < 0 :
                         self.CurrentState = State.STATE_REVERSE
@@ -212,7 +215,11 @@ class State:
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 :
                 self.drive(0,0)
                 self.Goal = None
-                self.CurrentState = State.STATE_IDLE            
+                if self.Hold :
+                    self.CurrentState = State.STATE_STOP
+                else:
+                    self.CurrentState = State.STATE_IDLE
+                    
             elif abs(heading_error) > math.pi / 2 :
                 self.CurrentState = State.STATE_TURN
             else:
@@ -225,7 +232,10 @@ class State:
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 : 
                 self.drive(0,0)
                 self.Goal = None
-                self.CurrentState = State.STATE_IDLE
+                if self.Hold :
+                    self.CurrentState = State.STATE_STOP
+                else:
+                    self.CurrentState = State.STATE_IDLE
             else:
                 self.drive(-0.2, 0)
     
@@ -237,6 +247,13 @@ class State:
             else:
                 self.PauseCnt = self.PauseCnt - 1
 
+        elif self.CurrentState == State.STATE_STOP : 
+            self.print_debug('STOP')
+            self.drive(0,0)
+            cur = self.OdomLocation.Odometry
+            if cur.twist.twist.angular.z < 0.1 and cur.twist.twist.linear.x < 0.1 :
+                self.CurrentState = State.STATE_IDLE
+            
 def get_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
     dist_to_end = angles.shortest_angular_distance(current.theta, end.theta)
@@ -244,7 +261,7 @@ def get_turn(start, end, current):
     def dist_to_turn(dist):
         gain = 2
         max = 0.7
-        min = 0.1
+        min = 0.05
         speed = dist * gain
         if speed > 0 : 
             if speed > max : 

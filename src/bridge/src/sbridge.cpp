@@ -25,7 +25,7 @@ ros::Timer actionTimer;
 string rover;
 
 PID linear(0.1, 0, 0, 0, 1, -1);
-PID angular(0.1, 0, 0, 0, 1, -1);
+PID angular(0.5, 0, 0, 0, 1, -1);
 
 double linear_velocity = 0, angular_velocity = 0;
 double sp_linear = 0, sp_angular = 0;

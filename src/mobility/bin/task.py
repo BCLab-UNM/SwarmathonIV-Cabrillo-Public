@@ -9,10 +9,11 @@ class Task :
     RESULT_ERR_TAG     = 3 
     RESULT_ERR_PATH    = 4
     
-    def __init__(self, r, theta, delay=0):
+    def __init__(self, r, theta, delay=0, hold=True):
         self.r = r 
         self.theta = theta
         self.delay = delay 
+        self.hold = hold
         self.result = Task.RESULT_NONE
         
 class TaskState :
