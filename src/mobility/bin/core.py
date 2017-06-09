@@ -201,7 +201,7 @@ class State:
             self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
-            if abs(heading_error) > math.pi / 4 :
+            if abs(heading_error) > math.pi / 16 :
                 self.drive(0, get_turn(self.Start, self.Goal, cur))
             else:
                 self.drive(0,0)
@@ -278,9 +278,9 @@ def get_turn(start, end, current):
 
     to = dist_to_turn(dist_to_end)
     if to > 0 :
-        return min(to, dist_to_turn(dist_from_start))
+        return -min(to, -abs(dist_to_turn(dist_from_start)))
     else:
-        return max(to, dist_to_turn(dist_from_start))
+        return -max(to, abs(dist_to_turn(dist_from_start)))
 
 def get_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
