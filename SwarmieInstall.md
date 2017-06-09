@@ -136,3 +136,29 @@ Make sure that the project is in your path:
 echo "source ~/rover_workspace/devel/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
+# Setup Hardware Permissions 
+You must give the robot user access to the hardware peripherals that drive the robtot. Adding the user to the dialout 
+gives them permission to modem-like things. The two Arduinos on the rover appear to be modems. 
+````
+sudo usermod -a -G dialout robot
+```
+You will have to logout and back in again for this change to take effect. 
+
+# Install Arduino
+It's extremely helpful to have the Arduino software installed on the Swarmie. 
+```
+cd /tmp
+wget https://downloads.arduino.cc/arduino-1.8.3-linux64.tar.xz
+cd /opt
+sudo tar -xvf /tmp/arduino-1.8.3-linux64.tar.xz 
+sudo ln -s arduino-1.8.3/ arduino
+```
+Now checkout the Arduino code:
+```
+cd ~
+git clone https://github.com/BCLab-UNM/Swarmathon-Arduino.git
+```
+Verify that you can upload code to the Arduino:
+```
+~/rover_workspace/misc/build_arduino.sh 
+```
