@@ -94,7 +94,7 @@ source ~/.bashrc
 ```
 Now install catkin and other ROS tools and libraries:
 ```
-sudo apt-get install python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers avahi-daemon ros-kinetic-zeroconf-avahi ros-kinetic-video-stream-opencv
+sudo apt-get install python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers avahi-daemon ros-kinetic-zeroconf-avahi ros-kinetic-video-stream-opencv emacs-nox
 ```
 
 # Install Cryptographic Secrets
