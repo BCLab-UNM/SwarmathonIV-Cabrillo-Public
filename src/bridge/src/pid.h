@@ -13,7 +13,7 @@
 class PID {
 
 public:
-        PID(double p, double i, double d, double db, double hi, double lo, double stick=-1);
+	PID(double p, double i, double d, double db, double hi, double lo, double stick=-1);
 	~PID();
 
 	double step(double setpoint, double feeback, double now=0);
@@ -23,7 +23,7 @@ private:
 	double getNow();
 
 	// Configuration
-        double _kp, _ki, _kd, _dband, _hi, _lo, _stiction;
+	double _kp, _ki, _kd, _dband, _hi, _lo, _stiction;
 
 	// State
 	double _out, _sum, _lasterr, _lastsp, _lasttime;

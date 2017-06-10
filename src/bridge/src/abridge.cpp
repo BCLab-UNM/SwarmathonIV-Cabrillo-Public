@@ -71,7 +71,6 @@ ros::Publisher infoLogPublisher;
 ros::Publisher heartbeatPublisher;
 
 ros::Publisher debugPIDPublisher;
-ros::Publisher debugArduinoPublisher;
 geometry_msgs::Twist dbT;
 
 //Subscribers
@@ -122,7 +121,6 @@ int main(int argc, char **argv) {
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
     
     debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/abridge/debugPID"), 1, false);
-    debugArduinoPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/debugArduino"), 1, false);
 
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
 
@@ -183,9 +181,9 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
 
 void serialActivityTimer(const ros::TimerEvent& e) {
 
-        static PID left(0.01, 0, 0, 0, 255, -255, 16);
-        static PID right(0.01, 0, 0, 0, 255, -255, 16);
-        static PID diff(0.01, 0, 0, 0, 255, -255, 8);
+	static PID left(0.01, 0, 0, 0, 255, -255, 16);
+	static PID right(0.01, 0, 0, 0, 255, -255, 16);
+	static PID diff(0.01, 0, 0, 0, 255, -255, 8);
 
 	// Calculate tick-wise velocities.
 	// ((double) rightTicks / cpr) * wheelDiameter * M_PI
@@ -197,10 +195,13 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 	int l = round(left.step(linear_sp - a, leftTicks, ts));
 	int r = round(right.step(linear_sp + a, rightTicks, ts));
 
+	// Debugging: Report PID performance for tuning.
+	// Output of the PID is in Linear:
 	dbT.linear.x = l;
 	dbT.linear.y = r;
 	dbT.linear.z = a;
 
+	// Feedback function is in Angular:
 	dbT.angular.x = linear_sp - leftTicks;
 	dbT.angular.y = linear_sp - rightTicks;
 	dbT.angular.z = rightTicks - leftTicks;
@@ -231,10 +232,6 @@ void parseData(string str) {
     static uint32_t lastOdomTS = 0;
     static double odomTheta = 0;
 
-    std_msgs::String dbg;
-    dbg.data = str;
-    debugArduinoPublisher.publish(dbg);
-    
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
 		string word;
