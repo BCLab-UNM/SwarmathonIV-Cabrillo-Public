@@ -17,6 +17,7 @@ public:
 	~PID();
 
 	double step(double setpoint, double feeback, double now=0);
+	void reconfig(double p, double i, double d, double db, double st);
 
 private:
 

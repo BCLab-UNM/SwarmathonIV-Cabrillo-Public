@@ -7,8 +7,10 @@
 #include <nav_msgs/Odometry.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <tf/transform_datatypes.h>
+#include <dynamic_reconfigure/server.h>
 
 #include "pid.h"
+#include <bridge/DriveConfig.h>
 
 using namespace std;
 
@@ -62,6 +64,28 @@ void doPIDs(const ros::TimerEvent& event) {
     skidsteerPublisher.publish(velocity);
 }
 
+void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
+	double p, i, d, db, st, wu;
+	p = cfg.linear_Kp;
+	i = cfg.linear_Ki;
+	d = cfg.linear_Kd;
+	db = cfg.linear_db;
+	st = cfg.linear_st;
+	wu = cfg.linear_wu;
+
+	linear.reconfig(p, i, d, db, st);
+
+	p = cfg.angular_Kp;
+	i = cfg.angular_Ki;
+	d = cfg.angular_Kd;
+	db = cfg.angular_db;
+	st = cfg.angular_st;
+	wu = cfg.angular_wu;
+
+	linear.reconfig(p, i, d, db, st);
+
+}
+
 int main(int argc, char **argv) {
     sleep(10);
 
@@ -90,6 +114,12 @@ int main(int argc, char **argv) {
 
     heartbeatTimer = sNH.createTimer(ros::Duration(2), publishHeartBeatTimerEventHandler);
     actionTimer = sNH.createTimer(ros::Duration(0.1), doPIDs);
+
+    // configure dynamic reconfiguration
+    dynamic_reconfigure::Server<bridge::DriveConfig> config_server;
+    dynamic_reconfigure::Server<bridge::DriveConfig>::CallbackType f;
+    f = boost::bind(&reconfigure, _1, _2);
+    config_server.setCallback(f);
 
     ros::spin();
 

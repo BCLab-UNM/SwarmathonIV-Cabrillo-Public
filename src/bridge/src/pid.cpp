@@ -30,6 +30,14 @@ PID::PID(double p, double i, double d, double db, double hi, double lo, double s
 PID::~PID() {
 }
 
+void PID::reconfig(double p, double i, double d, double db, double st) {
+	_kp = p;
+	_ki = i;
+	_kd = d;
+	_dband = db;
+	_stiction = st;
+}
+
 double PID::getNow() {
 	struct timespec n;
 	clock_gettime(CLOCK_MONOTONIC, &n);
