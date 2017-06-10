@@ -10,7 +10,7 @@
 
 #include "pid.h"
 
-PID::PID(double p, double i, double d, double db, double hi, double lo, double stick) {
+PID::PID(double p, double i, double d, double db, double hi, double lo, double stick, double wu) {
 	_kp = p;
 	_ki = i;
 	_kd = d;
@@ -18,6 +18,7 @@ PID::PID(double p, double i, double d, double db, double hi, double lo, double s
 	_hi = hi;
 	_lo = lo;
 	_stiction = stick;
+	_windup = wu;
 
 	_out = 0;
 	_sum = 0;
@@ -30,12 +31,13 @@ PID::PID(double p, double i, double d, double db, double hi, double lo, double s
 PID::~PID() {
 }
 
-void PID::reconfig(double p, double i, double d, double db, double st) {
+void PID::reconfig(double p, double i, double d, double db, double st, double wu) {
 	_kp = p;
 	_ki = i;
 	_kd = d;
 	_dband = db;
 	_stiction = st;
+	_windup = wu;
 }
 
 double PID::getNow() {
@@ -59,6 +61,16 @@ double PID::step(double setpoint, double feedback, double now) {
 		double elapsed = now - _lasttime;
 
 		_sum += _ki * err * elapsed;
+		if (_windup > 0) {
+			if (_sum < 0) {
+				if (_sum < -_windup)
+					_sum = -_windup;
+			}
+			else {
+				if (_sum > _windup)
+					_sum = _windup;
+			}
+		}
 		I = _sum;
 
 		D = _kd * ((setpoint - _lastsp) - (err - _lasterr)) / elapsed;

@@ -73,7 +73,7 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 	st = cfg.linear_st;
 	wu = cfg.linear_wu;
 
-	linear.reconfig(p, i, d, db, st);
+	linear.reconfig(p, i, d, db, st, wu);
 
 	p = cfg.angular_Kp;
 	i = cfg.angular_Ki;
@@ -82,7 +82,7 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 	st = cfg.angular_st;
 	wu = cfg.angular_wu;
 
-	linear.reconfig(p, i, d, db, st);
+	linear.reconfig(p, i, d, db, st, wu);
 
 }
 

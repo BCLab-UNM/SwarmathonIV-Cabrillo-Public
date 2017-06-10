@@ -3,6 +3,7 @@
 
 //ROS libraries
 #include <tf/transform_datatypes.h>
+#include <dynamic_reconfigure/server.h>
 
 //ROS messages
 #include <std_msgs/Float32.h>
@@ -19,6 +20,7 @@
 #include <usbSerial.h>
 
 #include "pid.h"
+#include <bridge/DriveConfig.h>
 
 using namespace std;
 
@@ -59,6 +61,10 @@ int16_t leftTicks = 0;
 int16_t rightTicks = 0;
 uint16_t odomTS = 0;
 
+PID left_pid(0.01, 0, 0, 0, 255, -255, 16);
+PID right_pid(0.01, 0, 0, 0, 255, -255, 16);
+PID diff_pid(0.01, 0, 0, 0, 255, -255, 8);
+
 //Publishers
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
@@ -85,6 +91,7 @@ ros::Timer publish_heartbeat_timer;
 
 //Callback handlers
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
+void reconfigure(bridge::DriveConfig &cfg, uint32_t level);
 
 int main(int argc, char **argv) {
     
@@ -138,9 +145,37 @@ int main(int argc, char **argv) {
     odom.header.frame_id = publishedName+"/odom";
     odom.child_frame_id = publishedName+"/base_link";
 
+    // configure dynamic reconfiguration
+    dynamic_reconfigure::Server<bridge::DriveConfig> config_server;
+    dynamic_reconfigure::Server<bridge::DriveConfig>::CallbackType f;
+    f = boost::bind(&reconfigure, _1, _2);
+    config_server.setCallback(f);
+
     ros::spin();
     
     return EXIT_SUCCESS;
+}
+
+void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
+	double p, i, d, db, st, wu;
+	p = cfg.linear_Kp;
+	i = cfg.linear_Ki;
+	d = cfg.linear_Kd;
+	db = cfg.linear_db;
+	st = cfg.linear_st;
+	wu = cfg.linear_wu;
+
+	left_pid.reconfig(p, i, d, db, st, wu);
+	right_pid.reconfig(p, i, d, db, st, wu);
+
+	p = cfg.angular_Kp;
+	i = cfg.angular_Ki;
+	d = cfg.angular_Kd;
+	db = cfg.angular_db;
+	st = cfg.angular_st;
+	wu = cfg.angular_wu;
+
+	diff_pid.reconfig(p, i, d, db, st, wu);
 }
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
@@ -181,19 +216,15 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
 
 void serialActivityTimer(const ros::TimerEvent& e) {
 
-	static PID left(0.01, 0, 0, 0, 255, -255, 16);
-	static PID right(0.01, 0, 0, 0, 255, -255, 16);
-	static PID diff(0.01, 0, 0, 0, 255, -255, 8);
-
 	// Calculate tick-wise velocities.
 	// ((double) rightTicks / cpr) * wheelDiameter * M_PI
 	double linear_sp = (speedCommand.linear.x * cpr) / (M_PI * wheelDiameter);
 	double angular_sp = (speedCommand.angular.z * cpr) / (M_PI * wheelDiameter * (wheelBase / 100));
 
 	double ts = double(odomTS) / 1000;
-	double a = diff.step(angular_sp, (rightTicks - leftTicks), ts);
-	int l = round(left.step(linear_sp - a, leftTicks, ts));
-	int r = round(right.step(linear_sp + a, rightTicks, ts));
+	double a = diff_pid.step(angular_sp, (rightTicks - leftTicks), ts);
+	int l = round(left_pid.step(linear_sp - a, leftTicks, ts));
+	int r = round(right_pid.step(linear_sp + a, rightTicks, ts));
 
 	// Debugging: Report PID performance for tuning.
 	// Output of the PID is in Linear:
@@ -318,8 +349,6 @@ void parseData(string str) {
 		}
 	}
 }
-
-
 
 void modeHandler(const std_msgs::UInt8::ConstPtr& message) {
 	currentMode = message->data;
