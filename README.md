@@ -38,7 +38,7 @@ Our simulated and physical Swarmies use existing ROS plugins, external to this r
 sudo apt-get install ros-kinetic-robot-localization
 ```
 
-##### 3. Install additional Gazebo plugins
+##### 3. Install additional Gazebo plugins and other
 
 Our simulated Swarmies use existing Gazebo plugins, external to this repo, to replicate sonar, IMU, and GPS sensors. These plugins are contained in the [hector_gazebo_plugins](http://wiki.ros.org/hector_gazebo_plugins) package, which should be installed using the apt-get package management tool:
 
@@ -53,6 +53,12 @@ Our Swarmies can receive mobility commands from the right thumb stick on a Micro
 ```
 
 Joystick commands can also be simulated using the direction keys (Up=I, Down=K, Left=J, Right=L) on the keyboard. The Rover GUI window must have focus for keyboard control to work.
+
+There's a new camera package in Kinetic. Install it using apt-get:
+
+```
+sudo apt-get install ros-kinetic-video-stream-opencv
+```
 
 ##### 4. Install git (if git is already installed, skip to step 5):
 
