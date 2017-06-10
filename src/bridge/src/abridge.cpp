@@ -1,3 +1,4 @@
+#include <math.h>
 #include <ros/ros.h>
 
 //ROS libraries
@@ -16,6 +17,8 @@
 
 //Package include
 #include <usbSerial.h>
+
+#include "pid.h"
 
 using namespace std;
 
@@ -44,26 +47,17 @@ char host[128];
 const float deltaTime = 0.1; //abridge's update interval
 int currentMode = 0;
 string publishedName;
+geometry_msgs::Twist speedCommand;
 
 float heartbeat_publish_interval = 2;
 
+float wheelBase = 27.8; //distance between left and right wheels (in cm)
+float wheelDiameter = 12.2; //diameter of wheel (in cm)
+int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
-//PID constants and arrays
-const int histArrayLength = 1000;
-
-float velFF = 0; //velocity feed forward
-int stepV = 0; //keeps track of the point in the evArray for adding new error each update cycle.
-float evArray[histArrayLength]; //history array of previous error for (arraySize/hz) seconds (error Velocity Array)
-float velError[4] = {0,0,0,0}; //contains current velocity error and error 3 steps in the past.
-
-int stepY = 0; //keeps track of the point in the eyArray for adding new error each update cycle.
-float eyArray[histArrayLength]; //history array of previous error for (arraySize/hz) seconds (error Yaw Array)
-float yawError[4] = {0,0,0,0}; //contains current yaw error and error 3 steps in the past.
-
-float prevLin = 0;
-float prevYaw = 0;
-
-ros::Time prevDriveCommandUpdateTime;
+uint16_t leftTicks = 0;
+uint16_t rightTicks = 0;
+uint16_t odomTS = 0;
 
 //Publishers
 ros::Publisher fingerAnglePublish;
@@ -75,6 +69,9 @@ ros::Publisher sonarCenterPublish;
 ros::Publisher sonarRightPublish;
 ros::Publisher infoLogPublisher;
 ros::Publisher heartbeatPublisher;
+
+ros::Publisher debugPIDPublisher;
+geometry_msgs::Twist dbT;
 
 //Subscribers
 ros::Subscriber driveControlSubscriber;
@@ -123,6 +120,10 @@ int main(int argc, char **argv) {
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
     
+    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/abridge/debugPID"), 1, false);
+
+    heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
+
     driveControlSubscriber = aNH.subscribe((publishedName + "/driveControl"), 10, driveCommandHandler);
     fingerAngleSubscriber = aNH.subscribe((publishedName + "/fingerAngle/cmd"), 1, fingerAngleHandler);
     wristAngleSubscriber = aNH.subscribe((publishedName + "/wristAngle/cmd"), 1, wristAngleHandler);
@@ -137,286 +138,14 @@ int main(int argc, char **argv) {
     odom.header.frame_id = publishedName+"/odom";
     odom.child_frame_id = publishedName+"/base_link";
 
-    for (int i = 0; i < histArrayLength; i++)
-    {
-    evArray[i] = 0;
-    eyArray[i] = 0;
-    }
-    
-    prevDriveCommandUpdateTime = ros::Time::now();
-
     ros::spin();
     
     return EXIT_SUCCESS;
 }
 
-//This command handler recives a linear velocity setpoint and a angular yaw error
-//and produces a command output for the left and right motors of the robot.
-//See the following paper for description of PID controllers.
-//Bennett, Stuart (November 1984). "Nicholas Minorsky and the automatic steering of ships". IEEE Control Systems Magazine. 4 (4): 10–15. doi:10.1109/MCS.1984.1104827. ISSN 0272-1708.
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
-   
-  // ********************************************************* 
-  // Change these six values to tune the PID.  
-  // *********************************************************
-  float Kpv = 140; //Proportinal Velocity
-  float Kiv = 20; //Integral Velocity
-  float Kdv = 15; //Derivative Velocity
-  
-  float Kpy = 200; //Proportinal Yaw   
-  float Kiy = 15; //Inegral Yaw
-  float Kdy = 15; //Derivative Yaw
-  
-    
-  // ********************************************************  
-    
-  float hz = 10; //This is the design frequency of the PID and if the update rate in mobility is changed this will have to
-                  //change to match as well as all tuning values.
-  float linearSpeed = 0.;
-  linearSpeed = (message->linear.x); //target linear velocity in meters per second
-  yawError[0] = (message->angular.z); //angular error in radians
-
-  float xVel = odom.twist.twist.linear.x;
-  float yVel = odom.twist.twist.linear.y;
-  float vel = sqrt(xVel*xVel + yVel*yVel);
-  
-  float PV = 0; //proportional velocity output 
-  float IV = 0; //Integral velocity output
-  float DV = 0; //Derivative velocity output
-  
-  float PY = 0; //proportional yaw output 
-  float IY = 0; //Integral yaw output
-  float DY = 0; //Derivative yaw output
-  
-  float sat = 255; //Saturation point
-  float velIntegralDeadspace = 0.01;
-  float yawIntegralDeadspace = 0.1;
-  
-  
-  if (!(linearSpeed == prevLin)) //if linear velocity setpoint changes reset integral and history to zero
-  {
-     for (int i= 0; i < histArrayLength; i++)
-     {
-       evArray[i] = 0;
-     }   
-     velError[0] = 0;
-     velError[1] = 0;
-     velError[2] = 0;
-     velError[3] = 0;
-     prevLin = linearSpeed; 
-   }
-   
-  //if yaw error setpoint changes reset yaw integral and yaw-error history to zero
-  if (prevYaw > 0 && yawError[0] < 0 || prevYaw < 0 && yawError > 0) 
-  {
-     for (int i= 0; i < histArrayLength; i++)
-     {
-       eyArray[i] = 0;
-     } 
-     yawError[1] = 0;
-     yawError[2] = 0;
-     yawError[3] = 0;
-     prevYaw = yawError[0];
-  }  
-   std::string getHumanFriendlyTime();
-
-  if (currentMode == 1) //manual control
-  {
-	yawError[0] *= 255/Kpy;
-	velError[0] = linearSpeed * 255/Kpv; //scale values between -255 and 255;
-  }
-  else //auto control
-  {
-    //Feed Forward command
-    //this is a direct mapping of commanded linear velocity to a PWM (Pulse Width Modulation) value command for the motors
-    if (linearSpeed > 0.5) velFF = 255;
-    else if (linearSpeed > 0.4) velFF = 180;
-    else if (linearSpeed > 0.3) velFF = 130;
-    else if (linearSpeed > 0.2) velFF = 75;
-    else if (linearSpeed > 0.1) velFF = 40;
-    else if (linearSpeed > 0.0) velFF = 10;
-
-    velError[0] = linearSpeed - vel; //calculate the error
-  }
-  
-  
-  // ----- BEGIN PID CONTROLLER CODE -----
-
-  
-  //Velocity--------------------------
-
-  
-  //Proportional
-  PV = Kpv * ((velError[0]+velError[1])/2);  //this is the proportional output
-  if (PV > sat) //limit the max and minimum output of proportional
-  PV = sat;
-  if (PV < -sat)
-  PV = -sat; 
-  
-  //Integral
-  //only use integral when error is larger than presumed noise.
-  if (velError[0] > velIntegralDeadspace || velError[0] < -velIntegralDeadspace)
-  {
-    evArray[stepV] = velError[0]; //add error into the error Array.
-    stepV++;
-    
-    if (stepV >= histArrayLength) stepV = 0;
-
-  }//deadzone ends here use integrel even without error as we have constant motion and drag.
-    
-    float sumV= 0;
-    for (int i= 0; i < histArrayLength; i++) //sum the array to get the error over time from t = 0 to present.
-    {
-        sumV += evArray[i];
-    }
-    
-    IV = Kiv * sumV; //this is integrated output
-     
-    //anti windup 
-    //anti windup reduces overshoot by limiting the acting time of the integral to areas where the 
-    //proportional term is less than half its saturation point.           
-    
-    //if PV is already commanding greater than half max PWM dont use the integral       
-    if (fabs(IV) > sat/2 || fabs(PV) > sat/2) //reset the integral to 0 if it hits its cap of half max PWM
-    {
-       for (int i= 0; i < histArrayLength; i++)
-        {
-           evArray[i] = 0;
-        }            
-        IV = 0;
-    }
-
-    //Derivative
-    if (!(fabs(PV) > sat/2)) 
-    {
-       //10 being the frequency of the system giving us a one second prediction base.
-       //calculates the derivative of the error using average of last 2 error values for current error
-       //and average of error 2 and 3 steps in the past as previouse error
-       DV = Kdv * ((velError[0]+velError[1])/2 - (velError[2]+velError[3])/2) * hz; 
-    }
-    velError[3] = velError[2];
-    velError[2] = velError[1];
-    velError[1] = velError[0]; //set previouse error to current error 
-    
-    float velOut = PV + IV + DV + velFF;
-    if (velOut > sat) //cap vel command
-    {
-        velOut = sat;
-    }
-    else if (velOut < -sat)
-    {
-        velOut = -sat;
-    }
-  
-    
-  //Yaw-----------------------------
-    
-
-  //Proportional
-  PY = Kpy * ((yawError[0]+yawError[1])/2);  //this is the proportional output
-  if (PY > sat) //limit the max and minimum output of proportional
-  PY = sat;
-  if (PY < -sat)
-  PY = -sat; 
-  
-  //Integral
-  //only use integral when error is larger than presumed noise.
-  if (yawError[0] > yawIntegralDeadspace || yawError[0] < -yawIntegralDeadspace)
-  {
-    eyArray[stepY] = yawError[0]; //add error into the error Array.
-    stepY++;
-    
-    if (stepY >= histArrayLength) stepY = 0;
-    
-    float sumY= 0;
-    for (int i= 0; i < histArrayLength; i++) //sum the array to get the error over time from t = 0 to present.
-    {
-        sumY += eyArray[i];
-    }
-    
-    IY = Kiy * sumY; //this is integrated output
-
-   }//deadzone ends here use integrel only with error as there is no force to disturb our heading.
-     
-
-    //anti windup 
-    //anti windup reduces overshoot by limiting the acting time of the integral to areas where the 
-    //proportional term is less than half its saturation point.           
-    
-    //if PY is already commanding greater than half max PWM dont use the integral       
-    if (fabs(IY) > sat/2 || fabs(PY) > sat/2) //reset the integral to 0 if it hits its cap of half max PWM
-    {
-       for (int i= 0; i < histArrayLength; i++)
-        {
-           eyArray[i] = 0;
-        }            
-        IY = 0;
-    }
-
-    //Derivative
-    if (!(fabs(PY) > sat/2)) 
-    {
-       //10 being the frequency of the system giving us a one second prediction base.
-       //calculates the derivative of the error using average of last 2 error values for current error
-       //and average of error 2 and 3 steps in the past as previouse error
-       DY = Kdy * ((yawError[0]+yawError[1])/2 - (yawError[2]+yawError[3])/2) * hz; 
-    }
-    yawError[3] = yawError[2];
-    yawError[2] = yawError[1];
-    yawError[1] = yawError[0]; //set previouse error to current error 
-    
-    float yawOut = PY + IY + DY;
-    
-    //cap yaw command
-    if (yawOut > sat/2) {
-        yawOut = sat/2;
-    }
-    else if (yawOut < -sat/2) {
-        yawOut = -sat/2;
-    }
-
-    if (linearSpeed > 0 && velOut < 0) {
-	   velOut = 0;
-	}
-    else if(linearSpeed < 0 && velOut > 0) {
-	   velOut = 0;
-	}
-	 
-    if (PY > 0 && yawOut < 0)
-	{
-	   yawOut = 0;
-	}
-    else if(PY < 0 && yawOut > 0) {
-	   yawOut = 0;
-	}
-
-
-    // ----- END PID CONTROLLER CODE -----
-
-    if (currentMode == 1) {
-	    yawOut = PY;
-	    velOut = PV;	
-  	}
-   
-   int left = velOut - yawOut;
-   int right = velOut + yawOut;
-   
-   if (left  >  sat) {left  =  sat;}
-   if (left  < -sat) {left  = -sat;}
-   if (right >  sat) {right =  sat;}
-   if (right < -sat) {right = -sat;}
-
-   if(linearSpeed == 0 && yawError[0] == 0) {
-     left = 0;
-     right = 0;
-   }
-  
-    
-    sprintf(moveCmd, "v,%d,%d\n", left, right); //format data for arduino into c string
-    usb.sendData(moveCmd);                      //send movement command to arduino over usb
-    memset(&moveCmd, '\0', sizeof (moveCmd));   //clear the movement command string
+  speedCommand = *message;
 }
-
 
 // The finger and wrist handlers receive gripper angle commands in floating point
 // radians, write them to a string and send that to the arduino
@@ -450,9 +179,35 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
 }
 
 void serialActivityTimer(const ros::TimerEvent& e) {
-    usb.sendData(dataCmd);
-    parseData(usb.readData());
-    publishRosTopics();
+
+	static PID left(0.5, 0, 0, 0, 255, -255);
+	static PID right(0.5, 0, 0, 0, 255, -255);
+	static PID diff(0.7, 0, 0, 0, 32, -32);
+
+	// Calculate tick-wise velocities.
+	// ((double) rightTicks / cpr) * wheelDiameter * M_PI
+	double linear_sp = (speedCommand.linear.x * cpr) / (M_PI * wheelDiameter);
+	double angular_sp = (wheelBase * speedCommand.angular.z * cpr) / (M_PI * wheelDiameter);
+
+	double ts = double(odomTS) / 1000;
+	double a = diff.step(angular_sp, (rightTicks - leftTicks), ts);
+	int l = round(left.step(linear_sp + a, leftTicks, ts));
+	int r = round(right.step(linear_sp - a, rightTicks, ts));
+
+	dbT.angular.x = leftTicks;
+	dbT.angular.y = rightTicks;
+	dbT.angular.z = odomTS;
+	dbT.linear.x = l;
+	dbT.linear.y = r;
+	debugPIDPublisher.publish(dbT);
+
+	sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
+	usb.sendData(moveCmd);                      //send movement command to arduino over usb
+	memset(&moveCmd, '\0', sizeof (moveCmd));   //clear the movement command string
+
+	usb.sendData(dataCmd);
+	parseData(usb.readData());
+	publishRosTopics();
 }
 
 void publishRosTopics() {
@@ -468,6 +223,8 @@ void publishRosTopics() {
 void parseData(string str) {
     istringstream oss(str);
     string sentence;
+    static uint32_t lastOdomTS = 0;
+    static double odomTheta = 0;
     
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
@@ -499,14 +256,45 @@ void parseData(string str) {
 				imu.orientation = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(8).c_str()), atof(dataSet.at(9).c_str()), atof(dataSet.at(10).c_str()));
 			}
 			else if (dataSet.at(0) == "ODOM") {
+				leftTicks = atof(dataSet.at(2).c_str());
+				rightTicks = atof(dataSet.at(3).c_str());
+				odomTS = atof(dataSet.at(4).c_str());
+
+			    double rightWheelDistance = ((double) rightTicks / cpr) * wheelDiameter * M_PI;
+			    double leftWheelDistance = ((double) leftTicks / cpr) * wheelDiameter * M_PI;
+
+			    //Calculate relative angle that robot has turned
+			    double dtheta = (rightWheelDistance - leftWheelDistance) / wheelBase;
+
+			    //Accumulate angles to calculate absolute heading
+			    odomTheta += dtheta;
+
+			    //Decompose linear distance into its component values
+			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2;
+			    double x = meanWheelDistance * cos(dtheta);
+			    double y = meanWheelDistance * sin(dtheta);
+
+			    // Calculate velocities if possible.
+			    double vtheta = 0;
+			    double vx = 0;
+			    double vy = 0;
+			    if (lastOdomTS > 0) {
+			    	double deltaT = double(odomTS - lastOdomTS) / 1000.0;
+			    	vtheta = dtheta / deltaT;
+			    	vx = x / deltaT;
+			    	vy = y / deltaT;
+			    }
+		    	lastOdomTS = odomTS;
+
 				odom.header.stamp = ros::Time::now();
-				odom.pose.pose.position.x += atof(dataSet.at(2).c_str()) / 100.0;
-				odom.pose.pose.position.y += atof(dataSet.at(3).c_str()) / 100.0;
+				odom.pose.pose.position.x += x / 100.0;
+				odom.pose.pose.position.y += y / 100.0;
 				odom.pose.pose.position.z = 0.0;
-				odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(atof(dataSet.at(4).c_str()));
-				odom.twist.twist.linear.x = atof(dataSet.at(5).c_str()) / 100.0;
-				odom.twist.twist.linear.y = atof(dataSet.at(6).c_str()) / 100.0;
-				odom.twist.twist.angular.z = atof(dataSet.at(7).c_str());
+				odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(odomTheta);
+
+				odom.twist.twist.linear.x = vx / 100.0;
+				odom.twist.twist.linear.y = vy / 100.0;
+				odom.twist.twist.angular.z = vtheta;
 			}
 			else if (dataSet.at(0) == "USL") {
 				sonarLeft.header.stamp = ros::Time::now();
