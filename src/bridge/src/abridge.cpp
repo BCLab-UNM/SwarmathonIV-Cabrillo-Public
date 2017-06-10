@@ -53,13 +53,13 @@ geometry_msgs::Twist speedCommand;
 
 float heartbeat_publish_interval = 2;
 
-float wheelBase = 27.8; //distance between left and right wheels (in cm)
-float wheelDiameter = 12.2; //diameter of wheel (in cm)
-int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
+const double wheelBase = 0.0278; //distance between left and right wheels (in M)
+const double wheelDiameter = 0.0122; //diameter of wheel (in M)
+const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
 int16_t leftTicks = 0;
 int16_t rightTicks = 0;
-uint16_t odomTS = 0;
+double odomTS = 0;
 
 PID left_pid(0.01, 0, 0, 0, 255, -255, 16);
 PID right_pid(0.01, 0, 0, 0, 255, -255, 16);
@@ -214,17 +214,31 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
   memset(&cmd, '\0', sizeof (cmd));
 }
 
+double ticksToMeters(double ticks) {
+	return (M_PI * wheelDiameter * ticks) / cpr;
+}
+
+double metersToTicks(double meters) {
+	return (meters * cpr) / (M_PI * wheelDiameter);
+}
+
+double diffToTheta(double right, double left) {
+	return (right - left) / wheelBase;
+}
+
+double thetaToDiff(double theta) {
+	return theta * wheelBase;
+}
+
 void serialActivityTimer(const ros::TimerEvent& e) {
 
 	// Calculate tick-wise velocities.
-	// ((double) rightTicks / cpr) * wheelDiameter * M_PI
-	double linear_sp = (speedCommand.linear.x * cpr) / (M_PI * wheelDiameter);
-	double angular_sp = (speedCommand.angular.z * cpr) / (M_PI * wheelDiameter * (wheelBase / 100));
+	double linear_sp = metersToTicks(speedCommand.linear.x); // Per second.
+	double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-	double ts = double(odomTS) / 1000;
-	double a = diff_pid.step(angular_sp, (rightTicks - leftTicks), ts);
-	int l = round(left_pid.step(linear_sp - a, leftTicks, ts));
-	int r = round(right_pid.step(linear_sp + a, rightTicks, ts));
+	double a = diff_pid.step(angular_sp, (rightTicks - leftTicks), odomTS);
+	int l = round(left_pid.step(linear_sp - a, leftTicks, odomTS));
+	int r = round(right_pid.step(linear_sp + a, rightTicks, odomTS));
 
 	// Debugging: Report PID performance for tuning.
 	// Output of the PID is in Linear:
@@ -260,7 +274,7 @@ void publishRosTopics() {
 void parseData(string str) {
     istringstream oss(str);
     string sentence;
-    static uint32_t lastOdomTS = 0;
+    static double lastOdomTS = 0;
     static double odomTheta = 0;
 
     while (getline(oss, sentence, '\n')) {
@@ -295,13 +309,13 @@ void parseData(string str) {
 			else if (dataSet.at(0) == "ODOM") {
 				leftTicks = atoi(dataSet.at(2).c_str());
 				rightTicks = atoi(dataSet.at(3).c_str());
-				odomTS = atoi(dataSet.at(4).c_str());
+				odomTS = atof(dataSet.at(4).c_str()) / 1000; // Seconds
 
-			    double rightWheelDistance = ((double) rightTicks / cpr) * wheelDiameter * M_PI;
-			    double leftWheelDistance = ((double) leftTicks / cpr) * wheelDiameter * M_PI;
+				double rightWheelDistance = ticksToMeters(rightTicks);
+				double leftWheelDistance = ticksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
-			    double dtheta = (rightWheelDistance - leftWheelDistance) / wheelBase;
+				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance);
 
 			    //Accumulate angles to calculate absolute heading
 			    odomTheta += dtheta;
@@ -316,7 +330,7 @@ void parseData(string str) {
 			    double vx = 0;
 			    double vy = 0;
 			    if (lastOdomTS > 0) {
-			    	double deltaT = double(odomTS - lastOdomTS) / 1000.0;
+			    	double deltaT = odomTS - lastOdomTS;
 			    	vtheta = dtheta / deltaT;
 			    	vx = x / deltaT;
 			    	vy = y / deltaT;
@@ -324,13 +338,13 @@ void parseData(string str) {
 		    	lastOdomTS = odomTS;
 
 				odom.header.stamp = ros::Time::now();
-				odom.pose.pose.position.x += x / 100.0;
-				odom.pose.pose.position.y += y / 100.0;
-				odom.pose.pose.position.z = 0.0;
+				odom.pose.pose.position.x += x;
+				odom.pose.pose.position.y += y;
+				odom.pose.pose.position.z = 0;
 				odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(odomTheta);
 
-				odom.twist.twist.linear.x = vx / 100.0;
-				odom.twist.twist.linear.y = vy / 100.0;
+				odom.twist.twist.linear.x = vx;
+				odom.twist.twist.linear.y = vy;
 				odom.twist.twist.angular.z = vtheta;
 			}
 			else if (dataSet.at(0) == "USL") {
