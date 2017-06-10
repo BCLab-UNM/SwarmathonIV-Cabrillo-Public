@@ -20,7 +20,6 @@ from geometry_msgs.msg import Twist, Pose2D
 
 from mobility.srv import Command 
 from task import Task, TaskState
-from mercurial.subrepo import state
 
 def sync(func) :
     '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
