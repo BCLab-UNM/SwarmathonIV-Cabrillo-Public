@@ -55,8 +55,8 @@ float wheelBase = 27.8; //distance between left and right wheels (in cm)
 float wheelDiameter = 12.2; //diameter of wheel (in cm)
 int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
-uint16_t leftTicks = 0;
-uint16_t rightTicks = 0;
+int16_t leftTicks = 0;
+int16_t rightTicks = 0;
 uint16_t odomTS = 0;
 
 //Publishers
@@ -71,6 +71,7 @@ ros::Publisher infoLogPublisher;
 ros::Publisher heartbeatPublisher;
 
 ros::Publisher debugPIDPublisher;
+ros::Publisher debugArduinoPublisher;
 geometry_msgs::Twist dbT;
 
 //Subscribers
@@ -121,6 +122,7 @@ int main(int argc, char **argv) {
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
     
     debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/abridge/debugPID"), 1, false);
+    debugArduinoPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/debugArduino"), 1, false);
 
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
 
@@ -144,7 +146,8 @@ int main(int argc, char **argv) {
 }
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
-  speedCommand = *message;
+  speedCommand.linear.x = message->linear.x;
+  speedCommand.angular.z = message->angular.z;
 }
 
 // The finger and wrist handlers receive gripper angle commands in floating point
@@ -180,25 +183,27 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
 
 void serialActivityTimer(const ros::TimerEvent& e) {
 
-	static PID left(0.5, 0, 0, 0, 255, -255);
-	static PID right(0.5, 0, 0, 0, 255, -255);
-	static PID diff(0.7, 0, 0, 0, 32, -32);
+        static PID left(0.01, 0, 0, 0, 255, -255, 16);
+        static PID right(0.01, 0, 0, 0, 255, -255, 16);
+        static PID diff(0.01, 0, 0, 0, 255, -255, 8);
 
 	// Calculate tick-wise velocities.
 	// ((double) rightTicks / cpr) * wheelDiameter * M_PI
 	double linear_sp = (speedCommand.linear.x * cpr) / (M_PI * wheelDiameter);
-	double angular_sp = (wheelBase * speedCommand.angular.z * cpr) / (M_PI * wheelDiameter);
+	double angular_sp = (speedCommand.angular.z * cpr) / (M_PI * wheelDiameter * (wheelBase / 100));
 
 	double ts = double(odomTS) / 1000;
 	double a = diff.step(angular_sp, (rightTicks - leftTicks), ts);
-	int l = round(left.step(linear_sp + a, leftTicks, ts));
-	int r = round(right.step(linear_sp - a, rightTicks, ts));
+	int l = round(left.step(linear_sp - a, leftTicks, ts));
+	int r = round(right.step(linear_sp + a, rightTicks, ts));
 
-	dbT.angular.x = leftTicks;
-	dbT.angular.y = rightTicks;
-	dbT.angular.z = odomTS;
 	dbT.linear.x = l;
 	dbT.linear.y = r;
+	dbT.linear.z = a;
+
+	dbT.angular.x = linear_sp - leftTicks;
+	dbT.angular.y = linear_sp - rightTicks;
+	dbT.angular.z = rightTicks - leftTicks;
 	debugPIDPublisher.publish(dbT);
 
 	sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
@@ -225,6 +230,10 @@ void parseData(string str) {
     string sentence;
     static uint32_t lastOdomTS = 0;
     static double odomTheta = 0;
+
+    std_msgs::String dbg;
+    dbg.data = str;
+    debugArduinoPublisher.publish(dbg);
     
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
@@ -256,9 +265,9 @@ void parseData(string str) {
 				imu.orientation = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(8).c_str()), atof(dataSet.at(9).c_str()), atof(dataSet.at(10).c_str()));
 			}
 			else if (dataSet.at(0) == "ODOM") {
-				leftTicks = atof(dataSet.at(2).c_str());
-				rightTicks = atof(dataSet.at(3).c_str());
-				odomTS = atof(dataSet.at(4).c_str());
+				leftTicks = atoi(dataSet.at(2).c_str());
+				rightTicks = atoi(dataSet.at(3).c_str());
+				odomTS = atoi(dataSet.at(4).c_str());
 
 			    double rightWheelDistance = ((double) rightTicks / cpr) * wheelDiameter * M_PI;
 			    double leftWheelDistance = ((double) leftTicks / cpr) * wheelDiameter * M_PI;

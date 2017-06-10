@@ -10,13 +10,14 @@
 
 #include "pid.h"
 
-PID::PID(double p, double i, double d, double db, double hi, double lo) {
+PID::PID(double p, double i, double d, double db, double hi, double lo, double stick) {
 	_kp = p;
 	_ki = i;
 	_kd = d;
 	_dband = db;
 	_hi = hi;
 	_lo = lo;
+	_stiction = stick;
 
 	_out = 0;
 	_sum = 0;
@@ -69,5 +70,8 @@ double PID::step(double setpoint, double feedback, double now) {
 	else if (_out < _lo)
 		_out = _lo;
 
-	return _out;
+	if (fabs(_out) < _stiction)
+	  return 0;
+	else
+	  return _out;
 }
