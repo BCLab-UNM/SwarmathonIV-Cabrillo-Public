@@ -22,7 +22,7 @@ Swarmathon-ROS is designed and tested exclusively on the 64 bit version of Ubunt
 
 ##### 1. Install ROS Indigo
 
-Follow the detailed instructions for installing ROS Indigo under Ubuntu 14.04 [here](http://wiki.ros.org/indigo/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo 2 simulator.
+Follow the detailed instructions for [installing ROS Indigo under Ubuntu 14.04](http://wiki.ros.org/indigo/Installation/Ubuntu). We recommend the Desktop-Full installation, which includes the Gazebo 2 simulator.
 
 ##### 2. Install additional ROS plugins
 
