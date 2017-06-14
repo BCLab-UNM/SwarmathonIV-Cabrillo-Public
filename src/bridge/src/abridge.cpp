@@ -63,7 +63,6 @@ double odomTS = 0;
 
 PID left_pid(0.01, 0, 0, 0, 255, -255, 16);
 PID right_pid(0.01, 0, 0, 0, 255, -255, 16);
-PID diff_pid(0.01, 0, 0, 0, 255, -255, 8);
 
 //Publishers
 ros::Publisher fingerAnglePublish;
@@ -167,15 +166,6 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 	left_pid.reconfig(p, i, d, db, st, wu);
 	right_pid.reconfig(p, i, d, db, st, wu);
-
-	p = cfg.angular_Kp;
-	i = cfg.angular_Ki;
-	d = cfg.angular_Kd;
-	db = cfg.angular_db;
-	st = cfg.angular_st;
-	wu = cfg.angular_wu;
-
-	diff_pid.reconfig(p, i, d, db, st, wu);
 }
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
@@ -232,29 +222,39 @@ double thetaToDiff(double theta) {
 
 void serialActivityTimer(const ros::TimerEvent& e) {
 
-	// Calculate tick-wise velocities.
-	double linear_sp = metersToTicks(speedCommand.linear.x); // Per second.
-	double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
+	int cmd_mode = round(speedCommand.angular.y);
 
-	double a = diff_pid.step(angular_sp, (rightTicks - leftTicks), odomTS);
-	int l = round(left_pid.step(linear_sp - a, leftTicks, odomTS));
-	int r = round(right_pid.step(linear_sp + a, rightTicks, odomTS));
+	if (cmd_mode == DRIVE_MODE_STOP) {
+		left_pid.reset();
+		right_pid.reset();
 
-	// Debugging: Report PID performance for tuning.
-	// Output of the PID is in Linear:
-	dbT.linear.x = l;
-	dbT.linear.y = r;
-	dbT.linear.z = a;
+		sprintf(moveCmd, "s\n");
+		usb.sendData(moveCmd);
+		memset(&moveCmd, '\0', sizeof (moveCmd));
+	}
+	else {
+		// Calculate tick-wise velocities.
+		double linear_sp = metersToTicks(speedCommand.linear.x); // Per second.
+		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-	// Feedback function is in Angular:
-	dbT.angular.x = linear_sp - leftTicks;
-	dbT.angular.y = linear_sp - rightTicks;
-	dbT.angular.z = rightTicks - leftTicks;
-	debugPIDPublisher.publish(dbT);
+		int l = round(left_pid.step(linear_sp - angular_sp, leftTicks, odomTS));
+		int r = round(right_pid.step(linear_sp + angular_sp, rightTicks, odomTS));
 
-	sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
-	usb.sendData(moveCmd);                      //send movement command to arduino over usb
-	memset(&moveCmd, '\0', sizeof (moveCmd));   //clear the movement command string
+		// Debugging: Report PID performance for tuning.
+		// Output of the PID is in Linear:
+		dbT.linear.x = l;
+		dbT.linear.y = r;
+
+		// Feedback function is in Angular:
+		dbT.angular.x = linear_sp - leftTicks;
+		dbT.angular.y = linear_sp - rightTicks;
+		dbT.angular.z = rightTicks - leftTicks;
+		debugPIDPublisher.publish(dbT);
+
+		sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
+		usb.sendData(moveCmd);                      //send movement command to arduino over usb
+		memset(&moveCmd, '\0', sizeof (moveCmd));   //clear the movement command string
+	}
 
 	usb.sendData(dataCmd);
 	parseData(usb.readData());
