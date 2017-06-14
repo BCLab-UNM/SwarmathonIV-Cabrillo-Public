@@ -261,7 +261,7 @@ def get_turn(start, end, current):
     def dist_to_turn(dist):
         gain = 2
         max = 0.7
-        min = 0.05
+        min = 0.1
         speed = dist * gain
         if speed > 0 : 
             if speed > max : 
@@ -284,7 +284,7 @@ def get_turn(start, end, current):
 
 def get_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
-    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y))
+    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - 0.1
     
     def dist_to_speed(dist):
         gain = 1 
@@ -322,6 +322,9 @@ def debug(req):
 def stop():
     global state
     state.Mode = State.MODE_MANUAL
+    state.CurrentState = State.STATE_IDLE
+    while not self.Work.empty() :
+        self.work.get(False)
 
 def go():
     global state
