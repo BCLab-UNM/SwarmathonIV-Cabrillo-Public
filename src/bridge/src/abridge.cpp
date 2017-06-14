@@ -53,12 +53,12 @@ geometry_msgs::Twist speedCommand;
 
 float heartbeat_publish_interval = 2;
 
-const double wheelBase = 0.0278; //distance between left and right wheels (in M)
-const double wheelDiameter = 0.0122; //diameter of wheel (in M)
+const double wheelBase = 0.278; //distance between left and right wheels (in M)
+const double wheelDiameter = 0.122; //diameter of wheel (in M)
 const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
-int16_t leftTicks = 0;
-int16_t rightTicks = 0;
+double leftTicks = 0;
+double rightTicks = 0;
 double odomTS = 0;
 
 PID left_pid(0.01, 0, 0, 0, 255, -255, 16);
@@ -170,6 +170,7 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
   speedCommand.linear.x = message->linear.x;
+  speedCommand.angular.y = message->angular.y;
   speedCommand.angular.z = message->angular.z;
 }
 
@@ -234,7 +235,7 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 	}
 	else {
 		// Calculate tick-wise velocities.
-		double linear_sp = metersToTicks(speedCommand.linear.x); // Per second.
+	        double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
 		int l = round(left_pid.step(linear_sp - angular_sp, leftTicks, odomTS));
@@ -244,10 +245,11 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		// Output of the PID is in Linear:
 		dbT.linear.x = l;
 		dbT.linear.y = r;
-
+		dbT.linear.z = linear_sp;
+		
 		// Feedback function is in Angular:
-		dbT.angular.x = linear_sp - leftTicks;
-		dbT.angular.y = linear_sp - rightTicks;
+		dbT.angular.x = leftTicks;
+		dbT.angular.y = rightTicks;
 		dbT.angular.z = rightTicks - leftTicks;
 		debugPIDPublisher.publish(dbT);
 
@@ -334,6 +336,10 @@ void parseData(string str) {
 			    	vtheta = dtheta / deltaT;
 			    	vx = x / deltaT;
 			    	vy = y / deltaT;
+
+				// Normalize ticks to ticks/s
+				leftTicks = leftTicks / deltaT;
+				rightTicks = rightTicks / deltaT;
 			    }
 		    	lastOdomTS = odomTS;
 
