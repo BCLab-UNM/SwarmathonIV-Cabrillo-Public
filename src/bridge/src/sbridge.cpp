@@ -26,11 +26,12 @@ ros::Timer actionTimer;
 
 string rover;
 
-PID linear(0.1, 0, 0, 0, 1, -1);
-PID angular(0.5, 0, 0, 0, 1, -1);
+PID left_wheel(0.1, 0, 0, 0, 1, -1);
+PID right_wheel(0.1, 0, 0, 0, 1, -1);
 
 double linear_velocity = 0, angular_velocity = 0;
 double sp_linear = 0, sp_angular = 0;
+int drive_mode = DRIVE_MODE_STOP;
 
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
     std_msgs::String msg;
@@ -41,26 +42,33 @@ void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
 void cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
 	sp_linear = message->linear.x;
 	sp_angular = message->angular.z;
+	drive_mode = round(message->angular.y);
 }
 
 void odomHandler(const nav_msgs::Odometry::ConstPtr& message) {
-	static double lastx = 0;
-	static double lasty = 0;
-	static double lasttheta = 0;
-
     linear_velocity = message->twist.twist.linear.x;
     angular_velocity = message->twist.twist.angular.z;
 }
 
 void doPIDs(const ros::TimerEvent& event) {
-	double now = event.current_real.toSec();
-    double linear_out = linear.step(sp_linear, linear_velocity, now);
-    double angular_out = angular.step(sp_angular, angular_velocity, now);
 
 	geometry_msgs::Twist velocity;
-    velocity.linear.x = linear_out;
-    velocity.angular.z = angular_out;
 
+	if (drive_mode == DRIVE_MODE_STOP) {
+		velocity.linear.x = 0;
+		velocity.angular.z = 0;
+		left_wheel.reset();
+		right_wheel.reset();
+	}
+	else {
+		double now = event.current_real.toSec();
+
+		double left_out = left_wheel.step(sp_linear - sp_angular, linear_velocity - angular_velocity, now);
+		double right_out = right_wheel.step(sp_linear + sp_angular, linear_velocity + angular_velocity, now);
+
+		velocity.linear.x = left_out + right_out;
+		velocity.angular.z = right_out - left_out;
+	}
     skidsteerPublisher.publish(velocity);
 }
 
@@ -73,17 +81,8 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 	st = cfg.linear_st;
 	wu = cfg.linear_wu;
 
-	linear.reconfig(p, i, d, db, st, wu);
-
-	p = cfg.angular_Kp;
-	i = cfg.angular_Ki;
-	d = cfg.angular_Kd;
-	db = cfg.angular_db;
-	st = cfg.angular_st;
-	wu = cfg.angular_wu;
-
-	linear.reconfig(p, i, d, db, st, wu);
-
+	left_wheel.reconfig(p, i, d, db, st, wu);
+	right_wheel.reconfig(p, i, d, db, st, wu);
 }
 
 int main(int argc, char **argv) {

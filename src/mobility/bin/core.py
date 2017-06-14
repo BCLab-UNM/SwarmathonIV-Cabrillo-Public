@@ -72,6 +72,9 @@ class State:
     STATE_PAUSE     = 6 
     STATE_HAZARD    = 7 
 
+    DRIVE_MODE_STOP = 0
+    DRIVE_MODE_PID  = 1 
+    
     def __init__(self, rover):
         self.Mode = State.MODE_MANUAL
         self.MapLocation = Location(None)
@@ -135,10 +138,11 @@ class State:
     def _map(self, msg) : 
         self.MapLocation = Location(msg)
 
-    def drive(self, speed, yawerr):
+    def drive(self, linear, angular, mode):
         t = Twist() 
-        t.linear.x = speed
-        t.angular.z = yawerr
+        t.linear.x = linear
+        t.angular.y = mode
+        t.angular.z = angular
         self.driveControl.publish(t)
         
     def print_info_log(self, msg):
@@ -162,17 +166,17 @@ class State:
     def run(self, event) :            
         if self.Mode == State.MODE_MANUAL :
             self.print_debug('Manual Mode')
-            self.drive(0,0)
+            self.drive(0,0,State.DRIVE_MODE_STOP)
             return
         
         if self.CurrentState == State.STATE_INIT : 
             self.print_debug('INIT')
             self.CurrentState = State.STATE_IDLE
-            self.drive(0,0)
+            self.drive(0,0,State.DRIVE_MODE_STOP)
     
         elif self.CurrentState == State.STATE_IDLE : 
             self.print_debug('IDLE')
-            self.drive(0,0)
+            self.drive(0,0,State.DRIVE_MODE_STOP)
             if not self.Work.empty() : 
                 task = self.Work.get(False)
     
@@ -201,9 +205,8 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > math.pi / 16 :
-                self.drive(0, get_turn(self.Start, self.Goal, cur))
+                self.drive(0, get_turn(self.Start, self.Goal, cur), State.DRIVE_MODE_PID)
             else:
-                self.drive(0,0)
                 self.CurrentState = State.STATE_DRIVE
                 
         elif self.CurrentState == State.STATE_DRIVE :
@@ -212,7 +215,6 @@ class State:
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 :
-                self.drive(0,0)
                 self.Goal = None
                 if self.Hold :
                     self.CurrentState = State.STATE_STOP
@@ -222,25 +224,24 @@ class State:
             elif abs(heading_error) > math.pi / 2 :
                 self.CurrentState = State.STATE_TURN
             else:
-                self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2)
+                self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
             self.print_debug('REVERSE')
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 : 
-                self.drive(0,0)
                 self.Goal = None
                 if self.Hold :
                     self.CurrentState = State.STATE_STOP
                 else:
                     self.CurrentState = State.STATE_IDLE
             else:
-                self.drive(-0.2, 0)
+                self.drive(-0.2, 0, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_PAUSE : 
             self.print_debug('PAUSE')
-            self.drive(0,0)
+            self.drive(0, 0, State.DRIVE_MODE_STOP)
             if self.PauseCnt == 0 :
                 self.CurrentState = State.STATE_IDLE
             else:
@@ -248,7 +249,7 @@ class State:
 
         elif self.CurrentState == State.STATE_STOP : 
             self.print_debug('STOP')
-            self.drive(0,0)
+            self.drive(0, 0, State.DRIVE_MODE_STOP)
             cur = self.OdomLocation.Odometry
             if cur.twist.twist.angular.z < 0.1 and cur.twist.twist.linear.x < 0.1 :
                 self.CurrentState = State.STATE_IDLE
