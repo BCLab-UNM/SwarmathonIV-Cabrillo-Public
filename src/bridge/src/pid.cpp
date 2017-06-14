@@ -40,6 +40,10 @@ void PID::reconfig(double p, double i, double d, double db, double st, double wu
 	_windup = wu;
 }
 
+void PID::reset() {
+	_out = _sum = _lasterr = _lastsp = _lasttime = 0;
+}
+
 double PID::getNow() {
 	struct timespec n;
 	clock_gettime(CLOCK_MONOTONIC, &n);

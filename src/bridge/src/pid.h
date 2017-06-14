@@ -10,6 +10,9 @@
 
 #include <time.h>
 
+#define DRIVE_MODE_STOP   0
+#define DRIVE_MODE_PID    1
+
 class PID {
 
 public:
@@ -18,6 +21,7 @@ public:
 
 	double step(double setpoint, double feeback, double now=0);
 	void reconfig(double p, double i, double d, double db, double st, double wu);
+	void reset();
 
 private:
 
