@@ -74,12 +74,12 @@ void doPIDs(const ros::TimerEvent& event) {
 
 void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 	double p, i, d, db, st, wu;
-	p = cfg.linear_Kp;
-	i = cfg.linear_Ki;
-	d = cfg.linear_Kd;
-	db = cfg.linear_db;
-	st = cfg.linear_st;
-	wu = cfg.linear_wu;
+	p = cfg.groups.pid.Kp * cfg.groups.pid.scale;
+	i = cfg.groups.pid.Ki * cfg.groups.pid.scale;
+	d = cfg.groups.pid.Kd * cfg.groups.pid.scale;
+	db = cfg.groups.pid.db;
+	st = cfg.groups.pid.st;
+	wu = cfg.groups.pid.wu;
 
 	left_wheel.reconfig(p, i, d, db, st, wu);
 	right_wheel.reconfig(p, i, d, db, st, wu);
