@@ -80,7 +80,7 @@ sudo apt-get update
 ```
 Now you can install all of ROS: 
 ```
-sudo apt-get install ros-indigo-desktop-full
+sudo apt-get install ros-kinetic-desktop-full
 ```
 This will take a while! After it's done you need to initizlize ROS:
 ```
@@ -107,7 +107,7 @@ Clone this GitHub repository to your home directory (~), renaming the repo so RO
 
 ```
 cd ~
-git clone https://github.com/BCLab-UNM/Swarmathon-ROS.git rover_workspace
+git clone git@github.com:BCLab-UNM/Swarmathon-Cabrillo.git rover_workspace
 ```
 
 Change your current working directory to the root directory of the downloaded repo:
@@ -156,7 +156,7 @@ sudo ln -s arduino-1.8.3/ arduino
 Now checkout the Arduino code:
 ```
 cd ~
-git clone https://github.com/BCLab-UNM/Swarmathon-Arduino.git
+git clone https://github.com/mike-matera/Swarmathon-Arduino.git
 ```
 Verify that you can upload code to the Arduino:
 ```
