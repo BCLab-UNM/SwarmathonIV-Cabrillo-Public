@@ -17,9 +17,12 @@ from apriltags_ros.msg import AprilTagDetectionArray
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
-import dynamic_reconfigure.client
+from dynamic_reconfigure.server import Server
+from mobility.cfg import DriveConfig 
 
-from mobility.srv import Command 
+from mobility.srv import Command, Core
+from mobility.msg import MoveResult
+
 from task import Task, TaskState
 
 def sync(func) :
@@ -55,7 +58,7 @@ class Location:
         '''Determine if the pose is within accepable distance of this location''' 
         dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
                           goal.y - self.Odometry.pose.pose.position.y);
-        return (dist < 0.1)
+        return (dist < State.GOAL_DISTANCE_OK)
                     
 class State: 
     '''Global robot state variables''' 
@@ -76,6 +79,22 @@ class State:
     DRIVE_MODE_STOP = 0
     DRIVE_MODE_PID  = 1 
     
+    # Tunable parameters 
+    DRIVE_SPEED_SLOPE = 1 
+    DRIVE_SPEED_MIN   = 0.1 
+    DRIVE_SPEED_MAX   = 0.5
+    
+    TURN_SPEED_SLOPE  = 2
+    TURN_SPEED_MIN    = 0.1
+    TURN_SPEED_MAX    = 0.7
+    
+    GOAL_DISTANCE_OK  = 0.1
+
+    ROTATE_THRESHOLD  = math.pi / 16 
+    DRIVE_ANGLE_ABORT = math.pi / 2 
+
+    STOP_THRESHOLD    = 0.1
+               
     def __init__(self, rover):
         self.Mode = State.MODE_MANUAL
         self.MapLocation = Location(None)
@@ -85,6 +104,7 @@ class State:
         self.Start = None
         self.PauseCnt = 0
         self.Hold = True;
+        self.Doing = None
         self.Controller = TaskState()
         self.Work = Queue()
         self.dbg_msg = None
@@ -98,7 +118,8 @@ class State:
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
 
         # Services 
-
+        self.control = rospy.Service(rover + '/control', Core, self._control);
+        
         # Publishers    
         self.status = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
         self.infoLog = rospy.Publisher(rover + '/infoLog', String, queue_size=1, latch=True)
@@ -111,6 +132,33 @@ class State:
         # Timers
         rospy.Timer(rospy.Duration(0.1), self.run)
         rospy.Timer(rospy.Duration(1), self._heartbeat)
+
+        # Configuration 
+        self.config_srv = Server(DriveConfig, self._reconfigure)
+
+    def _control(self, req):
+        print ("Called service.")
+        t = Task(req.r, req.theta, req.delay)
+        state.Work.put(t, False)
+        t.sema.acquire()
+        
+        rval = MoveResult()
+        rval.result = t.result
+        return rval
+    
+    @sync
+    def _reconfigure(self, config, level):
+        State.DRIVE_SPEED_SLOPE = config['DRIVE_SPEED_SLOPE']
+        State.DRIVE_SPEED_MIN   = config['DRIVE_SPEED_MIN']
+        State.DRIVE_SPEED_MAX   = config['DRIVE_SPEED_MAX']
+        State.TURN_SPEED_SLOPE  = config['TURN_SPEED_SLOPE']
+        State.TURN_SPEED_MIN    = config['TURN_SPEED_MIN']
+        State.TURN_SPEED_MAX    = config['TURN_SPEED_MAX']
+        State.GOAL_DISTANCE_OK  = config['GOAL_DISTANCE_OK']
+        State.ROTATE_THRESHOLD  = config['ROTATE_THRESHOLD']
+        State.DRIVE_ANGLE_ABORT = config['DRIVE_ANGLE_ABORT']
+        self.print_info_log('Mobility parameter reconfiguration done.')
+        return config 
     
     def _heartbeat(self, event):
         self.heartbeat.publish("")
@@ -178,25 +226,31 @@ class State:
         elif self.CurrentState == State.STATE_IDLE : 
             self.print_debug('IDLE')
             self.drive(0,0,State.DRIVE_MODE_STOP)
+
+            if self.Doing is not None : 
+                # FIXME: Place result here
+                self.Doing.sema.release()
+                self.Doing = None
+                
             if not self.Work.empty() : 
-                task = self.Work.get(False)
+                self.Doing = self.Work.get(False)
     
-                if task.delay > 0 :
-                    self.PauseCnt = task.delay
+                if self.Doing.delay > 0 :
+                    self.PauseCnt = self.Doing.delay
                     self.CurrentState = State.STATE_PAUSE
                 else :                       
-                    if task.r < 0 :
-                        task.theta = 0
+                    if self.Doing.r < 0 :
+                        self.Doing.theta = 0
         
                     cur = self.OdomLocation.get_pose()
                     self.Goal = Pose2D()
-                    self.Goal.theta = cur.theta + task.theta
-                    self.Goal.x = cur.x + task.r * math.cos(self.Goal.theta)
-                    self.Goal.y = cur.y + task.r * math.sin(self.Goal.theta)
+                    self.Goal.theta = cur.theta + self.Doing.theta
+                    self.Goal.x = cur.x + self.Doing.r * math.cos(self.Goal.theta)
+                    self.Goal.y = cur.y + self.Doing.r * math.sin(self.Goal.theta)
                     self.Start = cur
-                    self.Hold = task.hold
+                    self.Hold = self.Doing.hold
                     
-                    if task.r < 0 :
+                    if self.Doing.r < 0 :
                         self.CurrentState = State.STATE_REVERSE
                     else:
                         self.CurrentState = State.STATE_TURN
@@ -205,7 +259,7 @@ class State:
             self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
-            if abs(heading_error) > math.pi / 16 :
+            if abs(heading_error) > State.ROTATE_THRESHOLD :
                 self.drive(0, get_turn(self.Start, self.Goal, cur), State.DRIVE_MODE_PID)
             else:
                 self.CurrentState = State.STATE_DRIVE
@@ -215,7 +269,7 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 :
+            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
                 self.Goal = None
                 if self.Hold :
                     self.CurrentState = State.STATE_STOP
@@ -223,7 +277,8 @@ class State:
                     self.CurrentState = State.STATE_IDLE
                     
             elif abs(heading_error) > math.pi / 2 :
-                self.CurrentState = State.STATE_TURN
+                self.Doing.result = MoveResult.PATH_FAIL
+                self.CurrentState = State.STATE_STOP
             else:
                 self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2, State.DRIVE_MODE_PID)
     
@@ -231,7 +286,7 @@ class State:
             self.print_debug('REVERSE')
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > math.pi / 2 : 
+            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
                 self.Goal = None
                 if self.Hold :
                     self.CurrentState = State.STATE_STOP
@@ -252,28 +307,25 @@ class State:
             self.print_debug('STOP')
             self.drive(0, 0, State.DRIVE_MODE_STOP)
             cur = self.OdomLocation.Odometry
-            if cur.twist.twist.angular.z < 0.1 and cur.twist.twist.linear.x < 0.1 :
+            if cur.twist.twist.angular.z < State.STOP_THRESHOLD and cur.twist.twist.linear.x < State.STOP_THRESHOLD :
                 self.CurrentState = State.STATE_IDLE
             
 def get_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
-    dist_to_end = angles.shortest_angular_distance(current.theta, end.theta)
+    dist_to_end = angles.shortest_angular_distance(current.theta, end.theta) - State.ROTATE_THRESHOLD
     
     def dist_to_turn(dist):
-        gain = 2
-        max = 0.7
-        min = 0.1
-        speed = dist * gain
+        speed = dist * State.TURN_SPEED_SLOPE
         if speed > 0 : 
-            if speed > max : 
-                speed = max
-            elif speed < min : 
-                speed = min
+            if speed > State.TURN_SPEED_MAX : 
+                speed = State.TURN_SPEED_MAX
+            elif speed < State.TURN_SPEED_MIN : 
+                speed = State.TURN_SPEED_MIN
         else :
-            if speed < -max :
-                speed = -max
-            elif speed > -min :
-                speed = -min
+            if speed < -State.TURN_SPEED_MAX :
+                speed = -State.TURN_SPEED_MAX
+            elif speed > -State.TURN_SPEED_MIN :
+                speed = -State.TURN_SPEED_MIN
                          
         return speed
 
@@ -285,17 +337,14 @@ def get_turn(start, end, current):
 
 def get_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
-    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - 0.1
+    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - State.GOAL_DISTANCE_OK
     
     def dist_to_speed(dist):
-        gain = 1 
-        max = 0.5
-        min = 0.1
-        speed = dist * gain
-        if speed > max :
-            speed = max
-        elif speed < min :
-            speed = min 
+        speed = dist * State.DRIVE_SPEED_SLOPE
+        if speed > State.DRIVE_SPEED_MAX:
+            speed = State.DRIVE_SPEED_MAX
+        elif speed < State.DRIVE_SPEED_MIN :
+            speed = State.DRIVE_SPEED_MIN 
         
         return speed
 

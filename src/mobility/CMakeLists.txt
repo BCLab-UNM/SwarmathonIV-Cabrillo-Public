@@ -11,15 +11,24 @@ find_package(catkin REQUIRED COMPONENTS
   apriltags_ros
   rospy
   message_generation
+  dynamic_reconfigure
 )
 
 catkin_python_setup()
 
-add_service_files (
-	FILES Command.srv
+generate_dynamic_reconfigure_options(
+    cfg/params.py
 )
 
-generate_messages()
+add_message_files ( 
+	FILES MoveResult.msg
+)
+
+add_service_files (
+	FILES Command.srv Core.srv
+)
+
+generate_messages(DEPENDENCIES)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs random_numbers tf apriltags_ros rospy message_runtime

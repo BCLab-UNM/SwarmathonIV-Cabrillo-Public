@@ -1,20 +1,17 @@
 import math 
+import threading 
+from mobility.msg import MoveResult 
 
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
-    
-    RESULT_NONE        = 0 
-    RESULT_SUCCESS     = 1 
-    RESULT_ERR_SONAR   = 2 
-    RESULT_ERR_TAG     = 3 
-    RESULT_ERR_PATH    = 4
     
     def __init__(self, r, theta, delay=0, hold=True):
         self.r = r 
         self.theta = theta
         self.delay = delay 
         self.hold = hold
-        self.result = Task.RESULT_NONE
+        self.result = MoveResult.SUCCESS
+        self.sema = threading.Semaphore(0)
         
 class TaskState :
     

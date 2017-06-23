@@ -385,10 +385,10 @@
 
   <!-- Configure the PIDs -->
   <node name="$(anon dynparam)" pkg="dynamic_reconfigure" type="dynparam" args="set_from_parameters $(arg name)_SBRIDGE">
-    <param name="scale" type="double" value="0.0001" />
+    <param name="scale" type="double" value="0.1" />
     <param name="Kp" type="double" value="1.0" />
     <param name="Ki" type="double" value="0.5" />
-    <param name="Kd" type="double" value="0.5" />
+    <param name="Kd" type="double" value="0.1" />
     <param name="db" type="double" value="0.0" />
     <param name="st" type="double" value="0.0" />
     <param name="wu" type="double" value="1024" />
