@@ -17,6 +17,7 @@ from apriltags_ros.msg import AprilTagDetectionArray
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
+import dynamic_reconfigure.client
 
 from mobility.srv import Command 
 from task import Task, TaskState

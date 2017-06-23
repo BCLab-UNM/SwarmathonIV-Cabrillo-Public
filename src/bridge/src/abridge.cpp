@@ -61,8 +61,9 @@ double leftTicks = 0;
 double rightTicks = 0;
 double odomTS = 0;
 
-PID left_pid(0.01, 0, 0, 0, 255, -255, 16);
-PID right_pid(0.01, 0, 0, 0, 255, -255, 16);
+// Immobilize robot until the first PID configuration.
+PID left_pid(0, 0, 0, 0, 255, -255, 0, -1);
+PID right_pid(0, 0, 0, 0, 255, -255, 0, -1);
 
 //Publishers
 ros::Publisher fingerAnglePublish;
@@ -166,6 +167,10 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 	left_pid.reconfig(p, i, d, db, st, wu);
 	right_pid.reconfig(p, i, d, db, st, wu);
+
+	std_msgs::String msg;
+	msg.data = "PID reconfigure is done.";
+	infoLogPublisher.publish(msg);
 }
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {

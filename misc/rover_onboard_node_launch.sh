@@ -122,6 +122,14 @@ rosparam set $HOSTNAME\_MAP/process_noise_covariance "[0.005, 0, 0, 0, 0, 0, 0, 
 
 nohup rosrun robot_localization ekf_localization_node _two_d_mode:=true _world_frame:=map _frequency:=10 __name:=$HOSTNAME\_MAP /odometry/filtered:=/$HOSTNAME/odom/ekf &
 
+# Configure the PIDs with default values.
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE scale 0.0001
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE Kp 1.0
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE Ki 0.5
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE Kd 0.5
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE db 8
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE st 32
+rosrun dynamic_reconfigure dynparam set /${HOSTNAME}_ABRIDGE wu 1024
 
 #Wait for user input to terminate processes
 while true; do

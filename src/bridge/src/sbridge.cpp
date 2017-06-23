@@ -26,8 +26,9 @@ ros::Timer actionTimer;
 
 string rover;
 
-PID left_wheel(0.1, 0, 0, 0, 1, -1);
-PID right_wheel(0.1, 0, 0, 0, 1, -1);
+// Immobilize robot until the first PID configuration.
+PID left_wheel(0, 0, 0, 0, 1, -1, 0, -1);
+PID right_wheel(0, 0, 0, 0, 1, -1, 0, -1);
 
 double linear_velocity = 0, angular_velocity = 0;
 double sp_linear = 0, sp_angular = 0;
@@ -83,6 +84,10 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 	left_wheel.reconfig(p, i, d, db, st, wu);
 	right_wheel.reconfig(p, i, d, db, st, wu);
+
+	std_msgs::String msg;
+	msg.data = "PID reconfigure is done.";
+	infoLogPublisher.publish(msg);
 }
 
 int main(int argc, char **argv) {
