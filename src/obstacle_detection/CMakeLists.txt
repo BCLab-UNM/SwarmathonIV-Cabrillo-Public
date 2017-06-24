@@ -7,10 +7,17 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   message_filters
+  message_generation
 )
 
+add_message_files ( 
+	FILES Obstacle.msg
+)
+
+generate_messages(DEPENDENCIES)
+
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs message_filters
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs message_filters message_runtime
 )
 
 include_directories(
@@ -21,9 +28,9 @@ add_executable(
   obstacle src/obstacle.cpp
 )
 
+add_dependencies(obstacle ${catkin_EXPORTED_TARGETS})
+
 target_link_libraries(
   obstacle
   ${catkin_LIBRARIES}
 )
-
-

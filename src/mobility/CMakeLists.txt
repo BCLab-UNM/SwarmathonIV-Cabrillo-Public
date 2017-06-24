@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   message_generation
   dynamic_reconfigure
+  obstacle_detection
 )
 
 catkin_python_setup()
@@ -31,7 +32,7 @@ add_service_files (
 generate_messages(DEPENDENCIES)
 
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs random_numbers tf apriltags_ros rospy message_runtime
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs random_numbers tf apriltags_ros rospy message_runtime obstacle_detection
 )
 
 include_directories(

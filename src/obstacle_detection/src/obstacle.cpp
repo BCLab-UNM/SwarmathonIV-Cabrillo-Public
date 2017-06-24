@@ -10,6 +10,8 @@
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
 
+#include "obstacle_detection/Obstacle.h"
+
 using namespace std;
 
 //Globals
@@ -45,7 +47,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, (publishedName + "_OBSTACLE"));
     ros::NodeHandle oNH;
     
-    obstaclePublish = oNH.advertise<std_msgs::UInt8>((publishedName + "/obstacle"), 10);
+    obstaclePublish = oNH.advertise<obstacle_detection::Obstacle>((publishedName + "/obstacle"), 10);
     heartbeatPublisher = oNH.advertise<std_msgs::String>((publishedName + "/obstacle/heartbeat"), 1, true);
     
     message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(oNH, (publishedName + "/sonarLeft"), 10);
@@ -65,23 +67,26 @@ int main(int argc, char** argv) {
 }
 
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
-	std_msgs::UInt8 obstacleMode;
+	obstacle_detection::Obstacle m;
+
+	m.msg = obstacle_detection::Obstacle::PATH_IS_CLEAR;
 	
-	if ((sonarLeft->range > collisionDistance) && (sonarCenter->range > collisionDistance) && (sonarRight->range > collisionDistance)) {
-		obstacleMode.data = 0; //no collision
+	if (sonarLeft->range < collisionDistance) {
+		m.msg |= obstacle_detection::Obstacle::SONAR_LEFT;
 	}
-	else if ((sonarLeft->range > collisionDistance) && (sonarRight->range < collisionDistance)) {
-		obstacleMode.data = 1; //collision on right side
+	if (sonarRight->range < collisionDistance) {
+		m.msg |= obstacle_detection::Obstacle::SONAR_RIGHT;
 	}
-	else {
-		obstacleMode.data = 2; //collision in front or on left side
+	if (sonarCenter->range < collisionDistance) {
+		m.msg |= obstacle_detection::Obstacle::SONAR_CENTER;
 	}
-	if (sonarCenter->range < 0.12) //block in front of center unltrasound.
-	{
-		obstacleMode.data = 4;
+	if (sonarCenter->range < 0.12) {
+		//block in front of center ultrasound.
+		m.msg |= obstacle_detection::Obstacle::SONAR_BLOCK;
 	}
-	
-        obstaclePublish.publish(obstacleMode);
+
+	if (m.msg != obstacle_detection::Obstacle::PATH_IS_CLEAR)
+		obstaclePublish.publish(m);
 }
 
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {

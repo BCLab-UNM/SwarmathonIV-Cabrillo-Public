@@ -22,6 +22,7 @@ from mobility.cfg import DriveConfig
 
 from mobility.srv import Command, Core
 from mobility.msg import MoveResult
+from obstacle_detection.msg import Obstacle 
 
 from task import Task, TaskState
 
@@ -112,8 +113,7 @@ class State:
         # Subscribers
         #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
         rospy.Subscriber(rover + '/mode', UInt8, self._mode)
-        rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._target)
-        rospy.Subscriber(rover + '/obstacle', UInt8, self._obstacle)
+        rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
 
@@ -161,7 +161,7 @@ class State:
         return config 
     
     def _heartbeat(self, event):
-        self.heartbeat.publish("")
+        self.heartbeat.publish("ok")
         
     @sync
     def _joystick(self, msg) :
@@ -172,13 +172,20 @@ class State:
         self.Mode = msg
     
     @sync
-    def _target(self, msg) : 
-        pass 
-    
-    @sync
     def _obstacle(self, msg) :
-        pass 
-    
+        if self.Mode == State.MODE_MANUAL or self.CurrentState != State.STATE_DRIVE :
+            return
+        
+        if (msg.msg & Obstacle.IS_SONAR) != 0 :
+            self.Doing.result = MoveResult.OBSTACLE_SONAR 
+
+        if (msg.msg & Obstacle.IS_VISION) != 0 :
+            self.Doing.result = MoveResult.OBSTACLE_VISION
+
+        self.CurrentState = State.STATE_STOP
+        while not self.Work.empty() :
+            self.work.get(False)
+        
     @sync    
     def _odom(self, msg) : 
         self.OdomLocation = Location(msg)
