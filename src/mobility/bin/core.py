@@ -7,7 +7,6 @@ import rospy
 import angles
 import math
 import copy
-import StringIO 
 import threading
 from Queue import Queue 
 
@@ -18,13 +17,11 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
 from dynamic_reconfigure.server import Server
-from mobility.cfg import DriveConfig 
 
+from mobility.cfg import DriveConfig 
 from mobility.srv import Command, Core
 from mobility.msg import MoveResult
 from obstacle_detection.msg import Obstacle 
-
-from task import Task, TaskState
 
 def sync(func) :
     '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
@@ -37,6 +34,17 @@ def sync(func) :
             StateLock.release()
     return wrapper
 
+class Task : 
+    '''A robot relative place to navigate to. Expressed as r and theta''' 
+    
+    def __init__(self, r, theta, delay=0, hold=True):
+        self.r = r 
+        self.theta = theta
+        self.delay = delay 
+        self.hold = hold
+        self.result = MoveResult.SUCCESS
+        self.sema = threading.Semaphore(0)
+        
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
     def __init__(self, odo):
@@ -75,7 +83,6 @@ class State:
     STATE_REVERSE   = 4 
     STATE_STOP      = 5 
     STATE_PAUSE     = 6 
-    STATE_HAZARD    = 7 
 
     DRIVE_MODE_STOP = 0
     DRIVE_MODE_PID  = 1 
@@ -106,7 +113,6 @@ class State:
         self.PauseCnt = 0
         self.Hold = True;
         self.Doing = None
-        self.Controller = TaskState()
         self.Work = Queue()
         self.dbg_msg = None
         
@@ -169,7 +175,7 @@ class State:
 
     @sync    
     def _mode(self, msg) :
-        self.Mode = msg
+        self.Mode = msg.data
     
     @sync
     def _obstacle(self, msg) :
@@ -186,7 +192,7 @@ class State:
         while not self.Work.empty() :
             self.work.get(False)
         
-    @sync    
+    @sync
     def _odom(self, msg) : 
         self.OdomLocation = Location(msg)
             
@@ -220,9 +226,20 @@ class State:
 
     @sync    
     def run(self, event) :            
+
         if self.Mode == State.MODE_MANUAL :
             self.print_debug('Manual Mode')
             self.drive(0,0,State.DRIVE_MODE_STOP)
+            self.CurrentState = State.STATE_INIT
+
+            if self.Doing is not None :
+                self.Doing.result = MoveResult.USER_ABORT 
+                self.Doing.sema.release()
+                self.Doing = None 
+                
+            while not self.Work.empty() :
+                self.Work.get(False)
+                
             return
         
         if self.CurrentState == State.STATE_INIT : 
@@ -357,42 +374,6 @@ def get_speed(start, end, current):
 
     return min(dist_to_speed(dist_from_start), dist_to_speed(dist_to_end))    
      
-def debug(req):
-    global state
-    redir = StringIO.StringIO()
-    save = sys.stdout
-    sys.stdout = redir
-    err = None
-    try :
-        exec(req.str)
-    except Exception as e :
-        err = e
-
-    sys.stdout = save
-    if err is not None : 
-        return str(err) + "\n"
-
-    rval = redir.getvalue()
-    redir.close()
-    return str(rval)
-
-def stop():
-    global state
-    state.Mode = State.MODE_MANUAL
-    state.CurrentState = State.STATE_IDLE
-    while not self.Work.empty() :
-        self.work.get(False)
-
-def go():
-    global state
-    state.Mode = State.MODE_AUTO
-
-def goto(r, theta):
-    '''Debugging programmed move.'''
-    global state
-    t = Task(r, theta)
-    state.Work.put(t, False)
-        
 def main() :     
     global StateLock 
     global state
@@ -405,7 +386,6 @@ def main() :
     rover = sys.argv[1]
     rospy.init_node(rover + '_MOBILITY')
     state = State(rover)
-    rospy.Service(rover + '/cmd', Command, debug)
     rospy.spin()
 
 if __name__ == '__main__' : 

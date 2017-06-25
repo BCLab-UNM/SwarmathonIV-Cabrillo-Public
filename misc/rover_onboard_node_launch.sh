@@ -48,6 +48,7 @@ findDevicePath() {
 nohup rosrun tf static_transform_publisher __name:=$HOSTNAME\_BASE2CAM 0.12 -0.03 0.195 -1.57 0 -2.22 /$HOSTNAME/base_link /$HOSTNAME/camera_link 100 &
 nohup rosrun video_stream_opencv video_stream __name:=$HOSTNAME\_CAMERA _video_stream_provider:=/dev/video0 /camera:=/$HOSTNAME/camera/image _camera_info_url:=file://${HOME}/rover_workspace/camera_info/head_camera.yaml _width:=320 _height:=240 &
 nohup rosrun mobility core.py $HOSTNAME &
+nohup rosrun mobility task.py $HOSTNAME &
 nohup rosrun obstacle_detection obstacle &
 nohup rosrun diagnostics diagnostics &
 
@@ -138,6 +139,7 @@ while true; do
 
     if [ "$choice" == "q" ];then
 	rosnode kill $HOSTNAME\_MOBILITY
+	rosnode kill $HOSTNAME\_TASK
 	rostopic pub -1 /$HOSTNAME\/velocity geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}'
 	rosnode kill $HOSTNAME\_ABRIDGE
 	rosnode kill $HOSTNAME\_NAVSAT

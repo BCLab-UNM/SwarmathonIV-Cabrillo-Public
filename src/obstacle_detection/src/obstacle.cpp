@@ -69,6 +69,8 @@ int main(int argc, char** argv) {
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
 	obstacle_detection::Obstacle m;
 
+	// TODO: Implement filtering for sonar.
+
 	m.msg = obstacle_detection::Obstacle::PATH_IS_CLEAR;
 	
 	if (sonarLeft->range < collisionDistance) {
