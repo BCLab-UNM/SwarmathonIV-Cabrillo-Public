@@ -1,6 +1,8 @@
 #include <math.h>
 #include <ros/ros.h>
 
+#include <boost/thread.hpp>
+
 //ROS libraries
 #include <tf/transform_datatypes.h>
 #include <dynamic_reconfigure/server.h>
@@ -31,7 +33,7 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle);
 void serialActivityTimer(const ros::TimerEvent& e);
 void publishRosTopics();
 void parseData(string data);
-std::string getHumanFriendlyTime();
+void initialconfig();
 
 //Globals
 geometry_msgs::QuaternionStamped fingerAngle;
@@ -151,6 +153,7 @@ int main(int argc, char **argv) {
     f = boost::bind(&reconfigure, _1, _2);
     config_server.setCallback(f);
 
+    boost::thread t(initialconfig);
     ros::spin();
     
     return EXIT_SUCCESS;
@@ -383,4 +386,24 @@ void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {
     std_msgs::String msg;
     msg.data = "";
     heartbeatPublisher.publish(msg);
+}
+
+void initialconfig() {
+    // Set PID parameters from the launch configuration
+    bridge::DriveConfig initial_config;
+	ros::NodeHandle nh("~");
+
+	nh.getParam("scale", initial_config.scale);
+	nh.getParam("Kp", initial_config.Kp);
+	nh.getParam("Ki", initial_config.Ki);
+	nh.getParam("Kd", initial_config.Kd);
+	nh.getParam("db", initial_config.db);
+	nh.getParam("st", initial_config.st);
+	nh.getParam("wu", initial_config.wu);
+
+	// Announce the configuration to the server
+	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(rover + "_SBRIDGE");
+	dyn_client.setConfiguration(initial_config);
+
+	cout << "Initial configuration sent." << endl;
 }

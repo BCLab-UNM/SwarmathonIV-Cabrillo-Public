@@ -64,6 +64,9 @@ double PID::step(double setpoint, double feedback, double now) {
 	if ( _lasttime != 0) {
 		double elapsed = now - _lasttime;
 
+		if (elapsed == 0)
+			return _out;
+
 		_sum += _ki * err * elapsed;
 		if (_windup > 0) {
 			if (_sum < 0) {

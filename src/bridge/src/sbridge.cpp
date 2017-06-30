@@ -2,12 +2,15 @@
 #include <iostream>
 #include <math.h>
 
+#include <boost/thread.hpp>
+
 #include <ros/ros.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <tf/transform_datatypes.h>
 #include <dynamic_reconfigure/server.h>
+#include <dynamic_reconfigure/client.h>
 
 #include "pid.h"
 #include <bridge/DriveConfig.h>
@@ -90,6 +93,26 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 	infoLogPublisher.publish(msg);
 }
 
+void initialconfig() {
+    // Set PID parameters from the launch configuration
+    bridge::DriveConfig initial_config;
+	ros::NodeHandle nh("~");
+
+	nh.getParam("scale", initial_config.scale);
+	nh.getParam("Kp", initial_config.Kp);
+	nh.getParam("Ki", initial_config.Ki);
+	nh.getParam("Kd", initial_config.Kd);
+	nh.getParam("db", initial_config.db);
+	nh.getParam("st", initial_config.st);
+	nh.getParam("wu", initial_config.wu);
+
+	// Announce the configuration to the server
+	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(rover + "_SBRIDGE");
+	dyn_client.setConfiguration(initial_config);
+
+	cout << "Initial configuration sent." << endl;
+}
+
 int main(int argc, char **argv) {
     sleep(10);
 
@@ -125,6 +148,7 @@ int main(int argc, char **argv) {
     f = boost::bind(&reconfigure, _1, _2);
     config_server.setCallback(f);
 
+    boost::thread t(initialconfig);
     ros::spin();
 
 	return EXIT_SUCCESS;
