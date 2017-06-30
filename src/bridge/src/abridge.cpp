@@ -6,6 +6,7 @@
 //ROS libraries
 #include <tf/transform_datatypes.h>
 #include <dynamic_reconfigure/server.h>
+#include <dynamic_reconfigure/client.h>
 
 //ROS messages
 #include <std_msgs/Float32.h>
@@ -402,7 +403,7 @@ void initialconfig() {
 	nh.getParam("wu", initial_config.wu);
 
 	// Announce the configuration to the server
-	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(rover + "_SBRIDGE");
+	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(publishedName + "_ABRIDGE");
 	dyn_client.setConfiguration(initial_config);
 
 	cout << "Initial configuration sent." << endl;
