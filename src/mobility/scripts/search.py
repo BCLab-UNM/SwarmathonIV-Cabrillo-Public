@@ -14,11 +14,12 @@ def run(state):
     pass 
 
 def main():
-#    if len(sys.argv) < 2 :
-#        print ('usage:', sys.argv[0], '<rovername>')
-#        exit (-1)
-    
-    rover = 'achilles'
+    if len(sys.argv) < 2 :
+        print ('usage:', sys.argv[0], '<rovername>')
+        exit (-1)
+
+    global rover
+    rover = sys.argv[1]
     rospy.init_node(rover + '_SEARCH')
 
     global core_service 

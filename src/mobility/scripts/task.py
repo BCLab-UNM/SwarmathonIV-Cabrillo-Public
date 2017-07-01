@@ -58,8 +58,9 @@ def print_state(msg):
 
 def launch(prog):
     global launcher
+    global rover
     print_state("Launching task: " + prog)
-    node = roslaunch.core.Node('mobility', prog)
+    node = roslaunch.core.Node('mobility', prog, args=rover)
     process = launcher.launch(node)
     while process.is_alive() and not rospy.is_shutdown() :
         rospy.sleep(1.0)
@@ -76,6 +77,7 @@ def main() :
         print('usage:', sys.argv[0], '<rovername>')
         exit (-1)
     
+    global rover
     rover = sys.argv[1]
     rospy.init_node(rover + '_TASK')
 
