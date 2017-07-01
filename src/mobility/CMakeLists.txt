@@ -53,3 +53,8 @@ target_link_libraries(
   mobility
   ${catkin_LIBRARIES}
 )
+
+catkin_install_python (
+	PROGRAMS scripts/core.py
+	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
