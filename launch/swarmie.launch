@@ -5,6 +5,7 @@
   <node name="$(arg name)_DIAGNOSTICS" pkg="diagnostics" type="diagnostics" args="$(arg name)" />
   <node name="$(arg name)_MOBILITY" pkg="mobility" type="core.py" args="$(arg name)" />
   <node name="$(arg name)_TASK" pkg="mobility" type="task.py" args="$(arg name)" />
+  <node name="$(arg name)_MAPPING" pkg="mobility" type="mapping" args="$(arg name)" />
   <node name="$(arg name)_OBSTACLE" pkg="obstacle_detection" type="obstacle" args="$(arg name)" />
   <node pkg="robot_localization" type="navsat_transform_node" name="$(arg name)_NAVSAT" respawn="false">
 

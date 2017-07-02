@@ -26,7 +26,7 @@ def main():
     rospy.wait_for_service(rover + '/control')
     core_service = rospy.ServiceProxy(rover + '/control', Core)
 
-    core_service(2, math.pi/2, 0, True)
+    core_service(15, math.pi/2, 0, True)
 
     return 0
 
