@@ -69,9 +69,11 @@ def launch(prog):
     return process.exit_code 
 
 def mode(msg) :
-    global rover_mode 
+    global rover_mode, launcher
     rover_mode = msg.data
-    
+    if rover_mode == 1 : 
+        launcher.stop()
+        
 def main() :
     if len(sys.argv) < 2 :
         print('usage:', sys.argv[0], '<rovername>')
@@ -149,7 +151,7 @@ def main() :
             if launch(PROG_DROPOFF) == 0 :
                 CurrentState = STATE_SEARCH
         
-    launch.stop()
+    launcher.stop()
 
 if __name__ == '__main__' : 
     main()

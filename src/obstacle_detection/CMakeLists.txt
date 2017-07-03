@@ -8,16 +8,21 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   message_filters
   message_generation
+  apriltags_ros
 )
 
 add_message_files ( 
 	FILES Obstacle.msg
 )
 
+add_service_files (
+	FILES DetectionMask.srv
+)
+
 generate_messages(DEPENDENCIES)
 
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs message_filters message_runtime
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs message_filters message_runtime apriltags_ros
 )
 
 include_directories(

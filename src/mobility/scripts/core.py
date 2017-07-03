@@ -71,18 +71,17 @@ class Location:
                     
 class State: 
     '''Global robot state variables''' 
-    
+
     MODE_MANUAL     = 1 
     MODE_AUTO       = 2
     MODE_ALL_AUTO   = 3 
-
-    STATE_INIT      = 0
-    STATE_IDLE      = 1
-    STATE_TURN      = 2
-    STATE_DRIVE     = 3 
-    STATE_REVERSE   = 4 
-    STATE_STOP      = 5 
-    STATE_PAUSE     = 6 
+    
+    STATE_IDLE      = 0
+    STATE_TURN      = 1
+    STATE_DRIVE     = 2 
+    STATE_REVERSE   = 3 
+    STATE_STOP      = 4 
+    STATE_PAUSE     = 5 
 
     DRIVE_MODE_STOP = 0
     DRIVE_MODE_PID  = 1 
@@ -104,10 +103,9 @@ class State:
     STOP_THRESHOLD    = 0.1
                
     def __init__(self, rover):
-        self.Mode = State.MODE_MANUAL
         self.MapLocation = Location(None)
         self.OdomLocation =  Location(None)
-        self.CurrentState = State.STATE_INIT
+        self.CurrentState = State.STATE_IDLE
         self.Goal = None
         self.Start = None
         self.PauseCnt = 0
@@ -142,12 +140,17 @@ class State:
         # Configuration 
         self.config_srv = Server(DriveConfig, self._reconfigure)
 
+    def _stop_now(self, result) :
+        self.CurrentState = State.STATE_IDLE
+        while not self.Work.empty() :
+            self.Work.get(False)
+        if self.Doing is not None :
+            self.Doing.result = result
+    
     def _control(self, req):
-        print ("Called service.")
         t = Task(req.r, req.theta, req.delay)
         state.Work.put(t, False)
-        t.sema.acquire()
-        
+        t.sema.acquire()                
         rval = MoveResult()
         rval.result = t.result
         return rval
@@ -175,22 +178,16 @@ class State:
 
     @sync    
     def _mode(self, msg) :
-        self.Mode = msg.data
+        if msg.data == 1 :
+            self._stop_now(MoveResult.USER_ABORT)
     
     @sync
     def _obstacle(self, msg) :
-        if self.Mode == State.MODE_MANUAL or self.CurrentState != State.STATE_DRIVE :
-            return
-        
         if (msg.msg & Obstacle.IS_SONAR) != 0 :
-            self.Doing.result = MoveResult.OBSTACLE_SONAR 
+            self._stop_now(MoveResult.OBSTACLE_SONAR)
 
         if (msg.msg & Obstacle.IS_VISION) != 0 :
-            self.Doing.result = MoveResult.OBSTACLE_VISION
-
-        self.CurrentState = State.STATE_STOP
-        while not self.Work.empty() :
-            self.work.get(False)
+            self._stop_now(MoveResult.OBSTACLE_VISION)
         
     @sync
     def _odom(self, msg) : 
@@ -226,33 +223,12 @@ class State:
 
     @sync    
     def run(self, event) :            
-
-        if self.Mode == State.MODE_MANUAL :
-            self.print_debug('Manual Mode')
-            self.drive(0,0,State.DRIVE_MODE_STOP)
-            self.CurrentState = State.STATE_INIT
-
-            if self.Doing is not None :
-                self.Doing.result = MoveResult.USER_ABORT 
-                self.Doing.sema.release()
-                self.Doing = None 
-                
-            while not self.Work.empty() :
-                self.Work.get(False)
-                
-            return
-        
-        if self.CurrentState == State.STATE_INIT : 
-            self.print_debug('INIT')
-            self.CurrentState = State.STATE_IDLE
-            self.drive(0,0,State.DRIVE_MODE_STOP)
-    
-        elif self.CurrentState == State.STATE_IDLE : 
-            self.print_debug('IDLE')
+            
+        if self.CurrentState == State.STATE_IDLE : 
+            #self.print_debug('IDLE')
             self.drive(0,0,State.DRIVE_MODE_STOP)
 
             if self.Doing is not None : 
-                # FIXME: Place result here
                 self.Doing.sema.release()
                 self.Doing = None
                 
@@ -280,7 +256,7 @@ class State:
                         self.CurrentState = State.STATE_TURN
     
         elif self.CurrentState == State.STATE_TURN :
-            self.print_debug('TURN')
+            #self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > State.ROTATE_THRESHOLD :
@@ -289,7 +265,7 @@ class State:
                 self.CurrentState = State.STATE_DRIVE
                 
         elif self.CurrentState == State.STATE_DRIVE :
-            self.print_debug('DRIVE')
+            #self.print_debug('DRIVE')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
@@ -307,7 +283,7 @@ class State:
                 self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
-            self.print_debug('REVERSE')
+            #self.print_debug('REVERSE')
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
@@ -320,7 +296,7 @@ class State:
                 self.drive(-0.2, 0, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_PAUSE : 
-            self.print_debug('PAUSE')
+            #self.print_debug('PAUSE')
             self.drive(0, 0, State.DRIVE_MODE_STOP)
             if self.PauseCnt == 0 :
                 self.CurrentState = State.STATE_IDLE
@@ -328,7 +304,7 @@ class State:
                 self.PauseCnt = self.PauseCnt - 1
 
         elif self.CurrentState == State.STATE_STOP : 
-            self.print_debug('STOP')
+            #self.print_debug('STOP')
             self.drive(0, 0, State.DRIVE_MODE_STOP)
             cur = self.OdomLocation.Odometry
             if cur.twist.twist.angular.z < State.STOP_THRESHOLD and cur.twist.twist.linear.x < State.STOP_THRESHOLD :
