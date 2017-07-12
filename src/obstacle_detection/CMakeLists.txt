@@ -19,7 +19,7 @@ add_service_files (
 	FILES DetectionMask.srv
 )
 
-generate_messages(DEPENDENCIES)
+generate_messages(DEPENDENCIES std_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs message_filters message_runtime apriltags_ros
