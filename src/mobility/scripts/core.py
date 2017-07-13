@@ -143,7 +143,10 @@ class State:
     def _stop_now(self, result) :
         self.CurrentState = State.STATE_IDLE
         while not self.Work.empty() :
-            self.Work.get(False)
+            item = self.Work.get(False)
+            item.result = result
+            item.sema.release()
+
         if self.Doing is not None :
             self.Doing.result = result
     
@@ -225,7 +228,7 @@ class State:
     def run(self, event) :            
             
         if self.CurrentState == State.STATE_IDLE : 
-            #self.print_debug('IDLE')
+            self.print_debug('IDLE')
             self.drive(0,0,State.DRIVE_MODE_STOP)
 
             if self.Doing is not None : 
@@ -256,7 +259,7 @@ class State:
                         self.CurrentState = State.STATE_TURN
     
         elif self.CurrentState == State.STATE_TURN :
-            #self.print_debug('TURN')
+            self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > State.ROTATE_THRESHOLD :
@@ -265,7 +268,7 @@ class State:
                 self.CurrentState = State.STATE_DRIVE
                 
         elif self.CurrentState == State.STATE_DRIVE :
-            #self.print_debug('DRIVE')
+            self.print_debug('DRIVE')
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
@@ -283,7 +286,7 @@ class State:
                 self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
-            #self.print_debug('REVERSE')
+            self.print_debug('REVERSE')
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
@@ -296,7 +299,7 @@ class State:
                 self.drive(-0.2, 0, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_PAUSE : 
-            #self.print_debug('PAUSE')
+            self.print_debug('PAUSE')
             self.drive(0, 0, State.DRIVE_MODE_STOP)
             if self.PauseCnt == 0 :
                 self.CurrentState = State.STATE_IDLE
@@ -304,7 +307,7 @@ class State:
                 self.PauseCnt = self.PauseCnt - 1
 
         elif self.CurrentState == State.STATE_STOP : 
-            #self.print_debug('STOP')
+            self.print_debug('STOP')
             self.drive(0, 0, State.DRIVE_MODE_STOP)
             cur = self.OdomLocation.Odometry
             if cur.twist.twist.angular.z < State.STOP_THRESHOLD and cur.twist.twist.linear.x < State.STOP_THRESHOLD :

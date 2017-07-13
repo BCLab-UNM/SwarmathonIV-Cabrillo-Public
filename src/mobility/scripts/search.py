@@ -25,16 +25,26 @@ def main():
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
 
-    swarmie.set_obstacle_mask(Obstacle.IS_SONAR | Obstacle.IS_VISION)
+    # Enable stop on all obstacles.
+    swarmie.all_obstacles() 
+    
     while not rospy.is_shutdown() : 
+        rospy.loginfo("Wandering...")
+        
+        # Drive to a random location.   
         rval = swarmie.drive(2, random.gauss(0, math.pi/8))
-        print ("Drive returns:", rval)
-        if rval & MoveResult.OBSTACLE_SONAR != 0 :
-            swarmie.set_obstacle_mask(0)
-            swarmie.drive(1, math.pi)
-            swarmie.set_obstacle_mask(Obstacle.IS_VISION | Obstacle.IS_SONAR)
-        elif rval & MoveResult.OBSTACLE_VISION != 0 : 
-            return 0
+        
+        # Failed because we saw an obstacle with sonar.
+        if rval == MoveResult.OBSTACLE_SONAR :
+            rospy.loginfo("I see a wall!")
+            swarmie.set_obstacles(Obstacle.IS_VISION)
+            rval = swarmie.drive(0, random.gauss(math.pi, math.pi/8))
+            swarmie.all_obstacles()
+
+        # Failed because we saw a tag.        
+        elif rval == MoveResult.OBSTACLE_VISION : 
+            rospy.loginfo("I see a tag!")
+            pass 
         
     return 0
 

@@ -28,6 +28,9 @@ float heartbeat_publish_interval = 2;
 ros::Publisher obstaclePublish;
 ros::Publisher heartbeatPublisher;
 
+//Subscribers
+ros::Subscriber targetSubscriber;
+
 //Timers
 ros::Timer publish_heartbeat_timer;
 
@@ -64,7 +67,7 @@ int main(int argc, char** argv) {
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Range, sensor_msgs::Range, sensor_msgs::Range> sonarSyncPolicy;
 
-    oNH.subscribe((publishedName + "/targets"), 10, targetHandler);
+    targetSubscriber = oNH.subscribe((publishedName + "/targets"), 10, targetHandler);
 
     message_filters::Synchronizer<sonarSyncPolicy> sonarSync(sonarSyncPolicy(10), sonarLeftSubscriber, sonarCenterSubscriber, sonarRightSubscriber);
     sonarSync.registerCallback(boost::bind(&sonarHandler, _1, _2, _3));
@@ -98,7 +101,10 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	if (message->detections.size() > 0) {
 		obstacle_status |= obstacle_detection::Obstacle::TAG_SEEN;
     }
+
+	// Apply the mask
 	obstacle_status &= obstacle_mask;
+
 	if (obstacle_status & obstacle_detection::Obstacle::IS_VISION) {
 		obstacle_detection::Obstacle msg;
 		msg.msg = obstacle_status;
@@ -125,8 +131,6 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 		//block in front of center ultrasound.
 		obstacle_status |= obstacle_detection::Obstacle::SONAR_BLOCK;
 	}
-
-	cout << "Obstacle status: " << obstacle_status << " mask: " << obstacle_mask << endl;
 
 	// Apply the mask
 	obstacle_status &= obstacle_mask;

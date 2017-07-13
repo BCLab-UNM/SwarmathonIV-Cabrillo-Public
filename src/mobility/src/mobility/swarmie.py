@@ -25,18 +25,24 @@ class Swarmie:
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/obstacleMask')
 
-        self.drive_to = rospy.ServiceProxy(rover + '/control', Core)
-        self.set_obstacle_mask = rospy.ServiceProxy(rover + '/obstacleMask', DetectionMask)
+        self.control = rospy.ServiceProxy(rover + '/control', Core)
+        self.obstacleMask = rospy.ServiceProxy(rover + '/obstacleMask', DetectionMask)
     
     def drive(self, distance, theta):
-        return self.drive_to(distance, theta, 0, True).result.result
+        return self.control(distance, theta, 0, True).result.result
     
     def wait(self, time):
-        return self.drive_to(0, 0, time, True).result.result
+        return self.control(0, 0, time, True).result.result
     
     def backup(self, distance):
-        return self.drive_to(-distance, 0, 0, True).result.result
+        return self.control(-distance, 0, 0, True).result.result
     
-    def set_obstacle_mask(self, mask):
-        return self.set_obstacle_mask(mask)
+    def set_obstacles(self, mask):
+        return self.obstacleMask(mask)
+
+    def ignore_obstacles(self):
+        return self.obstacleMask(0)
+
+    def all_obstacles(self):
+        return self.obstacleMask(Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
