@@ -165,9 +165,7 @@ QString GazeboSimManager::stopRoverNode( QString rover_name )
 
 QString GazeboSimManager::startRoverNode( QString rover_name )
 {
-    QString argument = "roslaunch "+app_root+"/launch/swarmie.launch name:="+rover_name
-    		+ " simulation:=True swarmie_dev:=None ublox_dev:=None";
-
+    QString argument = "roslaunch "+app_root+"/launch/swarmie.launch name:="+rover_name;
     QProcess* rover_process = new QProcess();
 
     rover_processes[rover_name] = rover_process;

@@ -1,5 +1,10 @@
 <launch>
 
+  <!-- Default parameters to maintain compatibility with stock GUI -->
+  <arg name="simulation" default="True" />
+  <arg name="swarmie_dev" default="None" />
+  <arg name="ublox_dev" default="None" />
+
   <param name="tf_prefix" value="$(arg name)" />
   <node name="$(arg name)_BASE2CAM" pkg="tf" type="static_transform_publisher" args="0.12 -0.03 0.195 -1.57 0 -2.22 $(arg name)/base_link $(arg name)/camera_link 100" />
   <node name="$(arg name)_DIAGNOSTICS" pkg="diagnostics" type="diagnostics" args="$(arg name)" />
