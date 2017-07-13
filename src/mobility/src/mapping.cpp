@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
     // Initialize the map.
     rover_map = grid_map::GridMap({"obstacles", "targets"});
     rover_map.setFrameId(rover + "/map");
-    rover_map.setGeometry(grid_map::Length(25, 25), 0.1);
+    rover_map.setGeometry(grid_map::Length(25, 25), 0.5);
     ROS_INFO("Created map with size %f x %f m (%i x %i cells).",
       rover_map.getLength().x(), rover_map.getLength().y(),
       rover_map.getSize()(0), rover_map.getSize()(1));
