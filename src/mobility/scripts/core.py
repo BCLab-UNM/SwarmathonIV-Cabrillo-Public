@@ -151,7 +151,7 @@ class State:
             self.Doing.result = result
     
     def _control(self, req):
-        t = Task(req.r, req.theta, req.delay)
+        t = Task(req.r, req.theta, req.delay, req.hold)
         state.Work.put(t, False)
         t.sema.acquire()                
         rval = MoveResult()
@@ -229,13 +229,14 @@ class State:
             
         if self.CurrentState == State.STATE_IDLE : 
             self.print_debug('IDLE')
-            self.drive(0,0,State.DRIVE_MODE_STOP)
 
             if self.Doing is not None : 
                 self.Doing.sema.release()
                 self.Doing = None
                 
-            if not self.Work.empty() : 
+            if self.Work.empty() : 
+                self.drive(0,0,State.DRIVE_MODE_STOP)
+            else:
                 self.Doing = self.Work.get(False)
     
                 if self.Doing.delay > 0 :
@@ -257,7 +258,7 @@ class State:
                         self.CurrentState = State.STATE_REVERSE
                     else:
                         self.CurrentState = State.STATE_TURN
-    
+
         elif self.CurrentState == State.STATE_TURN :
             self.print_debug('TURN')
             cur = self.OdomLocation.get_pose()
