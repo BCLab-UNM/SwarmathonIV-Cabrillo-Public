@@ -78,7 +78,8 @@ int main(int argc, char** argv) {
     		| obstacle_detection::Obstacle::SONAR_RIGHT
 			| obstacle_detection::Obstacle::SONAR_CENTER
 			| obstacle_detection::Obstacle::SONAR_BLOCK
-			| obstacle_detection::Obstacle::TAG_SEEN;
+			| obstacle_detection::Obstacle::TAG_TARGET
+			| obstacle_detection::Obstacle::TAG_HOME;
 
     obstacle_status = obstacle_detection::Obstacle::PATH_IS_CLEAR;
 
@@ -98,9 +99,12 @@ bool setObstacleMask(obstacle_detection::DetectionMask::Request &req, obstacle_d
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
 	obstacle_status &= ~obstacle_detection::Obstacle::IS_VISION;
-	if (message->detections.size() > 0) {
-		obstacle_status |= obstacle_detection::Obstacle::TAG_SEEN;
-    }
+	for (int i=0; i<message->detections.size(); i++) {
+		if (message->detections[i].id == 0)
+			obstacle_status |= obstacle_detection::Obstacle::TAG_TARGET;
+		else if (message->detections[i].id == 256)
+			obstacle_status |= obstacle_detection::Obstacle::TAG_HOME;
+	}
 
 	// Apply the mask
 	obstacle_status &= obstacle_mask;

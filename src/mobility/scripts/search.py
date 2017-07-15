@@ -41,10 +41,9 @@ def main():
             rval = swarmie.drive(0, random.gauss(math.pi, math.pi/8))
             swarmie.all_obstacles()
 
-        # Failed because we saw a tag.        
+        # Failed because we saw a target tag.        
         elif rval == MoveResult.OBSTACLE_VISION : 
             rospy.loginfo("I see a tag!")
-            pass 
         
     return 0
 
