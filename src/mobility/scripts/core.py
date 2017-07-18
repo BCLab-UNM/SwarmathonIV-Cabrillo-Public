@@ -37,14 +37,17 @@ def sync(func) :
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
     
-    def __init__(self, r, theta, delay=0, hold=True):
+    def __init__(self, r, theta, delay=0, hold=True, blocking=True):
         self.r = r 
         self.theta = theta
         self.delay = delay 
         self.hold = hold
         self.result = MoveResult.SUCCESS
-        self.sema = threading.Semaphore(0)
-        
+        if blocking :
+            self.sema = threading.Semaphore(0)
+        else:
+            self.sema = None 
+            
 class Location: 
     '''A class that encodes a handler provided location and accessor methods''' 
     def __init__(self, odo):
@@ -145,14 +148,20 @@ class State:
         while not self.Work.empty() :
             item = self.Work.get(False)
             item.result = result
-            item.sema.release()
+            if item.sema is not None :
+                item.sema.release()
 
         if self.Doing is not None :
             self.Doing.result = result
     
     def _control(self, req):
-        t = Task(req.r, req.theta, req.delay, req.hold)
-        state.Work.put(t, False)
+        for r in req.req[:-1] :
+            t = Task(r.r, r.theta, r.delay, r.hold, False)
+            state.Work.put(t, False)
+        
+        r = req.req[-1]
+        t = Task(r.r, r.theta, r.delay, r.hold, True)
+        state.Work.put(t, True)
         t.sema.acquire()                
         rval = MoveResult()
         rval.result = t.result
@@ -231,7 +240,8 @@ class State:
             self.print_debug('IDLE')
 
             if self.Doing is not None : 
-                self.Doing.sema.release()
+                if self.Doing.sema is not None :
+                    self.Doing.sema.release()
                 self.Doing = None
                 
             if self.Work.empty() : 

@@ -45,6 +45,9 @@ def main():
         elif rval == MoveResult.OBSTACLE_VISION : 
             rospy.loginfo("I see a tag!")
         
+        else:
+            swarmie.circle()
+            
     return 0
 
 if __name__ == '__main__' : 

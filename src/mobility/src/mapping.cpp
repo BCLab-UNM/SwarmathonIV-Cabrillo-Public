@@ -31,25 +31,6 @@ grid_map::GridMap rover_map;
 ros::Publisher map_publisher;
 geometry_msgs::Pose2D currentLocation;
 
-void doSweep(double range, double angle) {
-	grid_map::Position start(0,0);
-	grid_map::Position block(range * cos(currentLocation.theta + angle),
-			range * sin(currentLocation.theta + angle));
-	grid_map::Position end(3 * cos(currentLocation.theta + angle),
-			3 * sin(currentLocation.theta + angle));
-
-	for (grid_map::LineIterator it(rover_map, start, block);
-			!it.isPastEnd(); ++it) {
-		rover_map.at("obstacles", *it) = 0;
-	}
-
-	// Skip the first block
-	grid_map::LineIterator it(rover_map, block, end);
-	for (++it; !it.isPastEnd(); ++it) {
-		rover_map.at("obstacles", *it) = 2;
-	}
-}
-
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
 /*
 	doSweep(sonarCenter->range, M_PI);
@@ -126,6 +107,16 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 }
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	for (int i=0; i<message->detections.size(); i++) {
+		// Tag positions are relative to base_link. Add Odometry to place them
+		// into the map frame. Right?
+		geometry_msgs::Point p = message->detections[i].pose.pose.position;
+		grid_map::Position pos(p.x + currentLocation.x, p.y + currentLocation.y);
+		grid_map::Index ind;
+		rover_map.getIndex(pos, ind);
+
+		rover_map.at("targets", ind) = 1;
+	}
 }
 
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
@@ -201,6 +192,7 @@ int main(int argc, char **argv) {
       grid_map::Position position;
       rover_map.getPosition(*it, position);
       rover_map.at("obstacles", *it) = 0.5;
+      rover_map.at("targets", *it) = 0.5;
     }
 
     // Publish map updates.

@@ -3,9 +3,10 @@ from __future__ import print_function
 
 import sys 
 import rospy
+import math 
 
 from mobility.srv import Core
-from mobility.msg import MoveResult
+from mobility.msg import MoveResult, MoveRequest
 from obstacle_detection.srv import DetectionMask 
 from obstacle_detection.msg import Obstacle 
 from std_msgs.msg import String
@@ -27,15 +28,21 @@ class Swarmie:
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.obstacleMask = rospy.ServiceProxy(rover + '/obstacleMask', DetectionMask)
+
+    def circle(self, edges=6, dist=1):
+        cir = []
+        for l in range(edges) :
+            cir.append(MoveRequest(dist, 2*math.pi/edges, 0, False))
+        return self.control(cir).result.result 
     
     def drive(self, distance, theta):
-        return self.control(distance, theta, 0, True).result.result
+        return self.control([MoveRequest(distance, theta, 0, True)]).result.result
     
     def wait(self, time):
-        return self.control(0, 0, time, True).result.result
+        return self.control([MoveRequest(0, 0, time, True)]).result.result
     
     def backup(self, distance):
-        return self.control(-distance, 0, 0, True).result.result
+        return self.control([MoveRequest(-distance, 0, 0, True)]).result.result
     
     def set_obstacles(self, mask):
         return self.obstacleMask(mask)
