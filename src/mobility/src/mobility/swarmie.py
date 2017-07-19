@@ -9,7 +9,8 @@ from mobility.srv import Core
 from mobility.msg import MoveResult, MoveRequest
 from obstacle_detection.srv import DetectionMask 
 from obstacle_detection.msg import Obstacle 
-from std_msgs.msg import String
+
+from std_msgs.msg import UInt8, String
 
 class Point: 
     def __init__(self):
@@ -22,6 +23,7 @@ class Swarmie:
         rospy.init_node(rover + '_CONTROLLER')
 
         self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
+        self.mode_publisher = rospy.Publisher(rover + '/mode', UInt8, queue_size=1, latch=True)
 
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/obstacleMask')
@@ -29,6 +31,16 @@ class Swarmie:
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.obstacleMask = rospy.ServiceProxy(rover + '/obstacleMask', DetectionMask)
 
+    def stop(self):
+        msg = UInt8() 
+        msg.data = 1
+        self.mode_publisher.publish(msg)
+    
+    def go(self):
+        msg = UInt8() 
+        msg.data = 2
+        self.mode_publisher.publish(msg)
+    
     def circle(self, edges=6, dist=1):
         cir = []
         for l in range(edges) :

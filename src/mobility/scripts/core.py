@@ -19,7 +19,7 @@ from geometry_msgs.msg import Twist, Pose2D
 from dynamic_reconfigure.server import Server
 
 from mobility.cfg import DriveConfig 
-from mobility.srv import Command, Core
+from mobility.srv import Core
 from mobility.msg import MoveResult
 from obstacle_detection.msg import Obstacle 
 

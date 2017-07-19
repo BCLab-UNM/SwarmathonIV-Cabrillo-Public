@@ -2,14 +2,25 @@
 
 from __future__ import print_function
 
-import rospy 
-import sys
-import signal
 import os
-from std_msgs.msg import String
-from mobility.srv import Command 
+import sys
+import math
+import signal
+import random 
 import readline
 import rlcompleter
+
+import rospy 
+
+from std_msgs.msg import String
+
+from mobility.srv import Core
+from mobility.msg import MoveResult
+
+from obstacle_detection.srv import DetectionMask 
+from obstacle_detection.msg import Obstacle 
+
+from mobility.swarmie import Swarmie 
 
 def logHandler(source, msg): 
     if not quiet : 
@@ -22,21 +33,21 @@ def handle(signum, frame):
         print ('Topic echo is OFF')
     else:
         print ('Topic echo is ON') 
-        
-def main() :
+
+
+if __name__ == '__main__' :
     global quiet 
+    quiet = False   
     
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
     
     rover = sys.argv[1]
-    rospy.init_node(rover + '_rdb')
 
-    print ("Waiting to connect to rover.")
-    rospy.wait_for_service(rover + '/cmd')
-
-    quiet = False   
+    swarmie = Swarmie(rover)
+    print ('Connected.')
+    
     rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('/status:', msg))
     print ("Subscribed to", rover + '/status')
 
@@ -47,24 +58,18 @@ def main() :
     print ("Subscribed to", rover + '/state_machine')
 
     signal.signal(signal.SIGQUIT, handle)    
-    print ('Ready.')
+
     print ('Topic data will be displayed. Press CTRL-\ to hide output.')
     readline.parse_and_bind("tab: complete")
     
     try :
-        cmd = rospy.ServiceProxy(rover + '/cmd', Command)
-        try :
-            while True : 
-                line = raw_input('>>> ')
-                if line is not None and line != '' :
-                    ret = cmd(line)
-                    print (ret.str, end='')    
-        except EOFError as e : 
-            print ("Goodbye")
+        while True : 
+            line = raw_input('>>> ')
+            if line is not None and line != '' :
+                try :
+                    exec (line)
+                except Exception as e :
+                    print (e)
+    except EOFError as e : 
+        print ("Goodbye")
 
-        cmd.close()
-    except Exception as e : 
-        print ("Exception while using service:", e)
-        
-if __name__ == '__main__' :
-    main()

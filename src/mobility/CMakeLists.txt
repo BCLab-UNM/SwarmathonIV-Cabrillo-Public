@@ -31,7 +31,7 @@ add_message_files (
 )
 
 add_service_files (
-	FILES Command.srv Core.srv
+	FILES Core.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs)

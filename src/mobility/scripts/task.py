@@ -8,48 +8,12 @@ import rospy
 import StringIO 
 import roslaunch
 
-from std_msgs.msg import UInt8, String, Float32
+from std_msgs.msg import UInt8, String
 
-from mobility.srv import Core, Command
+from mobility.srv import Core
 from mobility.msg import MoveRequest 
 
 '''Node that coordinates the overall robot task''' 
-
-def debug(req):
-    global state
-    redir = StringIO.StringIO()
-    save = sys.stdout
-    sys.stdout = redir
-    err = None
-    try :
-        exec(req.str)
-    except Exception as e :
-        err = e
-
-    sys.stdout = save
-    if err is not None : 
-        return str(err) + "\n"
-
-    rval = redir.getvalue()
-    redir.close()
-    return str(rval)
-
-def stop():
-    global mode_publisher
-    msg = UInt8() 
-    msg.data = 1
-    mode_publisher.publish(msg)
-
-def go():
-    global mode_publisher
-    msg = UInt8() 
-    msg.data = 2
-    mode_publisher.publish(msg)
-
-def goto(r, theta):
-    '''Debugging programmed move.'''
-    global core_service
-    core_service([MoveRequest(r, theta, 0, True)])
 
 def print_state(msg):
     global state_publisher
@@ -60,26 +24,32 @@ def print_state(msg):
 def launch(prog):
     global launcher
     global rover
+    global task
     print_state("Launching task: " + prog)
     node = roslaunch.core.Node('mobility', prog, args=rover)
-    process = launcher.launch(node)
-    while process.is_alive() and not rospy.is_shutdown() :
+    task = launcher.launch(node)
+    while task.is_alive() and not rospy.is_shutdown() :
         rospy.sleep(1.0)
     
-    print_state("Task exited with code: " +  str(process.exit_code))
-    return process.exit_code 
+    print_state("Task exited with code: " +  str(task.exit_code))
+    return task.exit_code 
 
 def mode(msg) :
-    global rover_mode, launcher
+    global rover_mode, launcher, task
     rover_mode = msg.data
-    if rover_mode == 1 : 
-        launcher.stop()
+    if rover_mode == 1 and task is not None :   
+        if task.is_alive() :  
+            print_state("Forcibly killing current task.")
+            task.stop()
         
 def main() :
     if len(sys.argv) < 2 :
         print('usage:', sys.argv[0], '<rovername>')
         exit (-1)
-    
+
+    global task 
+    task = None 
+        
     global rover
     rover = sys.argv[1]
     rospy.init_node(rover + '_TASK')
@@ -87,14 +57,8 @@ def main() :
     global core_service 
     rospy.wait_for_service(rover + '/control')
     core_service = rospy.ServiceProxy(rover + '/control', Core)
-    
-    global mode_publisher 
-    mode_publisher = rospy.Publisher(rover + '/mode', UInt8, queue_size=1, latch=True)
-    
+        
     rospy.Subscriber(rover + '/mode', UInt8, mode)
-
-    global debug_service
-    debug_service = rospy.Service(rover + '/cmd', Command, debug);
 
     global launcher
     launcher = roslaunch.scriptapi.ROSLaunch()
