@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <ros/ros.h>
+#include <tf/transform_listener.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -30,40 +31,40 @@ string rover;
 grid_map::GridMap rover_map;
 ros::Publisher map_publisher;
 geometry_msgs::Pose2D currentLocation;
+tf::TransformListener *cameraTF;
 
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
-/*
-	doSweep(sonarCenter->range, M_PI);
-	doSweep(sonarLeft->range, M_PI + M_PI_4);
-	doSweep(sonarRight->range, M_PI - M_PI_4);
-	*/
+
 	grid_map::Polygon view_poly;
 	view_poly.setFrameId(rover_map.getFrameId());
 
-	view_poly.addVertex(grid_map::Position(0, 0));
+	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
 	// Left sonar
 	view_poly.addVertex(
-			grid_map::Position(3 * cos(currentLocation.theta + M_PI + M_PI_4),
-					3 * sin(currentLocation.theta + M_PI + M_PI_4)
+			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta + M_PI_4),
+					currentLocation.y + 3 * sin(currentLocation.theta + M_PI_4)
 			));
 
 	// Center sonar
 	view_poly.addVertex(
-			grid_map::Position(3 * cos(currentLocation.theta + M_PI),
-					3 * sin(currentLocation.theta + M_PI)
+			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta),
+					currentLocation.y + 3 * sin(currentLocation.theta)
 			));
 
 	// Right sonar
 	view_poly.addVertex(
-			grid_map::Position(3 * cos(currentLocation.theta + M_PI - M_PI_4),
-					3 * sin(currentLocation.theta + M_PI - M_PI_4)
+			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta - M_PI_4),
+					currentLocation.y + 3 * sin(currentLocation.theta - M_PI_4)
 			));
 
 	// Increase the "obstacleness" of the viewable area.
 	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
 	      !iterator.isPastEnd(); ++iterator) {
 		double val = rover_map.at("obstacles", *iterator);
+		if (isnan(val)) {
+			val = 0.5;
+		}
 		val += 0.01;
 		if (val > 1)
 			val = 1;
@@ -74,48 +75,55 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	grid_map::Polygon clear_poly;
 	clear_poly.setFrameId(rover_map.getFrameId());
 
-	clear_poly.addVertex(grid_map::Position(0, 0));
+	clear_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
 	// Left sonar
 	clear_poly.addVertex(
-			grid_map::Position(sonarLeft->range * cos(currentLocation.theta + M_PI + M_PI_4),
-					sonarLeft->range * sin(currentLocation.theta + M_PI + M_PI_4)
+			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + M_PI_4),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + M_PI_4)
 			));
 
 	// Center sonar
 	clear_poly.addVertex(
-			grid_map::Position(sonarCenter->range * cos(currentLocation.theta + M_PI),
-					sonarCenter->range * sin(currentLocation.theta + M_PI)
+			grid_map::Position(currentLocation.x + sonarCenter->range * cos(currentLocation.theta),
+					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
 			));
 
 	// Right sonar
 	clear_poly.addVertex(
-			grid_map::Position(sonarRight->range * cos(currentLocation.theta + M_PI - M_PI_4),
-					sonarRight->range * sin(currentLocation.theta + M_PI - M_PI_4)
+			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - M_PI_4),
+					currentLocation.y + sonarRight->range * sin(currentLocation.theta - M_PI_4)
 			));
 
 	// Clear the area that's clear in sonar.
 	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
 		double val = rover_map.at("obstacles", *iterator);
-		val -= 0.05;
-		if (val < 0)
-			val = 0;
+		if (!isnan(val)) {
+			val -= 0.05;
+			if (val < 0)
+				val = 0;
+		}
 	    rover_map.at("obstacles", *iterator) = val;
 	  }
-
 }
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
-	for (int i=0; i<message->detections.size(); i++) {
-		// Tag positions are relative to base_link. Add Odometry to place them
-		// into the map frame. Right?
-		geometry_msgs::Point p = message->detections[i].pose.pose.position;
-		grid_map::Position pos(p.x + currentLocation.x, p.y + currentLocation.y);
-		grid_map::Index ind;
-		rover_map.getIndex(pos, ind);
-
-		rover_map.at("targets", ind) = 1;
+	if (message->detections.size() > 0) {
+		try {
+			for (int i=0; i<message->detections.size(); i++) {
+				geometry_msgs::PoseStamped tagpose;
+				cameraTF->transformPose(rover + "/odom",
+						message->detections[i].pose, tagpose);
+				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
+				grid_map::Index ind;
+				rover_map.getIndex(pos, ind);
+				rover_map.at("targets", ind) = 100;
+			}
+		} catch (tf::TransformException &e) {
+			ROS_ERROR("%s", e.what());
+			return;
+		}
 	}
 }
 
@@ -124,7 +132,7 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double y = message->pose.pose.position.y;
 
     grid_map::Position newPos(x, y);
-    rover_map.setPosition(newPos);
+    rover_map.move(newPos);
 
     tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
     tf::Matrix3x3 m(q);
@@ -136,9 +144,10 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 }
 
 void publishMap(const ros::TimerEvent& event) {
-    ros::Time time = ros::Time::now();
-	rover_map.setTimestamp(time.toNSec());
+	ros::Time time = ros::Time::now();
 	grid_map_msgs::GridMap message;
+
+	rover_map.setTimestamp(time.toNSec());
 	grid_map::GridMapRosConverter::toMessage(rover_map, message);
 	map_publisher.publish(message);
 }
@@ -175,28 +184,21 @@ int main(int argc, char **argv) {
     message_filters::Synchronizer<sonarSyncPolicy> sonarSync(sonarSyncPolicy(10), sonarLeftSubscriber, sonarCenterSubscriber, sonarRightSubscriber);
     sonarSync.registerCallback(boost::bind(&sonarHandler, _1, _2, _3));
 
+    // Transform Listener
+
+    cameraTF = new tf::TransformListener(ros::Duration(10));
+
     //	Publishers
 
-    map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/grid_map", 1, true);
+    map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/grid_map", 1, false);
 
-    // Initialize the map.
+    // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacles", "targets"});
-    rover_map.setFrameId(rover + "/map");
-    rover_map.setGeometry(grid_map::Length(25, 25), 0.5);
-    ROS_INFO("Created map with size %f x %f m (%i x %i cells).",
-      rover_map.getLength().x(), rover_map.getLength().y(),
-      rover_map.getSize()(0), rover_map.getSize()(1));
-
-    // All cells should look like "fog"
-    for (grid_map::GridMapIterator it(rover_map); !it.isPastEnd(); ++it) {
-      grid_map::Position position;
-      rover_map.getPosition(*it, position);
-      rover_map.at("obstacles", *it) = 0.5;
-      rover_map.at("targets", *it) = 0.5;
-    }
+    rover_map.setFrameId(rover + "/odom");
+    rover_map.setGeometry(grid_map::Length(6, 6), 0.03);
 
     // Publish map updates.
-    ros::Timer map_update = mNH.createTimer(ros::Duration(0.2), publishMap);
+    ros::Timer map_update = mNH.createTimer(ros::Duration(1), publishMap);
 
     ros::spin();
     return 0;

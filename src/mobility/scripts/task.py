@@ -11,6 +11,7 @@ import roslaunch
 from std_msgs.msg import UInt8, String, Float32
 
 from mobility.srv import Core, Command
+from mobility.msg import MoveRequest 
 
 '''Node that coordinates the overall robot task''' 
 
@@ -48,7 +49,7 @@ def go():
 def goto(r, theta):
     '''Debugging programmed move.'''
     global core_service
-    core_service(r, theta, 0, True)
+    core_service([MoveRequest(r, theta, 0, True)])
 
 def print_state(msg):
     global state_publisher
