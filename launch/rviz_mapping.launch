@@ -1,0 +1,9 @@
+<launch>
+  <arg name="rovername" default="achilles" />
+
+  <node pkg="grid_map_visualization" type="grid_map_visualization" name="$(arg rovername)_RVIZ_converter" output="screen">
+    <rosparam command="load" file="/home/maximus/rover_workspace/config/grid_map_rviz.yaml" />
+  </node>
+  <node pkg="rviz" type="rviz" name="$(arg rovername)_RVIZ" output="screen" args="-d /home/maximus/rover_workspace/config/rviz_view.rviz -f $(arg rovername)/odom" respawn="true">   
+  </node>
+</launch>
