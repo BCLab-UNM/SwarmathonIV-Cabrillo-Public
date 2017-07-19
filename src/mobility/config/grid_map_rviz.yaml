@@ -1,4 +1,4 @@
-grid_map_topic: /achilles/grid_map
+# grid_map_topic: /achilles/grid_map
 
 grid_map_visualizations:
   - name: obstacle_grid
