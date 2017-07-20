@@ -17,7 +17,6 @@ from std_msgs.msg import String
 from mobility.srv import Core
 from mobility.msg import MoveResult
 
-from obstacle_detection.srv import DetectionMask 
 from obstacle_detection.msg import Obstacle 
 
 from mobility.swarmie import Swarmie 
