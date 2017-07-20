@@ -37,11 +37,8 @@ def sync(func) :
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
     
-    def __init__(self, r, theta, delay=0, hold=True, blocking=True):
-        self.r = r 
-        self.theta = theta
-        self.delay = delay 
-        self.hold = hold
+    def __init__(self, msg, blocking=True):
+        self.request = msg
         self.result = MoveResult.SUCCESS
         if blocking :
             self.sema = threading.Semaphore(0)
@@ -83,8 +80,7 @@ class State:
     STATE_TURN      = 1
     STATE_DRIVE     = 2 
     STATE_REVERSE   = 3 
-    STATE_STOP      = 4 
-    STATE_PAUSE     = 5 
+    STATE_TIMED     = 4 
 
     DRIVE_MODE_STOP = 0
     DRIVE_MODE_PID  = 1 
@@ -111,8 +107,7 @@ class State:
         self.CurrentState = State.STATE_IDLE
         self.Goal = None
         self.Start = None
-        self.PauseCnt = 0
-        self.Hold = True;
+        self.TimerCount = 0
         self.Doing = None
         self.Work = Queue()
         self.dbg_msg = None
@@ -156,11 +151,9 @@ class State:
     
     def _control(self, req):
         for r in req.req[:-1] :
-            t = Task(r.r, r.theta, r.delay, r.hold, False)
-            state.Work.put(t, False)
+            state.Work.put(Task(r, False), False)
         
-        r = req.req[-1]
-        t = Task(r.r, r.theta, r.delay, r.hold, True)
+        t = Task(req.req[-1], True)
         state.Work.put(t, True)
         t.sema.acquire()                
         rval = MoveResult()
@@ -249,22 +242,21 @@ class State:
             else:
                 self.Doing = self.Work.get(False)
     
-                if self.Doing.delay > 0 :
-                    self.PauseCnt = self.Doing.delay
-                    self.CurrentState = State.STATE_PAUSE
+                if self.Doing.request.timer > 0 :
+                    self.TimerCount = self.Doing.request.timer * 10
+                    self.CurrentState = State.STATE_TIMED
                 else :                       
-                    if self.Doing.r < 0 :
-                        self.Doing.theta = 0
+                    if self.Doing.request.r < 0 :
+                        self.Doing.request.theta = 0
         
                     cur = self.OdomLocation.get_pose()
                     self.Goal = Pose2D()
-                    self.Goal.theta = cur.theta + self.Doing.theta
-                    self.Goal.x = cur.x + self.Doing.r * math.cos(self.Goal.theta)
-                    self.Goal.y = cur.y + self.Doing.r * math.sin(self.Goal.theta)
+                    self.Goal.theta = cur.theta + self.Doing.request.theta
+                    self.Goal.x = cur.x + self.Doing.request.r * math.cos(self.Goal.theta)
+                    self.Goal.y = cur.y + self.Doing.request.r * math.sin(self.Goal.theta)
                     self.Start = cur
-                    self.Hold = self.Doing.hold
                     
-                    if self.Doing.r < 0 :
+                    if self.Doing.request.r < 0 :
                         self.CurrentState = State.STATE_REVERSE
                     else:
                         self.CurrentState = State.STATE_TURN
@@ -285,10 +277,7 @@ class State:
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
                 self.Goal = None
-                if self.Hold :
-                    self.CurrentState = State.STATE_STOP
-                else:
-                    self.CurrentState = State.STATE_IDLE
+                self.CurrentState = State.STATE_IDLE
                     
             elif abs(heading_error) > math.pi / 2 :
                 self.Doing.result = MoveResult.PATH_FAIL
@@ -302,27 +291,20 @@ class State:
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
                 self.Goal = None
-                if self.Hold :
-                    self.CurrentState = State.STATE_STOP
-                else:
-                    self.CurrentState = State.STATE_IDLE
+                self.CurrentState = State.STATE_IDLE
             else:
                 self.drive(-0.2, 0, State.DRIVE_MODE_PID)
     
-        elif self.CurrentState == State.STATE_PAUSE : 
-            self.print_debug('PAUSE')
-            self.drive(0, 0, State.DRIVE_MODE_STOP)
-            if self.PauseCnt == 0 :
+        elif self.CurrentState == State.STATE_TIMED : 
+            self.print_debug('TIMED')
+            if self.Doing.request.linear == 0 and self.Doing.request.angular == 0 :
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
+            else:
+                self.drive(self.Doing.request.linear, self.Doing.request.angular, State.DRIVE_MODE_PID)
+            if self.TimerCount == 0 :
                 self.CurrentState = State.STATE_IDLE
             else:
-                self.PauseCnt = self.PauseCnt - 1
-
-        elif self.CurrentState == State.STATE_STOP : 
-            self.print_debug('STOP')
-            self.drive(0, 0, State.DRIVE_MODE_STOP)
-            cur = self.OdomLocation.Odometry
-            if cur.twist.twist.angular.z < State.STOP_THRESHOLD and cur.twist.twist.linear.x < State.STOP_THRESHOLD :
-                self.CurrentState = State.STATE_IDLE
+                self.TimerCount = self.TimerCount - 1
             
 def get_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)

@@ -1,4 +1,7 @@
 float64 r 
 float64 theta
-float64 delay 
-bool hold
+float64 timer
+float64 angular
+float64 linear
+
+

@@ -38,21 +38,24 @@ class Swarmie:
         msg = UInt8() 
         msg.data = 2
         self.mode_publisher.publish(msg)
-    
+            
     def circle(self, edges=6, dist=1):
         cir = []
         for l in range(edges) :
-            cir.append(MoveRequest(dist, 2*math.pi/edges, 0, False))
+            cir.append(MoveRequest(r=dist, theta=2*math.pi/edges, timer=0))
         return self.control(cir).result.result 
+
+    def timed_drive(self, time, linear, angular):
+        return self.control([MoveRequest(timer=time, linear=linear, angular=angular)])
     
     def drive(self, distance, theta):
-        return self.control([MoveRequest(distance, theta, 0, True)]).result.result
+        return self.control([MoveRequest(r=distance, theta=theta, timer=0)]).result.result
     
     def wait(self, time):
-        return self.control([MoveRequest(0, 0, time, True)]).result.result
+        return self.control([MoveRequest(timer=time, linear=0, angular=0)]).result.result
     
     def backup(self, distance):
-        return self.control([MoveRequest(-distance, 0, 0, True)]).result.result
+        return self.control([MoveRequest(r=-distance, theta=0, timer=0)]).result.result
     
     def set_obstacles(self, mask):
         return self.obstacleMask(mask)
