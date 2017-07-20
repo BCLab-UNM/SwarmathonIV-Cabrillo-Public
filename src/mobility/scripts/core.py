@@ -310,8 +310,15 @@ class State:
                 self.CurrentState = State.STATE_IDLE
             else:
                 self.TimerCount = self.TimerCount - 1
-            
+
 def get_turn(start, end, current):
+    dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
+    if dist_from_start < 0 :
+        return -0.3
+    else:
+        return 0.3 
+    
+def xget_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
     dist_to_end = angles.shortest_angular_distance(current.theta, end.theta) - State.ROTATE_THRESHOLD
     
@@ -337,6 +344,9 @@ def get_turn(start, end, current):
         return -max(to, abs(dist_to_turn(dist_from_start)))
 
 def get_speed(start, end, current):
+    return 0.3
+    
+def xget_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
     dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - State.GOAL_DISTANCE_OK
     

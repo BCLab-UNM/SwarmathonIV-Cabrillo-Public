@@ -21,6 +21,9 @@ ros::Publisher heartbeatPublisher;
 ros::Publisher skidsteerPublisher;
 ros::Publisher infoLogPublisher;
 
+ros::Publisher debugPIDPublisher;
+geometry_msgs::Twist dbT;
+
 ros::Subscriber driveControlSubscriber;
 ros::Subscriber odomSubscriber;
 
@@ -72,6 +75,19 @@ void doPIDs(const ros::TimerEvent& event) {
 
 		velocity.linear.x = left_out + right_out;
 		velocity.angular.z = right_out - left_out;
+
+		// Debugging: Report PID performance for tuning.
+		// Output of the PID is in Linear:
+		dbT.linear.x = left_out;
+		dbT.linear.y = right_out;
+		dbT.linear.z = sp_linear;
+
+		// Feedback function is in Angular:
+		dbT.angular.x = sp_angular;
+		dbT.angular.y = linear_velocity;
+		dbT.angular.z = angular_velocity;
+		debugPIDPublisher.publish(dbT);
+
 	}
     skidsteerPublisher.publish(velocity);
 }
@@ -138,6 +154,8 @@ int main(int argc, char **argv) {
     heartbeatPublisher = sNH.advertise<std_msgs::String>((rover + "/sbridge/heartbeat"), 1, false);
     skidsteerPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/skidsteer"), 10);
     infoLogPublisher = sNH.advertise<std_msgs::String>("/infoLog", 1, true);
+
+    debugPIDPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/bridge/debugPID"), 1, false);
 
     heartbeatTimer = sNH.createTimer(ros::Duration(2), publishHeartBeatTimerEventHandler);
     actionTimer = sNH.createTimer(ros::Duration(0.1), doPIDs);

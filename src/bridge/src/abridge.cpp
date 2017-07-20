@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
     
-    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/abridge/debugPID"), 1, false);
+    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/bridge/debugPID"), 1, false);
 
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
 
@@ -244,7 +244,7 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 	}
 	else {
 		// Calculate tick-wise velocities.
-	        double linear_sp = metersToTicks(speedCommand.linear.x);
+		double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
 		int l = round(left_pid.step(linear_sp - angular_sp, leftTicks, odomTS));
@@ -255,7 +255,7 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		dbT.linear.x = l;
 		dbT.linear.y = r;
 		dbT.linear.z = linear_sp;
-		
+
 		// Feedback function is in Angular:
 		dbT.angular.x = leftTicks;
 		dbT.angular.y = rightTicks;
