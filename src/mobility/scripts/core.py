@@ -188,10 +188,15 @@ class State:
     
     @sync
     def _obstacle(self, msg) :
-        if (msg.msg & Obstacle.IS_SONAR) != 0 :
+        if self.Doing is None :
+            return
+        
+        detected = msg.msg & self.Doing.request.obstacles
+         
+        if (detected & Obstacle.IS_SONAR) != 0 :
             self._stop_now(MoveResult.OBSTACLE_SONAR)
 
-        if (msg.msg & Obstacle.IS_VISION) != 0 :
+        if (detected & Obstacle.IS_VISION) != 0 :
             self._stop_now(MoveResult.OBSTACLE_VISION)
         
     @sync

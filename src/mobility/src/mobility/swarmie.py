@@ -24,10 +24,8 @@ class Swarmie:
         self.wrist_publisher = rospy.Publisher(rover + '/wristAngle/cmd', Float32, queue_size=1, latch=True)
 
         rospy.wait_for_service(rover + '/control')
-        rospy.wait_for_service(rover + '/obstacleMask')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
-        self.obstacleMask = rospy.ServiceProxy(rover + '/obstacleMask', DetectionMask)
 
     def stop(self):
         msg = UInt8() 
@@ -40,32 +38,20 @@ class Swarmie:
         self.mode_publisher.publish(msg)
             
     def circle(self, edges=6, dist=1):
-        cir = []
-        for l in range(edges) :
-            cir.append(MoveRequest(r=dist, theta=2*math.pi/edges, timer=0))
-        return self.control(cir).result.result 
+        return self.timed_drive(6.2, 0, 1)
 
-    def timed_drive(self, time, linear, angular):
-        return self.control([MoveRequest(timer=time, linear=linear, angular=angular)])
+    def timed_drive(self, time, linear, angular, ignore_obstacles = 0):
+        return self.control([MoveRequest(timer=time, linear=linear, angular=angular, obstacles=~ignore_obstacles)])
     
-    def drive(self, distance, theta):
-        return self.control([MoveRequest(r=distance, theta=theta, timer=0)]).result.result
+    def drive(self, distance, theta, ignore_obstacles = 0):
+        return self.control([MoveRequest(r=distance, theta=theta, timer=0, obstacles=~ignore_obstacles)]).result.result
     
-    def wait(self, time):
-        return self.control([MoveRequest(timer=time, linear=0, angular=0)]).result.result
+    def wait(self, time, ignore_obstacles = 0):
+        return self.control([MoveRequest(timer=time, linear=0, angular=0, obstacles=~ignore_obstacles)]).result.result
     
-    def backup(self, distance):
-        return self.control([MoveRequest(r=-distance, theta=0, timer=0)]).result.result
+    def backup(self, distance, ignore_obstacles = 0):
+        return self.control([MoveRequest(r=-distance, theta=0, timer=0, obstacles=~ignore_obstacles)]).result.result
     
-    def set_obstacles(self, mask):
-        return self.obstacleMask(mask)
-
-    def ignore_obstacles(self):
-        return self.obstacleMask(0)
-
-    def all_obstacles(self):
-        return self.obstacleMask(Obstacle.IS_SONAR | Obstacle.IS_VISION)
-
     def set_wrist_angle(self, angle):
         self.wrist_publisher.publish(Float32(angle))
 

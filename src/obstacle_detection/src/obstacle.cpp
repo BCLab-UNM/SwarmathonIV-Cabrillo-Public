@@ -13,7 +13,6 @@
 #include <apriltags_ros/AprilTagDetectionArray.h>
 
 #include "obstacle_detection/Obstacle.h"
-#include "obstacle_detection/DetectionMask.h"
 
 using namespace std;
 
@@ -34,13 +33,11 @@ ros::Subscriber targetSubscriber;
 //Timers
 ros::Timer publish_heartbeat_timer;
 
-unsigned int obstacle_mask;
 unsigned int obstacle_status;
 
 //Callback handlers
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight);
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
-bool setObstacleMask(obstacle_detection::DetectionMask::Request &req, obstacle_detection::DetectionMask::Response &resp);
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& tagInfo);
 
 int main(int argc, char** argv) {
@@ -58,7 +55,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, (publishedName + "_OBSTACLE"));
     ros::NodeHandle oNH;
     
-    obstaclePublish = oNH.advertise<obstacle_detection::Obstacle>((publishedName + "/obstacle"), 10);
+    obstaclePublish = oNH.advertise<obstacle_detection::Obstacle>((publishedName + "/obstacle"), 1, true);
     heartbeatPublisher = oNH.advertise<std_msgs::String>((publishedName + "/obstacle/heartbeat"), 1, true);
     
     message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(oNH, (publishedName + "/sonarLeft"), 10);
@@ -67,37 +64,22 @@ int main(int argc, char** argv) {
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Range, sensor_msgs::Range, sensor_msgs::Range> sonarSyncPolicy;
 
-    targetSubscriber = oNH.subscribe((publishedName + "/targets"), 10, targetHandler);
+    targetSubscriber = oNH.subscribe((publishedName + "/targets"), 1, targetHandler);
 
     message_filters::Synchronizer<sonarSyncPolicy> sonarSync(sonarSyncPolicy(10), sonarLeftSubscriber, sonarCenterSubscriber, sonarRightSubscriber);
     sonarSync.registerCallback(boost::bind(&sonarHandler, _1, _2, _3));
 
     publish_heartbeat_timer = oNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
 
-    obstacle_mask = obstacle_detection::Obstacle::SONAR_LEFT
-    		| obstacle_detection::Obstacle::SONAR_RIGHT
-			| obstacle_detection::Obstacle::SONAR_CENTER
-			| obstacle_detection::Obstacle::SONAR_BLOCK
-			| obstacle_detection::Obstacle::TAG_TARGET
-			| obstacle_detection::Obstacle::TAG_HOME;
-
     obstacle_status = obstacle_detection::Obstacle::PATH_IS_CLEAR;
-
-    ros::ServiceServer srv = oNH.advertiseService(publishedName + "/obstacleMask", setObstacleMask);
 
     ros::spin();
 
     return EXIT_SUCCESS;
 }
 
-bool setObstacleMask(obstacle_detection::DetectionMask::Request &req, obstacle_detection::DetectionMask::Response &resp) {
-	resp.rval = obstacle_mask;
-	obstacle_mask = req.mask;
-	cout << "Obstacle mask set to: " << obstacle_status << " was: " << resp.rval << endl;
-	return true;
-}
-
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	unsigned int old_status = obstacle_status;
 	obstacle_status &= ~obstacle_detection::Obstacle::IS_VISION;
 	for (int i=0; i<message->detections.size(); i++) {
 		if (message->detections[i].id == 0)
@@ -105,9 +87,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 		else if (message->detections[i].id == 256)
 			obstacle_status |= obstacle_detection::Obstacle::TAG_HOME;
 	}
-
-	// Apply the mask
-	obstacle_status &= obstacle_mask;
 
 	if (obstacle_status & obstacle_detection::Obstacle::IS_VISION) {
 		obstacle_detection::Obstacle msg;
@@ -120,6 +99,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// TODO: Implement filtering for sonar.
 
+	unsigned int old_status = obstacle_status;
 	obstacle_status &= ~obstacle_detection::Obstacle::IS_SONAR;
 	
 	if (sonarLeft->range < collisionDistance) {
@@ -135,9 +115,6 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 		//block in front of center ultrasound.
 		obstacle_status |= obstacle_detection::Obstacle::SONAR_BLOCK;
 	}
-
-	// Apply the mask
-	obstacle_status &= obstacle_mask;
 
 	if (obstacle_status & obstacle_detection::Obstacle::IS_SONAR) {
 		obstacle_detection::Obstacle msg;

@@ -15,10 +15,6 @@ add_message_files (
 	FILES Obstacle.msg
 )
 
-add_service_files (
-	FILES DetectionMask.srv
-)
-
 generate_messages(DEPENDENCIES std_msgs)
 
 catkin_package(
