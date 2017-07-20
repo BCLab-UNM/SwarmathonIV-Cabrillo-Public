@@ -7,11 +7,10 @@ import rospy
 import math
 import random 
 
-from mobility.srv import Core
-from mobility.msg import MoveResult
-from obstacle_detection.srv import DetectionMask 
-from obstacle_detection.msg import Obstacle 
 from std_msgs.msg import String
+
+from obstacle_detection.msg import Obstacle 
+from mobility.msg import MoveResult
 
 from mobility.swarmie import Swarmie 
 

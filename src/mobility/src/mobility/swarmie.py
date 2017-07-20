@@ -7,7 +7,6 @@ import math
 
 from mobility.srv import Core
 from mobility.msg import MoveResult, MoveRequest
-from obstacle_detection.srv import DetectionMask 
 from obstacle_detection.msg import Obstacle 
 
 from std_msgs.msg import UInt8, String, Float32
