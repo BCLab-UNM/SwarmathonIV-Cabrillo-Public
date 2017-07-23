@@ -26,8 +26,8 @@
                         <curve_0>
                             <axes>
                                 <x_axis>
-                                    <field>clock</field>
-                                    <field_type>0</field_type>
+                                    <field></field>
+                                    <field_type>1</field_type>
                                     <scale>
                                         <absolute_maximum>1000</absolute_maximum>
                                         <absolute_minimum>0</absolute_minimum>
@@ -35,8 +35,8 @@
                                         <relative_minimum>-1000</relative_minimum>
                                         <type>0</type>
                                     </scale>
-                                    <topic>/clock</topic>
-                                    <type>rosgraph_msgs/Clock</type>
+                                    <topic>/achilles/bridge/debugPID</topic>
+                                    <type>geometry_msgs/Twist</type>
                                 </x_axis>
                                 <y_axis>
                                     <field>linear/x</field>
@@ -77,8 +77,8 @@
                         <curve_1>
                             <axes>
                                 <x_axis>
-                                    <field>clock</field>
-                                    <field_type>0</field_type>
+                                    <field></field>
+                                    <field_type>1</field_type>
                                     <scale>
                                         <absolute_maximum>1000</absolute_maximum>
                                         <absolute_minimum>0</absolute_minimum>
@@ -86,8 +86,8 @@
                                         <relative_minimum>-1000</relative_minimum>
                                         <type>0</type>
                                     </scale>
-                                    <topic>/clock</topic>
-                                    <type>rosgraph_msgs/Clock</type>
+                                    <topic>/achilles/bridge/debugPID</topic>
+                                    <type>geometry_msgs/Twist</type>
                                 </x_axis>
                                 <y_axis>
                                     <field>linear/y</field>
