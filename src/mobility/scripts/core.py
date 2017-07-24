@@ -111,6 +111,7 @@ class State:
         self.Doing = None
         self.Work = Queue()
         self.dbg_msg = None
+        self.Obstacles = 0 
         
         # Subscribers
         #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
@@ -186,18 +187,21 @@ class State:
         if msg.data == 1 :
             self._stop_now(MoveResult.USER_ABORT)
     
+    def __check_obstacles(self):
+        if self.Doing is not None :        
+            detected = self.Obstacles & self.Doing.request.obstacles
+         
+            if (detected & Obstacle.IS_SONAR) != 0 :
+                self._stop_now(MoveResult.OBSTACLE_SONAR)
+
+            if (detected & Obstacle.IS_VISION) != 0 :
+                self._stop_now(MoveResult.OBSTACLE_VISION)
+    
     @sync
     def _obstacle(self, msg) :
-        if self.Doing is None :
-            return
-        
-        detected = msg.msg & self.Doing.request.obstacles
-         
-        if (detected & Obstacle.IS_SONAR) != 0 :
-            self._stop_now(MoveResult.OBSTACLE_SONAR)
-
-        if (detected & Obstacle.IS_VISION) != 0 :
-            self._stop_now(MoveResult.OBSTACLE_VISION)
+        self.Obstacles &= ~msg.mask 
+        self.Obstacles |= msg.msg 
+        self.__check_obstacles()        
         
     @sync
     def _odom(self, msg) : 
@@ -268,6 +272,7 @@ class State:
 
         elif self.CurrentState == State.STATE_TURN :
             self.print_debug('TURN')
+            self.__check_obstacles()
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > State.ROTATE_THRESHOLD :
@@ -277,6 +282,7 @@ class State:
                 
         elif self.CurrentState == State.STATE_DRIVE :
             self.print_debug('DRIVE')
+            self.__check_obstacles()
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
@@ -292,6 +298,7 @@ class State:
     
         elif self.CurrentState == State.STATE_REVERSE :
             self.print_debug('REVERSE')
+            self.__check_obstacles()
             cur = self.OdomLocation.get_pose()
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
@@ -302,6 +309,7 @@ class State:
     
         elif self.CurrentState == State.STATE_TIMED : 
             self.print_debug('TIMED')
+            self.__check_obstacles()
             if self.Doing.request.linear == 0 and self.Doing.request.angular == 0 :
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:

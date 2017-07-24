@@ -79,48 +79,55 @@ int main(int argc, char** argv) {
 }
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
-	unsigned int old_status = obstacle_status;
-	obstacle_status &= ~obstacle_detection::Obstacle::IS_VISION;
+	static unsigned int prev_status = 0;
+	unsigned int next_status = 0;
+
 	for (int i=0; i<message->detections.size(); i++) {
 		if (message->detections[i].id == 0)
-			obstacle_status |= obstacle_detection::Obstacle::TAG_TARGET;
+			next_status |= obstacle_detection::Obstacle::TAG_TARGET;
 		else if (message->detections[i].id == 256)
-			obstacle_status |= obstacle_detection::Obstacle::TAG_HOME;
+			next_status |= obstacle_detection::Obstacle::TAG_HOME;
 	}
 
-	if (obstacle_status & obstacle_detection::Obstacle::IS_VISION) {
+	if (next_status != prev_status) {
 		obstacle_detection::Obstacle msg;
-		msg.msg = obstacle_status;
+		msg.msg = next_status;
+		msg.mask = obstacle_detection::Obstacle::IS_VISION;
 		obstaclePublish.publish(msg);
 	}
+
+	prev_status = next_status;
 }
 
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
 
-	// TODO: Implement filtering for sonar.
+	static unsigned int prev_status = 0;
+	unsigned int next_status = 0;
 
-	unsigned int old_status = obstacle_status;
-	obstacle_status &= ~obstacle_detection::Obstacle::IS_SONAR;
+	// TODO: Implement filtering for sonar.
 	
 	if (sonarLeft->range < collisionDistance) {
-		obstacle_status |= obstacle_detection::Obstacle::SONAR_LEFT;
+		next_status |= obstacle_detection::Obstacle::SONAR_LEFT;
 	}
 	if (sonarRight->range < collisionDistance) {
-		obstacle_status |= obstacle_detection::Obstacle::SONAR_RIGHT;
+		next_status |= obstacle_detection::Obstacle::SONAR_RIGHT;
 	}
 	if (sonarCenter->range < collisionDistance) {
-		obstacle_status |= obstacle_detection::Obstacle::SONAR_CENTER;
+		next_status |= obstacle_detection::Obstacle::SONAR_CENTER;
 	}
 	if (sonarCenter->range < 0.12) {
 		//block in front of center ultrasound.
-		obstacle_status |= obstacle_detection::Obstacle::SONAR_BLOCK;
+		next_status |= obstacle_detection::Obstacle::SONAR_BLOCK;
 	}
 
-	if (obstacle_status & obstacle_detection::Obstacle::IS_SONAR) {
+	if (next_status != prev_status) {
 		obstacle_detection::Obstacle msg;
-		msg.msg = obstacle_status;
+		msg.msg = next_status;
+		msg.mask = obstacle_detection::Obstacle::IS_SONAR;
 		obstaclePublish.publish(msg);
 	}
+
+	prev_status = next_status;
 }
 
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {

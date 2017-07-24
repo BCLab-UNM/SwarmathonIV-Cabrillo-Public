@@ -11,3 +11,4 @@ int32 IS_SONAR         = 15
 int32 IS_VISION        = 768
 
 int32 msg 
+int32 mask
