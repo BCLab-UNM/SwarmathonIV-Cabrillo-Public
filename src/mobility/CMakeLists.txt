@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   std_msgs
+  geometry_msgs
   random_numbers
   tf
   apriltags_ros
@@ -31,10 +32,10 @@ add_message_files (
 )
 
 add_service_files (
-	FILES Core.srv
+	FILES Core.srv FindTarget.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs 

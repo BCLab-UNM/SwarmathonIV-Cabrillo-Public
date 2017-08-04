@@ -6,10 +6,11 @@ import rospy
 import math 
 import random 
 
-from mobility.srv import Core
+from mobility.srv import Core, FindTarget
 from mobility.msg import MoveResult, MoveRequest
 from obstacle_detection.msg import Obstacle 
 
+from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 
 class DriveException(Exception):
@@ -48,8 +49,12 @@ class Swarmie:
         self.wrist_publisher = rospy.Publisher(rover + '/wristAngle/cmd', Float32, queue_size=1, latch=True)
 
         rospy.wait_for_service(rover + '/control')
+        rospy.wait_for_service(rover + '/map/find_nearest_target')
+        rospy.wait_for_service(rover + '/map/clear_target_map')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
+        self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
+        self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
 
     def stop(self):
         msg = UInt8() 

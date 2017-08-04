@@ -23,6 +23,10 @@
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Pose2D.h>
+#include <geometry_msgs/PointStamped.h>
+#include <std_srvs/Empty.h>
+
+#include <mobility/FindTarget.h>
 
 using namespace std;
 
@@ -118,7 +122,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
 				rover_map.getIndex(pos, ind);
-				rover_map.at("targets", ind) = 100;
+				rover_map.at("targets", ind) = message->detections[i].id;
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
@@ -141,6 +145,31 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     currentLocation.x = x;
     currentLocation.y = y;
     currentLocation.theta = yaw;
+}
+
+bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarget::Response &resp) {
+	bool rval = false;
+	grid_map::Position mypos(currentLocation.x, currentLocation.y);
+	resp.result.header.stamp = ros::Time::now();
+	for (grid_map::SpiralIterator it(rover_map, mypos, 2); !it.isPastEnd(); ++it) {
+		if (rover_map.at("targets", *it) == 0) {
+			// Found one!
+			resp.result.header.frame_id = rover_map.getFrameId();
+			grid_map::Position tagpos;
+			rover_map.getPosition(*it, tagpos);
+			resp.result.point.x = tagpos.x();
+			resp.result.point.y = tagpos.y();
+			resp.result.point.z = 0; // No z() in the map.
+			rval = true;
+			break;
+		}
+	}
+	return rval;
+}
+
+bool clear_target_map(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
+	rover_map.clear("targets");
+	return true;
 }
 
 void publishMap(const ros::TimerEvent& event) {
@@ -191,6 +220,11 @@ int main(int argc, char **argv) {
     //	Publishers
 
     map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/grid_map", 1, false);
+
+    // Services
+
+    ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
+    ros::ServiceServer ctm = mNH.advertiseService(rover + "/map/clear_target_map", clear_target_map);
 
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacles", "targets"});
