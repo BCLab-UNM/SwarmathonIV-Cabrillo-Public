@@ -179,8 +179,29 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
   speedCommand.linear.x = message->linear.x;
-  speedCommand.angular.y = message->angular.y;
   speedCommand.angular.z = message->angular.z;
+
+  int current_mode = round(speedCommand.angular.y);
+  int next_mode = round(message->angular.y);
+
+  if (current_mode == DRIVE_MODE_STOP && next_mode == DRIVE_MODE_PID) {
+
+	  /* Feed forward controller:
+	   *
+	   *   This should only run for a single step, when mobility core changes
+	   *   the PID mode from DRIVE_MODE_STOP to DRIVE_MODE_PID. During that first
+	   *   step the feed-forward controller will pick a reasonable start point.
+	   *   It will the force that start point into the PID controller.
+	   */
+
+	  double left = 0;
+	  double right = 0;
+
+	  left_pid.feedforward(left, 0.25);
+	  right_pid.feedforward(right, 0.25);
+  }
+
+  speedCommand.angular.y = message->angular.y;
 }
 
 // The finger and wrist handlers receive gripper angle commands in floating point
