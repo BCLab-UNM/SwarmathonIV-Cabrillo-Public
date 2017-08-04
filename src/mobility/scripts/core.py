@@ -279,6 +279,7 @@ class State:
                 self.drive(0, get_turn(self.Start, self.Goal, cur), State.DRIVE_MODE_PID)
             else:
                 self.CurrentState = State.STATE_DRIVE
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
                 
         elif self.CurrentState == State.STATE_DRIVE :
             self.print_debug('DRIVE')
@@ -289,12 +290,14 @@ class State:
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
                     
             elif abs(heading_error) > math.pi / 2 :
                 self.Doing.result = MoveResult.PATH_FAIL
                 self.CurrentState = State.STATE_STOP
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
-                self.drive(get_speed(self.Start, self.Goal, cur), heading_error/2, State.DRIVE_MODE_PID)
+                self.drive(get_speed(self.Start, self.Goal, cur), 0, State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
             self.print_debug('REVERSE')
@@ -304,6 +307,7 @@ class State:
             if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
                 self.drive(-0.2, 0, State.DRIVE_MODE_PID)
     
@@ -314,19 +318,21 @@ class State:
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
                 self.drive(self.Doing.request.linear, self.Doing.request.angular, State.DRIVE_MODE_PID)
+                
             if self.TimerCount == 0 :
                 self.CurrentState = State.STATE_IDLE
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
                 self.TimerCount = self.TimerCount - 1
 
-def get_turn(start, end, current):
-    dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
+def xget_turn(start, end, current):
+    dist_from_start = angles.shortest_angular_distance(current.theta, end.theta)
     if dist_from_start < 0 :
         return -0.3
     else:
         return 0.3 
     
-def xget_turn(start, end, current):
+def get_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
     dist_to_end = angles.shortest_angular_distance(current.theta, end.theta) - State.ROTATE_THRESHOLD
     
@@ -351,10 +357,10 @@ def xget_turn(start, end, current):
     else:
         return -max(to, abs(dist_to_turn(dist_from_start)))
 
-def get_speed(start, end, current):
+def xget_speed(start, end, current):
     return 0.3
     
-def xget_speed(start, end, current):
+def get_speed(start, end, current):
     dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
     dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - State.GOAL_DISTANCE_OK
     
