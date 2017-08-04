@@ -18,3 +18,7 @@ elif [ "$exe" == "final.sh" ]; then
 else
     roslaunch ./launch/rover_gui.launch 
 fi
+
+# This seems to be necessary to kill rover nodes
+pkill roslaunch
+
