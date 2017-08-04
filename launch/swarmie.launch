@@ -395,9 +395,9 @@
     <node name="$(arg name)_SBRIDGE" pkg="bridge" type="sbridge" args="$(arg name)">
       <!-- Configure the PIDs -->
       <param name="scale" value="0.1" />
-      <param name="Kp" value="1.0" />
-      <param name="Ki" value="0.5" />
-      <param name="Kd" value="0.1" />
+      <param name="Kp" value="0.5" />
+      <param name="Ki" value="0.0" />
+      <param name="Kd" value="0.0" />
       <param name="db" value="0.0" />
       <param name="st" value="0.0" />
       <param name="wu" value="1024" />

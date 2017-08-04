@@ -11,6 +11,7 @@
 #include <tf/transform_datatypes.h>
 #include <dynamic_reconfigure/server.h>
 #include <dynamic_reconfigure/client.h>
+#include "tf/transform_datatypes.h"
 
 #include "pid.h"
 #include <bridge/DriveConfig.h>
@@ -28,7 +29,7 @@ ros::Subscriber driveControlSubscriber;
 ros::Subscriber odomSubscriber;
 
 ros::Timer heartbeatTimer;
-ros::Timer actionTimer;
+//ros::Timer actionTimer;
 
 string rover;
 
@@ -36,9 +37,10 @@ string rover;
 PID left_wheel(0, 0, 0, 0, 1, -1, 0, -1);
 PID right_wheel(0, 0, 0, 0, 1, -1, 0, -1);
 
-double linear_velocity = 0, angular_velocity = 0;
-double sp_linear = 0, sp_angular = 0;
+double sp_linear = 0, sp_delta = 0;
 int drive_mode = DRIVE_MODE_STOP;
+
+const double wheelBase = 0.278; //distance between left and right wheels (in M)
 
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
     std_msgs::String msg;
@@ -47,17 +49,40 @@ void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
 }
 
 void cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
-	sp_linear = message->linear.x;
-	sp_angular = message->angular.z;
-	drive_mode = round(message->angular.y);
+	sp_linear = message->linear.x;   // M/s
+	sp_delta = (message->angular.z * M_PI * wheelBase) / 2; // Delta M/s (/2)
+
+	int next_mode = round(message->angular.y);
+	if (drive_mode == DRIVE_MODE_STOP && next_mode == DRIVE_MODE_PID) {
+
+		/* Feed forward controller:
+		 *
+		 * In the simulator this is trivial because the output is
+		 * velocity, not motor control voltage.
+		 */
+
+		left_wheel.feedforward(sp_linear - sp_delta, 0.5);
+		right_wheel.feedforward(sp_linear + sp_delta, 0.5);
+	}
+
+	drive_mode = next_mode;
 }
 
 void odomHandler(const nav_msgs::Odometry::ConstPtr& message) {
-    linear_velocity = message->twist.twist.linear.x;
-    angular_velocity = message->twist.twist.angular.z;
-}
+	double linear_velocity, delta_velocity;
 
-void doPIDs(const ros::TimerEvent& event) {
+	/*
+	tf::Quaternion quat;
+	double roll, pitch, yaw;
+	tf::quaternionMsgToTF(message->pose.pose.orientation, quat);
+    tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
+
+	linear_velocity = message->twist.twist.linear.x * sin(yaw)
+		+ message->twist.twist.linear.y * cos(yaw);
+	 */
+
+	linear_velocity = message->twist.twist.linear.x;
+    delta_velocity = (message->twist.twist.angular.z * M_PI * wheelBase) / 2;
 
 	geometry_msgs::Twist velocity;
 
@@ -68,13 +93,15 @@ void doPIDs(const ros::TimerEvent& event) {
 		right_wheel.reset();
 	}
 	else {
-		double now = event.current_real.toSec();
+		double now = (double(message->header.stamp.sec) * 10e9 + message->header.stamp.nsec) / 10e9;
 
-		double left_out = left_wheel.step(sp_linear - sp_angular, linear_velocity - angular_velocity, now);
-		double right_out = right_wheel.step(sp_linear + sp_angular, linear_velocity + angular_velocity, now);
+		double left_out = left_wheel.step(sp_linear - sp_delta,
+				linear_velocity - delta_velocity, now);
+		double right_out = right_wheel.step(sp_linear + sp_delta,
+				linear_velocity + delta_velocity, now);
 
-		velocity.linear.x = left_out + right_out;
-		velocity.angular.z = right_out - left_out;
+		velocity.linear.x = (left_out + right_out) / 2;
+		velocity.angular.z = 2 * (right_out - left_out) / M_PI;
 
 		// Debugging: Report PID performance for tuning.
 		// Output of the PID is in Linear:
@@ -83,9 +110,9 @@ void doPIDs(const ros::TimerEvent& event) {
 		dbT.linear.z = sp_linear;
 
 		// Feedback function is in Angular:
-		dbT.angular.x = sp_angular;
+		dbT.angular.x = sp_delta;
 		dbT.angular.y = linear_velocity;
-		dbT.angular.z = angular_velocity;
+		dbT.angular.z = delta_velocity;
 		debugPIDPublisher.publish(dbT);
 
 	}
@@ -158,7 +185,7 @@ int main(int argc, char **argv) {
     debugPIDPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/bridge/debugPID"), 1, false);
 
     heartbeatTimer = sNH.createTimer(ros::Duration(2), publishHeartBeatTimerEventHandler);
-    actionTimer = sNH.createTimer(ros::Duration(0.1), doPIDs);
+    //actionTimer = sNH.createTimer(ros::Duration(0.1), doPIDs);
 
     // configure dynamic reconfiguration
     dynamic_reconfigure::Server<bridge::DriveConfig> config_server;
