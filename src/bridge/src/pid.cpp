@@ -26,6 +26,7 @@ PID::PID(double p, double i, double d, double db, double hi, double lo, double s
 	_lastsp = 0;
 
 	_lasttime = 0;
+	_feedf_time = 0;
 }
 
 PID::~PID() {
@@ -41,7 +42,7 @@ void PID::reconfig(double p, double i, double d, double db, double st, double wu
 }
 
 void PID::reset() {
-	_out = _sum = _lasterr = _lastsp = _lasttime = 0;
+	_out = _sum = _lasterr = _lastsp = _lasttime = _feedf_time = 0;
 }
 
 double PID::getNow() {
@@ -54,7 +55,7 @@ double PID::step(double setpoint, double feedback, double now) {
 
 	double err = setpoint - feedback;
 
-	double P = err * _kp;
+	double P = 0;
 	double I = 0;
 	double D = 0;
 
@@ -62,10 +63,16 @@ double PID::step(double setpoint, double feedback, double now) {
 		now = getNow();
 
 	if ( _lasttime != 0) {
+
+		P = err * _kp;
+
 		double elapsed = now - _lasttime;
 
-		if (elapsed == 0)
+		if (_feedf_time > 0 || elapsed == 0) {
+			_feedf_time -= elapsed;
+			std::cout << "feed forward: " << now << " " << _lasttime << std::endl;
 			return _out;
+		}
 
 		_sum += _ki * err * elapsed;
 		if (_windup > 0) {
@@ -101,4 +108,9 @@ double PID::step(double setpoint, double feedback, double now) {
 	  return 0;
 	else
 	  return _out;
+}
+
+void PID::feedforward(double output, double duration) {
+	_out = output;
+	_feedf_time = duration;
 }

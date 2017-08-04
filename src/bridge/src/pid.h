@@ -10,8 +10,9 @@
 
 #include <time.h>
 
-#define DRIVE_MODE_STOP   0
-#define DRIVE_MODE_PID    1
+#define DRIVE_MODE_STOP       0
+#define DRIVE_MODE_PID        1
+#define DRIVE_MODE_FF         2
 
 class PID {
 
@@ -20,6 +21,7 @@ public:
 	~PID();
 
 	double step(double setpoint, double feeback, double now=0);
+	void feedforward(double output, double duration);
 	void reconfig(double p, double i, double d, double db, double st, double wu);
 	void reset();
 
@@ -31,7 +33,7 @@ private:
 	double _kp, _ki, _kd, _dband, _hi, _lo, _stiction, _windup;
 
 	// State
-	double _out, _sum, _lasterr, _lastsp, _lasttime;
+	double _out, _sum, _lasterr, _lastsp, _lasttime, _feedf_time;
 };
 
 #endif /* BRIDGE_SRC_PID_H_ */
