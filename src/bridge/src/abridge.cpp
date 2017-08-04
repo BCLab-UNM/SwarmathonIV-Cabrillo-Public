@@ -197,8 +197,8 @@ void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
 	  double left = 0;
 	  double right = 0;
 
-	  left_pid.feedforward(left, 0.25);
-	  right_pid.feedforward(right, 0.25);
+	  left_pid.feedforward(left, 0.5);
+	  right_pid.feedforward(right, 0.5);
   }
 
   speedCommand.angular.y = message->angular.y;
@@ -278,9 +278,9 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		dbT.linear.z = linear_sp;
 
 		// Feedback function is in Angular:
-		dbT.angular.x = leftTicks;
-		dbT.angular.y = rightTicks;
-		dbT.angular.z = rightTicks - leftTicks;
+		dbT.angular.x = angular_sp;
+		dbT.angular.y = leftTicks;
+		dbT.angular.z = rightTicks;
 		debugPIDPublisher.publish(dbT);
 
 		sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
@@ -367,9 +367,9 @@ void parseData(string str) {
 			    	vx = x / deltaT;
 			    	vy = y / deltaT;
 
-				// Normalize ticks to ticks/s
-				leftTicks = leftTicks / deltaT;
-				rightTicks = rightTicks / deltaT;
+			    	// Normalize ticks to ticks/s
+			    	leftTicks = leftTicks / deltaT;
+			    	rightTicks = rightTicks / deltaT;
 			    }
 		    	lastOdomTS = odomTS;
 
