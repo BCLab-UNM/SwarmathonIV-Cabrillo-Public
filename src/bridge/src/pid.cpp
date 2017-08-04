@@ -70,7 +70,6 @@ double PID::step(double setpoint, double feedback, double now) {
 
 		if (_feedf_time > 0 || elapsed == 0) {
 			_feedf_time -= elapsed;
-			std::cout << "feed forward: " << now << " " << _lasttime << std::endl;
 			return _out;
 		}
 
