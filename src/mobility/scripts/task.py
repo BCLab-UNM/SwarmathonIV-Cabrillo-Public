@@ -65,7 +65,7 @@ def main() :
     launcher.start()
 
     global state_publisher
-    state_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=5, latch=True)
+    state_publisher = rospy.Publisher('/infoLog', String, queue_size=5, latch=True)
 
     STATE_INIT     = 0 
     STATE_SEARCH   = 1 

@@ -64,7 +64,7 @@ class Location:
         return pose
 
     def at_goal(self, goal):
-        '''Determine if the pose is within accepable distance of this location''' 
+        '''Determine if the pose is within acceptable distance of this location''' 
         dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
                           goal.y - self.Odometry.pose.pose.position.y);
         return (dist < State.GOAL_DISTANCE_OK)
@@ -195,8 +195,11 @@ class State:
                 self._stop_now(MoveResult.OBSTACLE_SONAR)
 
             if (detected & Obstacle.IS_VISION) != 0 :
-                self._stop_now(MoveResult.OBSTACLE_VISION)
-    
+                if (detected & Obstacle.TAG_HOME) : 
+                    self._stop_now(MoveResult.OBSTACLE_HOME)
+                else:
+                    self._stop_now(MoveResult.OBSTACLE_TAG)
+
     @sync
     def _obstacle(self, msg) :
         self.Obstacles &= ~msg.mask 
@@ -269,6 +272,9 @@ class State:
                         self.CurrentState = State.STATE_REVERSE
                     else:
                         self.CurrentState = State.STATE_TURN
+                        
+                    self.__check_obstacles()
+                    
 
         elif self.CurrentState == State.STATE_TURN :
             self.print_debug('TURN')
