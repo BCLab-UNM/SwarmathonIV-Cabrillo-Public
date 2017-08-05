@@ -48,21 +48,6 @@ include_directories(
 )
 
 add_executable(
-  mobility 
-  src/PickUpController.cpp
-  src/DropOffController.cpp
-  src/SearchController.cpp
-  src/mobility.cpp
-)
-
-add_dependencies(mobility ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(
-  mobility
-  ${catkin_LIBRARIES}
-)
-
-add_executable(
   mapping
   src/mapping.cpp
 )
