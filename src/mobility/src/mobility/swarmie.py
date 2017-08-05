@@ -36,6 +36,7 @@ class AbortException(DriveException):
     pass
 
 class Swarmie: 
+    '''Class that embodies the Swarmie's API''' 
     
     def __init__(self, rover):
         self.rover_name = rover 
@@ -58,16 +59,19 @@ class Swarmie:
         self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
 
     def stop(self):
+        '''Stop the rover by placing it in manual mode.''' 
         msg = UInt8() 
         msg.data = 1
         self.mode_publisher.publish(msg)
     
     def go(self):
+        '''Start the rover by placing it into autonomous mode.'''
         msg = UInt8() 
         msg.data = 2
         self.mode_publisher.publish(msg)
             
     def circle(self, edges=6, dist=1):
+        '''Drive in a small circle''' 
         if random.randint(0,1) == 0 :
             return self.timed_drive(15, 0.1, 0.62)
         else:
@@ -88,57 +92,71 @@ class Swarmie:
             return MoveResult.SUCCESS
 
     def timed_drive(self, time, linear, angular, ignore_obstacles = 0):
+        '''Send the specified velocity command for a given period of time.'''
         return self.__check_raise(
             self.control([MoveRequest(timer=time, linear=linear, angular=angular, obstacles=~ignore_obstacles)])
             )
     
     def drive(self, distance, theta, ignore_obstacles = 0):
+        '''Turn theta degrees then drive the specfied distance'''
         return self.__check_raise(
             self.control([MoveRequest(r=distance, theta=theta, timer=0, obstacles=~ignore_obstacles)]).result.result
             )
 
     def wait(self, time, ignore_obstacles = 0):
+        '''Wait for a period of time. This can be used to check for obstacles'''
         return self.__check_raise(
             self.control([MoveRequest(timer=time, linear=0, angular=0, obstacles=~ignore_obstacles)]).result.result
             )
         
     def backup(self, distance, ignore_obstacles = 0):
+        '''Backup the specified distance.''' 
         return self.__check_raise(
             self.control([MoveRequest(r=-distance, theta=0, timer=0, obstacles=~ignore_obstacles)]).result.result
             )
         
     def set_wrist_angle(self, angle):
+        '''Set the wrist angle to the specified angle'''
         self.wrist_publisher.publish(Float32(angle))
 
     def set_finger_angle(self, angle):
+        '''Set the finger angle to the spedified angle'''
         self.finger_publisher.publish(Float32(angle))
         
     def wrist_down(self):
+        '''Lower the wrist to put it in the pickup position'''
         self.wrist_publisher.publish(Float32(1.25))
     
     def wrist_up(self):
+        '''Raise the wrist to the top'''
         self.wrist_publisher.publish(Float32(0.0))
     
     def wrist_middle(self):
+        '''Put the wrist in the middle of its travel so that the rover can drive with a block'''
         self.wrist_publisher.publish(Float32(0.75))
 
     def fingers_open(self):
+        '''Open the fingers'''
         self.finger_publisher.publish(Float32(math.pi/2))
     
     def fingers_close(self):
+        '''Close the fingers'''
         self.finger_publisher.publish(Float32(0.0))
     
     def print_state_machine(self, msg):
+        '''Print a message to the /rover/state_machine topic.'''
         s = String()
         s.data = msg 
         self.sm_publisher.publish(s)
 
     def print_infoLog(self, msg):
+        '''Print a message to the /infoLog topic this is viewable in the GUI'''
         s = String()
         s.data = msg 
         self.info_publisher.publish(s)
 
     def print_status(self, msg):
+        '''Print a message to the /rover/status topic this is viewable in the GUI'''
         s = String()
         s.data = msg 
         self.status_publisher.publish(s)
