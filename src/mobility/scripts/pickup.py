@@ -12,6 +12,7 @@ from std_msgs.msg import String
 
 from obstacle_detection.msg import Obstacle 
 from mobility.msg import MoveResult
+from mobility.srv import FindTarget
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
@@ -26,34 +27,42 @@ def main():
     swarmie = Swarmie(rovername)
            
     tlist = tf.TransformListener() 
-    block = swarmie.find_nearest_target() 
-    rel_block = None
+    try :
+        block = swarmie.find_nearest_target() 
 
-    while rel_block is None :    
-        try: 
-            tlist.waitForTransform(rovername + '/base_link', block.result.header.frame_id, rospy.Time(0), rospy.Duration(3))
-            block.result.header.stamp = rospy.Time(0)
-            rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
+        tlist.waitForTransform(rovername + '/base_link', 
+                               block.result.header.frame_id, block.result.header.stamp, 
+                               rospy.Duration(3))
+        rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
+    
+        swarmie.wrist_down()
+        swarmie.fingers_open()
+        swarmie.drive(rel_block.point.x * 3.1, 
+                      rel_block.point.x * 3.1 * math.sin(rel_block.point.y * 3.1), 
+                      Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        swarmie.fingers_close()
+        rospy.sleep(0.5)
         
-            print ("Block is: ", block)
-            print ("REL Block is: ", rel_block)
-            
-        except Exception as e: 
-            print ("Fucked: ", e)
-
-    swarmie.lower_wrist()
-    swarmie.open_fingers()
-    swarmie.drive(rel_block.point.x * 3, 
-                  rel_block.point.x * 3 * math.sin(rel_block.point.y), 
-                  Obstacle.IS_SONAR | Obstacle.IS_VISION)
-    swarmie.close_fingers()
-    rospy.sleep(0.5)
-    swarmie.raise_wrist()    
-
-    rospy.sleep(2)
-    swarmie.open_fingers()
+        swarmie.wrist_up()
+        rospy.sleep(1)
         
-    return 0
+        try:
+            swarmie.wait(1, Obstacle.IS_VISION | Obstacle.SONAR_LEFT | Obstacle.SONAR_RIGHT | Obstacle.SONAR_CENTER)
+            exit(-1)
+        except ObstacleException as e:
+            pass
+        
+        swarmie.wrist_middle()
+        exit(0)
+        
+    except rospy.ServiceException as e:
+        print ("There doesn't seem to be any blocks on the map.")
+        exit(-1)
+    
+    except tf.TransformException as e: 
+        print ("Transform failed: ", e)
+        
+    exit(0)
 
 if __name__ == '__main__' : 
     main()

@@ -14,8 +14,9 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 
 class DriveException(Exception):
-    pass
-
+    def __init__(self, st):
+        self.status = st
+    
 class VisionException(DriveException):
     pass
 
@@ -74,15 +75,15 @@ class Swarmie:
 
     def __check_raise(self, value):        
         if value == MoveResult.OBSTACLE_SONAR :
-            raise ObstacleException()
+            raise ObstacleException(value)
         elif value == MoveResult.OBSTACLE_TAG : 
-            raise TagException()
+            raise TagException(value)
         elif value == MoveResult.OBSTACLE_HOME : 
-            raise HomeException()
+            raise HomeException(value)
         elif value == MoveResult.PATH_FAIL : 
-            raise PathException()
+            raise PathException(value)
         elif value == MoveResult.USER_ABORT : 
-            raise AbortException()
+            raise AbortException(value)
         else:
             return MoveResult.SUCCESS
 
@@ -112,16 +113,19 @@ class Swarmie:
     def set_finger_angle(self, angle):
         self.finger_publisher.publish(Float32(angle))
         
-    def lower_wrist(self):
+    def wrist_down(self):
         self.wrist_publisher.publish(Float32(1.25))
     
-    def raise_wrist(self):
+    def wrist_up(self):
         self.wrist_publisher.publish(Float32(0.0))
     
-    def open_fingers(self):
+    def wrist_middle(self):
+        self.wrist_publisher.publish(Float32(0.75))
+
+    def fingers_open(self):
         self.finger_publisher.publish(Float32(math.pi/2))
     
-    def close_fingers(self):
+    def fingers_close(self):
         self.finger_publisher.publish(Float32(0.0))
     
     def print_state_machine(self, msg):
