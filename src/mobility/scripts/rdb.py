@@ -20,11 +20,15 @@ from mobility.msg import MoveResult
 from obstacle_detection.msg import Obstacle 
 
 from mobility.swarmie import Swarmie 
+from ctypes import CDLL, util
+
+redraw = CDLL(util.find_library('readline')).rl_forced_update_display
 
 def logHandler(source, msg): 
     if not quiet : 
         print (source, msg.data)
-
+        redraw()
+        
 def handle(signum, frame):
     global quiet 
     quiet = not quiet
@@ -50,8 +54,8 @@ if __name__ == '__main__' :
     rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('/status:', msg))
     print ("Subscribed to", rover + '/status')
 
-    rospy.Subscriber(rover + '/infoLog', String, lambda msg : logHandler('/infoLog:', msg))
-    print ("Subscribed to", rover + '/infoLog')
+    rospy.Subscriber('/infoLog', String, lambda msg : logHandler('/infoLog:', msg))
+    print ("Subscribed to /infoLog")
     
     rospy.Subscriber(rover + '/state_machine', String, lambda msg : logHandler('/state_machine:', msg))
     print ("Subscribed to", rover + '/state_machine')
