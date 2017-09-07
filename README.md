@@ -1,5 +1,9 @@
 # Swarmathon-ROS
 
+This respoitory is no longer maintained but remains available for reference purposes.
+
+**Swarmathon-ROS was the code base for Swarmathon I and II (2015-May 2017). The code base for Swarmathon III (2018 at Kennedy Space Center) is here [SwarmBaseCode-ROS](https://github.com/BCLab-UNM/SwarmBaseCode-ROS).**
+
 This repository is a ROS (Robot Operating System) controller framework for the Swarmie robots used in the [NASA Swarmathon](http://www.nasaswarmathon.com), a national swarm robotics competition. This particular framework is a ROS implementation of the CPFA (central-place foraging algorithm) developed for [iAnt robot swarms](http://swarms.cs.unm.edu) at the [University of New Mexico](http://www.unm.edu/).
 
 This repository contains:
