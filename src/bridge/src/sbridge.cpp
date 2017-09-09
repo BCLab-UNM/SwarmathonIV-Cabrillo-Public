@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
     driveControlSubscriber = sNH.subscribe((rover + "/driveControl"), 10, &cmdHandler);
     odomSubscriber = sNH.subscribe((rover + "/odom"), 1, &odomHandler);
 
-    heartbeatPublisher = sNH.advertise<std_msgs::String>((rover + "/sbridge/heartbeat"), 1, false);
+    heartbeatPublisher = sNH.advertise<std_msgs::String>((rover + "/bridge/heartbeat"), 1, false);
     skidsteerPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/skidsteer"), 10);
     infoLogPublisher = sNH.advertise<std_msgs::String>("/infoLog", 1, true);
 

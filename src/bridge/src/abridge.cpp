@@ -128,11 +128,8 @@ int main(int argc, char **argv) {
     sonarCenterPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarCenter"), 10);
     sonarRightPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarRight"), 10);
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
-    heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
-    
     debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/bridge/debugPID"), 1, false);
-
-    heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/abridge/heartbeat"), 1, true);
+    heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/bridge/heartbeat"), 1, true);
 
     driveControlSubscriber = aNH.subscribe((publishedName + "/driveControl"), 10, driveCommandHandler);
     fingerAngleSubscriber = aNH.subscribe((publishedName + "/fingerAngle/cmd"), 1, fingerAngleHandler);
