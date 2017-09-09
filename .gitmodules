@@ -7,6 +7,3 @@
 [submodule "src/usb_cam"]
 	path = src/usb_cam
 	url = https://github.com/bosch-ros-pkg/usb_cam.git
-[submodule "src/grid_map"]
-	path = src/grid_map
-	url = https://github.com/ethz-asl/grid_map.git
