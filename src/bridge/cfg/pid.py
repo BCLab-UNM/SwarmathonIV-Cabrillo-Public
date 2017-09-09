@@ -14,4 +14,4 @@ pid.add("db", double_t, 0, "Deadband for wheel velocity.", 0, 0, 128)
 pid.add("st", double_t, 0, "Stiction for wheel velocity.", 0, 0, 128)
 pid.add("wu", double_t, 0, "Windup limit wheel velocity.", 0, 0, 65535)
 
-exit(gen.generate(PACKAGE, "config", "Drive"))
+exit(gen.generate(PACKAGE, "pid_dynconfig", "pid"))

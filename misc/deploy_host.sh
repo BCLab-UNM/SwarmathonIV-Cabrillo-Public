@@ -7,10 +7,49 @@ if [ -z "$1" ]; then
     exit -1
 fi
 
-# Build deploy image
+TEMPDIR=$(mktemp -d)
+
+function finish {
+  rm -rf "$TEMPDIR"
+}
+
+trap finish EXIT
+
+# Build the current workspace 
+catkin build --no-status --no-color
+
+
+# Package the build products, scripts, launch configs and stuff
+echo "Copying installation files."
+
+# Launch configurations run from the /proj directory by default.
+cp -R ../install/ $TEMPDIR
+cp -R ../camera_info/ $TEMPDIR
+cp -R ../launch/ $TEMPDIR
+cp -R ../misc/ $TEMPDIR
+cat <<EOF > $TEMPDIR/bootstrap.sh
+function finish {
+  cd ~
+  rm -rf "$TEMPDIR"
+}
+
+trap finish EXIT
+
+cd $TEMPDIR
+pwd
+source /opt/ros/kinetic/setup.bash
+source ./install/setup.bash
+./misc/rover_onboard_node_launch.sh 
+
+EOF
+chmod u+x $TEMPDIR/bootstrap.sh
+
 (
-    cd ~/
-    tar -cf - rover_workspace/camera_info rover_workspace/launch rover_workspace/misc rover_workspace/src rover_workspace/*.sh | ssh robot@$1 tar -xvf -    
+    # Copy the build products to the swarmie. 
+    cd $TEMPDIR
+    tar -cf - $TEMPDIR 2>/dev/null | ssh robot@$1 "cd /; tar -xf -"
 )
 
-ssh -t robot@$1 /home/robot/rover_workspace/misc/deploy_rover.sh
+echo "Executing rover code."
+# Execute the bootstrap code.
+ssh -t robot@$1 $TEMPDIR/bootstrap.sh

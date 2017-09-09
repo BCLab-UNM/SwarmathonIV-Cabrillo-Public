@@ -23,7 +23,7 @@
 #include <usbSerial.h>
 
 #include "pid.h"
-#include <bridge/DriveConfig.h>
+#include <bridge/pidConfig.h>
 
 using namespace std;
 
@@ -94,7 +94,7 @@ ros::Timer publish_heartbeat_timer;
 
 //Callback handlers
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
-void reconfigure(bridge::DriveConfig &cfg, uint32_t level);
+void reconfigure(bridge::pidConfig &cfg, uint32_t level);
 
 int main(int argc, char **argv) {
     
@@ -146,8 +146,8 @@ int main(int argc, char **argv) {
     odom.child_frame_id = publishedName+"/base_link";
 
     // configure dynamic reconfiguration
-    dynamic_reconfigure::Server<bridge::DriveConfig> config_server;
-    dynamic_reconfigure::Server<bridge::DriveConfig>::CallbackType f;
+    dynamic_reconfigure::Server<bridge::pidConfig> config_server;
+    dynamic_reconfigure::Server<bridge::pidConfig>::CallbackType f;
     f = boost::bind(&reconfigure, _1, _2);
     config_server.setCallback(f);
 
@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
+void reconfigure(bridge::pidConfig &cfg, uint32_t level) {
 	double p, i, d, db, st, wu;
 	p = cfg.groups.pid.Kp * cfg.groups.pid.scale;
 	i = cfg.groups.pid.Ki * cfg.groups.pid.scale;
@@ -409,7 +409,7 @@ void publishHeartBeatTimerEventHandler(const ros::TimerEvent&) {
 
 void initialconfig() {
     // Set PID parameters from the launch configuration
-    bridge::DriveConfig initial_config;
+    bridge::pidConfig initial_config;
 	ros::NodeHandle nh("~");
 
 	nh.getParam("scale", initial_config.scale);
@@ -421,7 +421,7 @@ void initialconfig() {
 	nh.getParam("wu", initial_config.wu);
 
 	// Announce the configuration to the server
-	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(publishedName + "_ABRIDGE");
+	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client(publishedName + "_ABRIDGE");
 	dyn_client.setConfiguration(initial_config);
 
 	cout << "Initial configuration sent." << endl;

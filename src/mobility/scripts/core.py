@@ -18,7 +18,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose2D
 from dynamic_reconfigure.server import Server
 
-from mobility.cfg import DriveConfig 
+from mobility.cfg import driveConfig 
 from mobility.srv import Core
 from mobility.msg import MoveResult
 from obstacle_detection.msg import Obstacle 
@@ -137,7 +137,7 @@ class State:
         rospy.Timer(rospy.Duration(1), self._heartbeat)
 
         # Configuration 
-        self.config_srv = Server(DriveConfig, self._reconfigure)
+        self.config_srv = Server(driveConfig, self._reconfigure)
 
     def _stop_now(self, result) :
         self.CurrentState = State.STATE_IDLE

@@ -26,7 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_python_setup()
 
 generate_dynamic_reconfigure_options(
-    cfg/params.py
+    cfg/drive.py
 )
 
 add_message_files ( 
@@ -42,7 +42,7 @@ generate_messages(DEPENDENCIES std_msgs geometry_msgs)
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs 
   random_numbers tf apriltags_ros rospy message_runtime 
-  obstacle_detection grid_map_ros grid_map_msgs
+  obstacle_detection grid_map_ros grid_map_msgs dynamic_reconfigure
 )
 
 include_directories(
@@ -62,6 +62,16 @@ target_link_libraries(
 )
 
 catkin_install_python (
-	PROGRAMS scripts/core.py
+	PROGRAMS 
+	scripts/core.py 
+	scripts/task.py 
+	scripts/rdb.py 
+	scripts/search.py 
+	scripts/pickup.py 
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(TARGETS mapping
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )

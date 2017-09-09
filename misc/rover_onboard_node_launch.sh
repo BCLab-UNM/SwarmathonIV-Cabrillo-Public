@@ -15,4 +15,9 @@ else
   ublox_dev=/dev/ttyACM0
 fi
 
-roslaunch ~/rover_workspace/launch/swarmie.launch name:=$(hostname) simulation:=False swarmie_dev:=$swarmie_dev ublox_dev:=$ublox_dev
+launchfile=~/rover_workspace/launch/swarmie.launch
+if [ -f ./launch/swarmie.launch ]; then
+    launchfile=./launch/swarmie.launch
+fi
+
+roslaunch $launchfile name:=$(hostname) simulation:=False swarmie_dev:=$swarmie_dev ublox_dev:=$ublox_dev

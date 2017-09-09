@@ -39,3 +39,8 @@ target_link_libraries(
   obstacle
   ${catkin_LIBRARIES}
 )
+
+install(TARGETS obstacle 
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+)

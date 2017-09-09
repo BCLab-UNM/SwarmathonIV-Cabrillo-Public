@@ -14,7 +14,7 @@
 #include "tf/transform_datatypes.h"
 
 #include "pid.h"
-#include <bridge/DriveConfig.h>
+#include <bridge/pidConfig.h>
 
 using namespace std;
 
@@ -119,7 +119,7 @@ void odomHandler(const nav_msgs::Odometry::ConstPtr& message) {
     skidsteerPublisher.publish(velocity);
 }
 
-void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
+void reconfigure(bridge::pidConfig &cfg, uint32_t level) {
 	double p, i, d, db, st, wu;
 	p = cfg.groups.pid.Kp * cfg.groups.pid.scale;
 	i = cfg.groups.pid.Ki * cfg.groups.pid.scale;
@@ -138,7 +138,7 @@ void reconfigure(bridge::DriveConfig &cfg, uint32_t level) {
 
 void initialconfig() {
     // Set PID parameters from the launch configuration
-    bridge::DriveConfig initial_config;
+    bridge::pidConfig initial_config;
 	ros::NodeHandle nh("~");
 
 	nh.getParam("scale", initial_config.scale);
@@ -150,7 +150,7 @@ void initialconfig() {
 	nh.getParam("wu", initial_config.wu);
 
 	// Announce the configuration to the server
-	dynamic_reconfigure::Client<bridge::DriveConfig> dyn_client(rover + "_SBRIDGE");
+	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client(rover + "_SBRIDGE");
 	dyn_client.setConfiguration(initial_config);
 
 	cout << "Initial configuration sent." << endl;
@@ -188,8 +188,8 @@ int main(int argc, char **argv) {
     //actionTimer = sNH.createTimer(ros::Duration(0.1), doPIDs);
 
     // configure dynamic reconfiguration
-    dynamic_reconfigure::Server<bridge::DriveConfig> config_server;
-    dynamic_reconfigure::Server<bridge::DriveConfig>::CallbackType f;
+    dynamic_reconfigure::Server<bridge::pidConfig> config_server;
+    dynamic_reconfigure::Server<bridge::pidConfig>::CallbackType f;
     f = boost::bind(&reconfigure, _1, _2);
     config_server.setCallback(f);
 

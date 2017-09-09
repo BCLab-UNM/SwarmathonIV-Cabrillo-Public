@@ -23,4 +23,4 @@ mob.add("DRIVE_ANGLE_ABORT", double_t, 0, "Angle where we abort the drive state.
 
 mob.add("STOP_THRESHOLD", double_t, 0, "Speed below which we're considered stopped.", 0.1, 0, 1);
 
-exit(gen.generate(PACKAGE, "config", "Drive"))
+exit(gen.generate(PACKAGE, "config", "drive"))
