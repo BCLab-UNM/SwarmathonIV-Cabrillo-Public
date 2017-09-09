@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <package>
-  <name>behaviours</name>
+  <name>mobility</name>
   <version>0.2.0</version>
   <description>Algorithmic implementation of random search as a finite state machine</description>
 
-  <maintainer email="swarmathon@cs.unm.edu">NASA Swarmathon</maintainer>
+  <maintainer email="michael.matera@cabrillo.edu">Mike Matera</maintainer>
 
   <license>GPLv2</license>
 
@@ -16,7 +16,6 @@
   <build_depend>random_numbers</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>apriltags_ros</build_depend>
-
   <build_depend>rospy</build_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
