@@ -153,8 +153,8 @@ void GripperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf) {
   gazebo::transport::NodePtr gazeboNode(new gazebo::transport::Node());
   gazeboNode->Init();
   
-  string leftFingerContactTopic = "/gazebo/default/"+model->GetName()+"/gripper_left_finger/contacts";
-  string rightFingerContactTopic = "/gazebo/default/"+model->GetName()+"/gripper_right_finger/contacts";
+  string leftFingerContactTopic = "/gazebo/default/"+model->GetName()+"/gripper_left_finger/finger/contacts";
+  string rightFingerContactTopic = "/gazebo/default/"+model->GetName()+"/gripper_right_finger/finger/contacts";
 
   
   // Subscribe to the gripper contact gazebo topics
@@ -635,12 +635,10 @@ void GripperPlugin::attach() {
   double damping = 100.0f;
   erp = stiffness*dt / (stiffness*dt + damping);
   cfm = 1.0 / (stiffness*dt + damping);
-
   targetAttachJoint->SetParam("erp", 0, erp);
   targetAttachJoint->SetParam("cfm", 0, cfm);
   targetAttachJoint->SetParam("stop_erp", 0, erp);
   targetAttachJoint->SetParam("stop_cfm", 0, cfm);
-  
   targetAttachJoint->SetHighStop(0, 0.0);
   targetAttachJoint->SetLowStop(0, 0.0);
 

@@ -20,7 +20,8 @@
 #include <QImage>
 #include <QMutex>
 #include <QPainter>
-#include <vector>
+#include <vector> // For standard template library vectors
+#include <tuple> //  For standard template library tuples
 #include <utility> // For STL pair
 #include <tuple>
 

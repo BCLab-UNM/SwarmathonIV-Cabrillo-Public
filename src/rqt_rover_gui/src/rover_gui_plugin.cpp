@@ -32,7 +32,7 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/foreach.hpp>
-#endif
+#endif // End Q_MOC_RUN
 
 //#include <regex> // For regex expressions
 
@@ -1563,7 +1563,11 @@ void RoverGUIPlugin::customWorldButtonEventHandler()
     app_root_cstr = getenv(name);
     QString app_root = QString(app_root_cstr) + "/simulation/worlds/";
 
-    QString path = QFileDialog::getOpenFileName(widget, tr("Open File"),
+    // NOTE: passing a parent widget here (aka, our "widget" variable) will style the dialog box
+    //     in the same manner as the RQT rover GUI, currently with a black background and unreadable
+    //     gray text; meanwhile, passing in a null value results in the default operating system
+    //     style to be used
+    QString path = QFileDialog::getOpenFileName(/*widget*/ NULL, tr("Open File"),
                                                     app_root,
                                                     tr("Gazebo World File (*.world)"));
 
@@ -1759,6 +1763,11 @@ void RoverGUIPlugin::buildSimulationButtonEventHandler()
 
         progress_dialog.setValue((++n_rovers_created)*100.0f/n_rovers);
         qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
+        
+        if(i == 0)
+        {
+          sleep(rover_load_delay); // Gives plugins enough time to finish loading
+        }
     }
 
    if (ui.powerlaw_distribution_radio_button->isChecked())
