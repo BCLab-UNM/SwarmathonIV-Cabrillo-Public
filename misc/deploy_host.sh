@@ -16,6 +16,7 @@ function finish {
 trap finish EXIT
 
 # Build the current workspace 
+cd ~/rover_workspace
 catkin build --no-status --no-color
 
 
@@ -23,10 +24,10 @@ catkin build --no-status --no-color
 echo "Copying installation files."
 
 # Launch configurations run from the /proj directory by default.
-cp -R ../install/ $TEMPDIR
-cp -R ../camera_info/ $TEMPDIR
-cp -R ../launch/ $TEMPDIR
-cp -R ../misc/ $TEMPDIR
+cp -R install/ $TEMPDIR
+cp -R camera_info/ $TEMPDIR
+cp -R launch/ $TEMPDIR
+cp -R misc/ $TEMPDIR
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {
   cd ~
