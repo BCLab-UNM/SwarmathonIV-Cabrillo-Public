@@ -1,0 +1,12 @@
+<launch>
+
+  <node name="config_gui" pkg="rqt_reconfigure" type="rqt_reconfigure"/>
+
+  <node name="plot_gui" pkg="rqt_multiplot" type="rqt_multiplot" args="--multiplot-config file:///home/robot/rover_workspace/misc/plot_achilles.xml  --multiplot-run-all"/>
+
+  <include file="/home/robot/rover_workspace/launch/rover_gui.launch">
+    <arg name="single" value="true"/>
+    <arg name="startsim" value="true"/>
+  </include>
+
+</launch>

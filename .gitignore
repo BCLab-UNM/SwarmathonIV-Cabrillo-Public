@@ -2,10 +2,12 @@
 \#*#
 build
 devel
+install
 **/CMakeLists.txt.user*
 *.swp
 logs
 proj
 .catkin_tools
 .catkin_workspace
+*.pyc
 

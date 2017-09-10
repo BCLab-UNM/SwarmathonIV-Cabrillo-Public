@@ -26,10 +26,9 @@ Diagnostics::Diagnostics(std::string name) {
   sonarLeftSubscribe = nodeHandle.subscribe(publishedName + "/sonarLeft", 10, &Diagnostics::sonarLeftTimestampUpdate, this);
   sonarCenterSubscribe = nodeHandle.subscribe(publishedName + "/sonarCenter", 10, &Diagnostics::sonarCenterTimestampUpdate, this);
   sonarRightSubscribe = nodeHandle.subscribe(publishedName + "/sonarRight", 10, &Diagnostics::sonarRightTimestampUpdate, this);
-  abdridgeNodeSubscribe = nodeHandle.subscribe(publishedName + "/abridge/heartbeat", 1, &Diagnostics::abridgeNode,this);
-  sbdridgeNodeSubscribe = nodeHandle.subscribe(publishedName + "/sbridge/heartbeat", 1, &Diagnostics::sbridgeNode,this);
+  bdridgeNodeSubscribe = nodeHandle.subscribe(publishedName + "/bridge/heartbeat", 1, &Diagnostics::bridgeNode,this);
   obstacleNodeSubscribe = nodeHandle.subscribe(publishedName + "/obstacle/heartbeat", 1, &Diagnostics::obstacleNode,this);
-  behaviourNodeSubscribe = nodeHandle.subscribe(publishedName + "/behaviour/heartbeat", 1, &Diagnostics::behaviourNode,this);
+  behaviourNodeSubscribe = nodeHandle.subscribe(publishedName + "/mobility/heartbeat", 1, &Diagnostics::behaviourNode,this);
   ubloxNodeSubscribe = nodeHandle.subscribe(publishedName + "/fix" , 1, &Diagnostics::ubloxNode,this);
 
   // Initialize the variables we use to track the simulation update rate
@@ -61,7 +60,7 @@ Diagnostics::Diagnostics(std::string name) {
     gazeboNode->Init();
     string worldStatsTopic = "/gazebo/default/world_stats";
     worldStatsSubscriber = gazeboNode->Subscribe(worldStatsTopic, &Diagnostics::simWorldStatsEventHandler, this);
- 
+    
     simulated = true;
     publishInfoLogMessage("Diagnostic Package Started. Simulated Rover.");
   } else {
@@ -147,12 +146,8 @@ void Diagnostics::sonarRightTimestampUpdate(const sensor_msgs::Range::ConstPtr& 
     sonarRightTimestamp = message->header.stamp;
 }
 
-void Diagnostics::abridgeNode(std_msgs::String msg) {
-    abridgeNodeTimestamp = ros::Time::now();
-}
-
-void Diagnostics::sbridgeNode(std_msgs::String msg) {
-    sbridgeNodeTimestamp = ros::Time::now();
+void Diagnostics::bridgeNode(std_msgs::String msg) {
+    bridgeNodeTimestamp = ros::Time::now();
 }
 
 void Diagnostics::obstacleNode(std_msgs::String msg) {
@@ -202,12 +197,9 @@ void Diagnostics::nodeCheckTimerEventHandler(const ros::TimerEvent& event) {
 
     if (node_start_delay > (ros::Time::now() - diagnostics_start_time).sec) return;
 
+    checkBridge();
     if (!simulated) {
-        checkAbridge();
         checkUblox();
-    }
-    else {
-       checkSbridge();
     }
 
     checkObstacle();
@@ -221,7 +213,7 @@ void Diagnostics::simCheckTimerEventHandler(const ros::TimerEvent& event) {
     std_msgs::Float32MultiArray rosMsg;
     rosMsg.data.clear();
     rosMsg.data.push_back(0.0f);
- rosMsg.data.push_back(0.0f);
+    rosMsg.data.push_back(0.0f);
     rosMsg.data.push_back(checkSimRate());
     diagnosticDataPublisher.publish(rosMsg);
   }
@@ -361,31 +353,17 @@ void Diagnostics::checkOdometry() {
 	}
 }
 
-void Diagnostics::checkAbridge() {
+void Diagnostics::checkBridge() {
 
-    if (ros::Time::now() - abridgeNodeTimestamp <= ros::Duration(node_heartbeat_timeout)) {
-        if (!abridgeRunning) {
-            abridgeRunning = true;
-            publishInfoLogMessage("the abridge node is now running");
+    if (ros::Time::now() - bridgeNodeTimestamp <= ros::Duration(node_heartbeat_timeout)) {
+        if (!bridgeRunning) {
+            bridgeRunning = true;
+            publishInfoLogMessage("the bridge node is now running");
         }
     }
-    else if (abridgeRunning) {
-        abridgeRunning = false;
-        publishErrorLogMessage("the abridge node is not running");
-    }
-}
-
-void Diagnostics::checkSbridge() {
-
-    if (ros::Time::now() - sbridgeNodeTimestamp <= ros::Duration(node_heartbeat_timeout)) {
-        if (!sbridgeRunning) {
-            sbridgeRunning = true;
-            publishInfoLogMessage("the sbridge node is now running");
-        }
-    }
-    else if (sbridgeRunning) {
-        sbridgeRunning = false;
-        publishErrorLogMessage("the sbridge node is not running");
+    else if (bridgeRunning) {
+        bridgeRunning = false;
+        publishErrorLogMessage("the bridge node is not running");
     }
 }
 
@@ -493,10 +471,15 @@ bool Diagnostics::checkIfSimulatedRover() {
   struct stat buffer;
   const char *model_path_env = "GAZEBO_MODEL_PATH";
   char *model_root = getenv(model_path_env);
-  string model_path = string(model_root)+"/"+publishedName+"/model.sdf";
-  return (stat(model_path.c_str(), &buffer) == 0); 
+  if (model_root != NULL) {
+    string model_path = string(model_root)+"/"+publishedName+"/model.sdf";
+    return (stat(model_path.c_str(), &buffer) == 0);
+  }
+  else {
+    return false;
+  }
 }
-     
+  
 Diagnostics::~Diagnostics() {
   gazebo::shutdown();
 }

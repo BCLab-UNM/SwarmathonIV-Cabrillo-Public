@@ -71,6 +71,12 @@ Thw Swarmies can receive commands from the thumb sticks on a Microsoft Xbox 360 
 
 Joystick commands can also be simulated using the direction keys (Up=I, Down=K, Left=J, Right=L) on the keyboard. The Rover GUI window must have focus for keyboard control to work.
 
+There's a new camera package in Kinetic. Install it using apt-get:
+
+```
+sudo apt-get install ros-kinetic-video-stream-opencv
+```
+
 ##### 4. Install git (if git is already installed, skip to step 5):
 
 ```

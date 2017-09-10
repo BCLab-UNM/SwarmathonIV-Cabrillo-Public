@@ -1,0 +1,15 @@
+# grid_map_topic: /achilles/grid_map
+
+grid_map_visualizations:
+  - name: obstacle_grid
+    type: occupancy_grid
+    params:
+     layer: obstacles
+     data_min: 0
+     data_max: 0.75
+  - name: target_grid
+    type: occupancy_grid
+    params:
+     layer: targets
+     data_min: 0
+     data_max: 1

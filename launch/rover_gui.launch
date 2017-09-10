@@ -1,0 +1,19 @@
+<launch>
+
+  <arg name="world" default="$(env PWD)/simulation/worlds/swarmathon.world"/>
+  <arg name="round" default="prelim"/>
+  <arg name="single" default="true"/>
+  <arg name="startsim" default="false"/>
+
+  <node name="rqt_rover_gui" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
+
+    <env name="SWARMATHON_APP_ROOT" value="$(env PWD)" />
+    <env name="GAZEBO_MODEL_PATH" value="$(env PWD)/simulation/models" />
+    <env name="GAZEBO_PLUGIN_PATH" value="$(env PWD)/build/gazebo_plugins" />
+
+    <param name="world" value="$(arg world)"/>
+    <param name="round" value="$(arg round)"/>
+    <param name="single" value="$(arg single)"/>
+    <param name="startsim" value="$(arg startsim)"/>
+  </node>
+</launch>
