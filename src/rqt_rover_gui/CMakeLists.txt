@@ -112,3 +112,11 @@ target_link_libraries(
 )
 
 set(CMAKE_BUILD_TYPE Debug)
+
+install(FILES plugin.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  )
+
+install(DIRECTORY resources/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/resources
+  )
