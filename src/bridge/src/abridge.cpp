@@ -92,6 +92,9 @@ ros::Subscriber modeSubscriber;
 ros::Timer publishTimer;
 ros::Timer publish_heartbeat_timer;
 
+// Feed-forward constant
+double ff;
+
 //Callback handlers
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
 void reconfigure(bridge::pidConfig &cfg, uint32_t level);
@@ -165,6 +168,7 @@ void reconfigure(bridge::pidConfig &cfg, uint32_t level) {
 	db = cfg.groups.pid.db;
 	st = cfg.groups.pid.st;
 	wu = cfg.groups.pid.wu;
+	ff = cfg.groups.pid.ff;
 
 	left_pid.reconfig(p, i, d, db, st, wu);
 	right_pid.reconfig(p, i, d, db, st, wu);
@@ -177,27 +181,6 @@ void reconfigure(bridge::pidConfig &cfg, uint32_t level) {
 void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
   speedCommand.linear.x = message->linear.x;
   speedCommand.angular.z = message->angular.z;
-
-  int current_mode = round(speedCommand.angular.y);
-  int next_mode = round(message->angular.y);
-
-  if (current_mode == DRIVE_MODE_STOP && next_mode == DRIVE_MODE_PID) {
-
-	  /* Feed forward controller:
-	   *
-	   *   This should only run for a single step, when mobility core changes
-	   *   the PID mode from DRIVE_MODE_STOP to DRIVE_MODE_PID. During that first
-	   *   step the feed-forward controller will pick a reasonable start point.
-	   *   It will the force that start point into the PID controller.
-	   */
-
-	  double left = 0;
-	  double right = 0;
-
-	  left_pid.feedforward(left, 0.5);
-	  right_pid.feedforward(right, 0.5);
-  }
-
   speedCommand.angular.y = message->angular.y;
 }
 
@@ -265,12 +248,19 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-		int l = round(left_pid.step(linear_sp - angular_sp, leftTicks, odomTS));
-		int r = round(right_pid.step(linear_sp + angular_sp, rightTicks, odomTS));
+		double left_sp = linear_sp - angular_sp;
+		double right_sp = linear_sp + angular_sp;
+
+		int l = round(left_pid.step(left_sp, leftTicks, odomTS));
+		int r = round(right_pid.step(right_sp, rightTicks, odomTS));
+
+		// Feed forward
+		l += ff * left_sp;
+		r += ff * right_sp;
 
 		// Debugging: Report PID performance for tuning.
 		// Output of the PID is in Linear:
-		dbT.linear.x = l;
+		dbT.linear.x = l; // sp_linear * ff
 		dbT.linear.y = r;
 		dbT.linear.z = linear_sp;
 
@@ -419,6 +409,7 @@ void initialconfig() {
 	nh.getParam("db", initial_config.db);
 	nh.getParam("st", initial_config.st);
 	nh.getParam("wu", initial_config.wu);
+	nh.getParam("ff", initial_config.ff);
 
 	// Announce the configuration to the server
 	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client(publishedName + "_ABRIDGE");

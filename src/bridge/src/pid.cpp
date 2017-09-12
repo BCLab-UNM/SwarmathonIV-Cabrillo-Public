@@ -26,7 +26,6 @@ PID::PID(double p, double i, double d, double db, double hi, double lo, double s
 	_lastsp = 0;
 
 	_lasttime = 0;
-	_feedf_time = 0;
 }
 
 PID::~PID() {
@@ -42,7 +41,7 @@ void PID::reconfig(double p, double i, double d, double db, double st, double wu
 }
 
 void PID::reset() {
-	_out = _sum = _lasterr = _lastsp = _lasttime = _feedf_time = 0;
+	_out = _sum = _lasterr = _lastsp = _lasttime = 0;
 }
 
 double PID::getNow() {
@@ -68,8 +67,7 @@ double PID::step(double setpoint, double feedback, double now) {
 
 		double elapsed = now - _lasttime;
 
-		if (_feedf_time > 0 || elapsed == 0) {
-			_feedf_time -= elapsed;
+		if (elapsed == 0) {
 			return _out;
 		}
 
@@ -107,9 +105,4 @@ double PID::step(double setpoint, double feedback, double now) {
 	  return 0;
 	else
 	  return _out;
-}
-
-void PID::feedforward(double output, double duration) {
-	_out = output;
-	_feedf_time = duration;
 }

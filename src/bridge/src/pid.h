@@ -21,7 +21,6 @@ public:
 	~PID();
 
 	double step(double setpoint, double feeback, double now=0);
-	void feedforward(double output, double duration);
 	void reconfig(double p, double i, double d, double db, double st, double wu);
 	void reset();
 
@@ -33,7 +32,7 @@ private:
 	double _kp, _ki, _kd, _dband, _hi, _lo, _stiction, _windup;
 
 	// State
-	double _out, _sum, _lasterr, _lastsp, _lasttime, _feedf_time;
+	double _out, _sum, _lasterr, _lastsp, _lasttime;
 };
 
 #endif /* BRIDGE_SRC_PID_H_ */
