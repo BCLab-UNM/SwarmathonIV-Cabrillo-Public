@@ -65,8 +65,8 @@ double rightTicks = 0;
 double odomTS = 0;
 
 // Immobilize robot until the first PID configuration.
-PID left_pid(0, 0, 0, 0, 255, -255, 0, -1);
-PID right_pid(0, 0, 0, 0, 255, -255, 0, -1);
+PID left_pid(0, 0, 0, 0, 120, -120, 0, -1);
+PID right_pid(0, 0, 0, 0, 120, -120, 0, -1);
 
 //Publishers
 ros::Publisher fingerAnglePublish;
