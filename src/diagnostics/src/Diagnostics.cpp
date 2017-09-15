@@ -479,7 +479,7 @@ bool Diagnostics::checkIfSimulatedRover() {
     return false;
   }
 }
-  
+
 Diagnostics::~Diagnostics() {
   gazebo::shutdown();
 }
