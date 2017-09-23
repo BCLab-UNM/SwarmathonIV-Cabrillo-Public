@@ -11,4 +11,5 @@ proj
 .catkin_workspace
 *.pyc
 install
+misc/logs
 
