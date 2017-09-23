@@ -393,14 +393,6 @@
 
   <group if="$(arg simulation)">
     <node name="$(arg name)_SBRIDGE" pkg="bridge" type="sbridge" args="$(arg name)">
-      <!-- Configure the PIDs -->
-      <param name="scale" value="0.1" />
-      <param name="Kp" value="0.5" />
-      <param name="Ki" value="0.0" />
-      <param name="Kd" value="0.0" />
-      <param name="db" value="0.0" />
-      <param name="st" value="0.0" />
-      <param name="wu" value="1024" />
     </node>
   </group>
   
@@ -408,13 +400,14 @@
 
     <node name="$(arg name)_ABRIDGE" pkg="bridge" type="abridge" args="$(arg name)">
       <param name="device" value="$(arg swarmie_dev)"/>
-      <param name="scale" value="0.0001" />
-      <param name="Kp" value="1.0" />
+      <param name="scale" value="0.001" />
+      <param name="Kp" value="0.1" />
       <param name="Ki" value="0.0" />
       <param name="Kd" value="0.0" />
       <param name="db" value="0.0" />
       <param name="st" value="0.0" />
       <param name="wu" value="1024" />
+      <param name="ff" value="0.009" />
     </node>
     
     <node name="$(arg name)_UBLOX" pkg="ublox_gps" type="ublox_gps">
