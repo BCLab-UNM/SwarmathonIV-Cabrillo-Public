@@ -77,44 +77,62 @@ class Swarmie:
         else:
             return self.timed_drive(15, 0.1, -0.62)
 
-    def __check_raise(self, value):        
-        if value == MoveResult.OBSTACLE_SONAR :
-            raise ObstacleException(value)
-        elif value == MoveResult.OBSTACLE_TAG : 
-            raise TagException(value)
-        elif value == MoveResult.OBSTACLE_HOME : 
-            raise HomeException(value)
-        elif value == MoveResult.PATH_FAIL : 
-            raise PathException(value)
-        elif value == MoveResult.USER_ABORT : 
-            raise AbortException(value)
-        else:
-            return MoveResult.SUCCESS
+    def __drive(self, request, **kwargs):
 
-    def timed_drive(self, time, linear, angular, ignore_obstacles = 0):
+        obstacles = ~0 
+        if 'ignore' in kwargs :
+            obstacles = ~kwargs['ignore']
+
+        request.obstacles = obstacles 
+
+        value = self.control([request])
+        
+        if 'throw' not in kwargs or kwargs['throw'] : 
+            if value == MoveResult.OBSTACLE_SONAR :
+                raise ObstacleException(value)
+            elif value == MoveResult.OBSTACLE_TAG : 
+                raise TagException(value)
+            elif value == MoveResult.OBSTACLE_HOME : 
+                raise HomeException(value)
+            elif value == MoveResult.PATH_FAIL : 
+                raise PathException(value)
+            elif value == MoveResult.USER_ABORT : 
+                raise AbortException(value)
+        
+        return value
+        
+    def timed_drive(self, time, linear, angular, **kwargs):
         '''Send the specified velocity command for a given period of time.'''
-        return self.__check_raise(
-            self.control([MoveRequest(timer=time, linear=linear, angular=angular, obstacles=~ignore_obstacles)])
-            )
+        req = MoveRequest(
+            timer=time, 
+            linear=linear, 
+            angular=angular, 
+            obstacles=~ignore_obstacles
+        )
+        return self.__drive(req, **kwargs)
     
-    def drive(self, distance, theta, ignore_obstacles = 0):
-        '''Turn theta degrees then drive the specfied distance'''
-        return self.__check_raise(
-            self.control([MoveRequest(r=distance, theta=theta, timer=0, obstacles=~ignore_obstacles)]).result.result
-            )
+    def drive(self, distance, **kwargs):
+        '''Drive the specfied distance'''
+        req = MoveRequest(
+            r=distance, 
+        )        
+        return self.__drive(req, **kwargs)
 
-    def wait(self, time, ignore_obstacles = 0):
+    def turn(self, theta, **kwargs):
+        '''Turn theta degrees'''
+        req = MoveRequest(
+            theta=theta, 
+        )
+        return self.__drive(req, **kwargs)
+
+    def wait(self, time, **kwargs):
         '''Wait for a period of time. This can be used to check for obstacles'''
-        return self.__check_raise(
-            self.control([MoveRequest(timer=time, linear=0, angular=0, obstacles=~ignore_obstacles)]).result.result
-            )
-        
-    def backup(self, distance, ignore_obstacles = 0):
-        '''Backup the specified distance.''' 
-        return self.__check_raise(
-            self.control([MoveRequest(r=-distance, theta=0, timer=0, obstacles=~ignore_obstacles)]).result.result
-            )
-        
+        req = MoveRequest(
+            timer=time, 
+        )
+
+        return self.__drive(req, **kwargs)
+                
     def set_wrist_angle(self, angle):
         '''Set the wrist angle to the specified angle'''
         self.wrist_publisher.publish(Float32(angle))

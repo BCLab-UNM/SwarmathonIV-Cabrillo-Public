@@ -33,7 +33,7 @@ add_executable(
   obstacle src/obstacle.cpp
 )
 
-add_dependencies(obstacle ${catkin_EXPORTED_TARGETS})
+add_dependencies(obstacle obstacle_detection_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(
   obstacle
