@@ -16,23 +16,29 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 
 '''Searcher node.''' 
 
-def turnaround(swarmie): 
-    swarmie.drive(0, random.gauss(math.pi/2, math.pi/4), Obstacle.IS_SONAR | Obstacle.IS_VISION)
+def turnaround(): 
+    global swarmie
+    swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
-def wander(swarmie):
+def wander():
+    global swarmie
     try :
         rospy.loginfo("Wandering...")
-        swarmie.drive(2, random.gauss(0, math.pi/8))
+        swarmie.turn(random.gauss(0, math.pi/8))
+        swarmie.drive(2)
 
         rospy.loginfo("Circling...")
         swarmie.circle()
         
     except ObstacleException :
         print ("I saw an obstacle!")
-        turnaround(swarmie)
+        turnaround()
 
 
 def main():
+    global swarmie 
+    global rovername 
+    
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
@@ -41,19 +47,23 @@ def main():
     swarmie = Swarmie(rovername)
             
     try: 
-        while not rospy.is_shutdown() : 
+        for move in range(10) :
+            if rospy.is_shutdown : 
+                exit(-1)
             try:
-                wander(swarmie)
+                wander()
             
             except HomeException : 
                 # TODO: Recalibrate the map.
                 print ("I saw home!")
-                turnaround(swarmie)
+                turnaround()
                 
     except TagException : 
         print("I found a tag!")
-    
-    exit(0)
+        exit(0)
+        
+    print ("I'm homesick!")
+    exit(1)
 
 if __name__ == '__main__' : 
     main()

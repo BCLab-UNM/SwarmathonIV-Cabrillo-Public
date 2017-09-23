@@ -58,27 +58,7 @@ class Swarmie:
         self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
 
-    def stop(self):
-        '''Stop the rover by placing it in manual mode.''' 
-        msg = UInt8() 
-        msg.data = 1
-        self.mode_publisher.publish(msg)
-    
-    def go(self):
-        '''Start the rover by placing it into autonomous mode.'''
-        msg = UInt8() 
-        msg.data = 2
-        self.mode_publisher.publish(msg)
-            
-    def circle(self, edges=6, dist=1):
-        '''Drive in a small circle''' 
-        if random.randint(0,1) == 0 :
-            return self.timed_drive(15, 0.1, 0.62)
-        else:
-            return self.timed_drive(15, 0.1, -0.62)
-
     def __drive(self, request, **kwargs):
-
         obstacles = ~0 
         if 'ignore' in kwargs :
             obstacles = ~kwargs['ignore']
@@ -101,13 +81,31 @@ class Swarmie:
         
         return value
         
+    def stop(self):
+        '''Stop the rover by placing it in manual mode.''' 
+        msg = UInt8() 
+        msg.data = 1
+        self.mode_publisher.publish(msg)
+    
+    def go(self):
+        '''Start the rover by placing it into autonomous mode.'''
+        msg = UInt8() 
+        msg.data = 2
+        self.mode_publisher.publish(msg)
+            
+    def circle(self):
+        '''Drive in a small circle''' 
+        if random.randint(0,1) == 0 :
+            return self.timed_drive(15, 0.1, 0.62)
+        else:
+            return self.timed_drive(15, 0.1, -0.62)
+
     def timed_drive(self, time, linear, angular, **kwargs):
         '''Send the specified velocity command for a given period of time.'''
         req = MoveRequest(
             timer=time, 
             linear=linear, 
             angular=angular, 
-            obstacles=~ignore_obstacles
         )
         return self.__drive(req, **kwargs)
     
@@ -178,3 +176,13 @@ class Swarmie:
         s = String()
         s.data = msg 
         self.status_publisher.publish(s)
+        
+    def has_block(self):
+        '''Return True if the center sonar detects an object at very short distance.''' 
+        request = MoveRequest(
+            timer=1, 
+            linear=0, 
+            angular=0
+        )
+        val = self.__drive(request, throw=False)
+        return bool(val & Obstacle.SONAR_BLOCK)

@@ -9,6 +9,7 @@ import random
 import tf
 
 from std_msgs.msg import String
+import angles 
 
 from obstacle_detection.msg import Obstacle 
 from mobility.msg import MoveResult
@@ -18,51 +19,91 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 
 '''Pickup node.''' 
 
+def get_block_location():
+    global tlist
+    global rovername 
+    block = swarmie.find_nearest_target() 
+
+    # FIXME: Why do I have to time shift the TF. This is a problem.
+    block.result.header.stamp.secs = block.result.header.stamp.secs  + 1 
+    tlist.waitForTransform(rovername + '/base_link', 
+                            block.result.header.frame_id, block.result.header.stamp, 
+                            rospy.Duration(3))
+    rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
+
+    r = math.hypot(rel_block.point.x, rel_block.point.y)
+    theta = angles.shortest_angular_distance(math.pi/2, math.acos(rel_block.point.x));
+
+    return r, theta
+
+def approach():
+    global swarmie 
+    print ("Attempting a pickup.")
+    try :
+        swarmie.fingers_open()
+        swarmie.wrist_down()
+
+        r, theta = get_block_location()
+   
+        # Drive to the block
+        swarmie.turn(theta, ignore=Obstacle.IS_VISION)
+        swarmie.drive(r, ignore=Obstacle.IS_VISION)
+
+        # Grab
+        swarmie.fingers_close()
+        rospy.sleep(0.5)
+        swarmie.wrist_up()
+        rospy.sleep(1)
+
+        if swarmie.has_block() :
+            swarmie.wrist_middle()
+            return True        
+                
+    except rospy.ServiceException as e:
+        print ("There doesn't seem to be any blocks on the map.", e)
+
+    except tf.TransformException as e: 
+        print ("Transform failed: ", e)
+
+    swarmie.fingers_open()
+    swarmie.wrist_middle()
+    return False
+
+def recover():
+    global swarmie 
+    print ("Missed, trying to recover.")
+    swarmie.clear_target_map()
+    
+    try :
+        swarmie.drive(-0.5);
+        swarmie.turn(math.pi/2)
+        swarmie.turn(-math.pi)
+        swarmie.turn(math.pi/2)
+    except: 
+        # Hopefully this means we saw something.
+        pass
+
 def main():
+    global tlist
+    global swarmie 
+    global rovername 
+    
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
     rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
-           
+    swarmie = Swarmie(rovername)       
     tlist = tf.TransformListener() 
-    try :
-        block = swarmie.find_nearest_target() 
 
-        tlist.waitForTransform(rovername + '/base_link', 
-                               block.result.header.frame_id, block.result.header.stamp, 
-                               rospy.Duration(3))
-        rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
-    
-        swarmie.wrist_down()
-        swarmie.fingers_open()
-        swarmie.drive(rel_block.point.x * 3.1, 
-                      rel_block.point.x * 3.1 * math.sin(rel_block.point.y * 3.1), 
-                      Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        swarmie.fingers_close()
-        rospy.sleep(0.5)
+    for i in range(3) : 
+        if approach() :
+            print ("Got it!")
+            exit(0)        
+        recover()
         
-        swarmie.wrist_up()
-        rospy.sleep(1)
-        
-        try:
-            swarmie.wait(1, Obstacle.IS_VISION | Obstacle.SONAR_LEFT | Obstacle.SONAR_RIGHT | Obstacle.SONAR_CENTER)
-            exit(-1)
-        except ObstacleException as e:
-            pass
-        
-        swarmie.wrist_middle()
-        exit(0)
-        
-    except rospy.ServiceException as e:
-        print ("There doesn't seem to be any blocks on the map.")
-        exit(-1)
-    
-    except tf.TransformException as e: 
-        print ("Transform failed: ", e)
-        
-    exit(0)
+    print ("Giving up after too many attempts.")
+    exit(1)
 
 if __name__ == '__main__' : 
     main()

@@ -73,11 +73,11 @@ def main() :
     STATE_GOHOME   = 3 
     STATE_DROPOFF  = 4 
     
-    PROG_INIT      = 'search.py'
+    PROG_INIT      = 'init.py'
     PROG_SEARCH    = 'search.py'
-    PROG_PICKUP    = 'search.py'
-    PROG_GOHOME    = 'search.py'
-    PROG_DROPOFF   = 'search.py'
+    PROG_PICKUP    = 'pickup.py'
+    PROG_GOHOME    = 'gohome.py'
+    PROG_DROPOFF   = 'dropoff.py'
     
     CurrentState = STATE_INIT 
     
@@ -98,7 +98,9 @@ def main() :
             print_state ("Task: SEARCH")
             if launch(PROG_SEARCH) == 0 :
                 CurrentState = STATE_PICKUP
-        
+            else:
+                CurrentState = STATE_GOHOME 
+                
         elif CurrentState == STATE_PICKUP : 
             print_state ("Task: PICKUP")
             if launch(PROG_PICKUP) == 0 :
