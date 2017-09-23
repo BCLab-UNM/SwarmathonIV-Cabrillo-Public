@@ -262,8 +262,7 @@ namespace rqt_rover_gui
     if (nh.getParam("single", singlerover)) {
     	if (singlerover) {
     		ui.override_num_rovers_checkbox->setChecked(true);
-    		ui.custom_num_rovers_combobox->setCurrentIndex(0);
-    		emit sendInfoLogMessage("Only creating one rover.");
+    		ui.custom_num_rovers_combobox->setCurrentIndex(1);
     	}
     }
 
