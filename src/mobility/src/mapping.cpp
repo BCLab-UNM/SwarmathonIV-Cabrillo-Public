@@ -126,7 +126,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
 				rover_map.getIndex(pos, ind);
-				rover_map.at("targets", ind) = message->detections[i].id;
+				rover_map.at("targets", ind) = 1;
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
@@ -179,6 +179,17 @@ bool clear_target_map(std_srvs::Empty::Request &req, std_srvs::Empty::Response &
 void publishMap(const ros::TimerEvent& event) {
 	ros::Time time = ros::Time::now();
 	grid_map_msgs::GridMap message;
+
+	//
+	// Aging. As time goes by, the probability that a block
+	// Is still in the place we saw it shrinks. Let's iterate
+	// over the map and apply aging.
+	//
+	grid_map::Matrix &data = rover_map["targets"];
+	for (grid_map::GridMapIterator it(rover_map); !it.isPastEnd(); ++it) {
+		const int i = it.getLinearIndex();
+		data(i) = data(i) * 0.99;
+	}
 
 	rover_map.setTimestamp(time.toNSec());
 	grid_map::GridMapRosConverter::toMessage(rover_map, message);
