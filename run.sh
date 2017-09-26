@@ -1,5 +1,6 @@
 #!/bin/bash
 
+source "$(dirname $0)/devel/setup.bash"
 #Delete the rqt cache - can take 24 hours for changes in the UI
 # to show up otherwise
 rm ~/.config/ros.org/rqt_gui.ini
