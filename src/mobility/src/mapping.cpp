@@ -32,15 +32,18 @@ using namespace std;
 
 string rover;
 
-grid_map::GridMap rover_map;
-ros::Publisher map_publisher;
+grid_map::GridMap obstacle_map;
+grid_map::GridMap target_map;
+
+ros::Publisher obstacle_map_publisher;
+ros::Publisher target_map_publisher;
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
 
 	grid_map::Polygon view_poly;
-	view_poly.setFrameId(rover_map.getFrameId());
+	view_poly.setFrameId(obstacle_map.getFrameId());
 
 	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
@@ -63,21 +66,21 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 			));
 
 	// Increase the "obstacleness" of the viewable area.
-	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
+	for (grid_map::PolygonIterator iterator(obstacle_map, view_poly);
 	      !iterator.isPastEnd(); ++iterator) {
-		double val = rover_map.at("obstacles", *iterator);
+		double val = obstacle_map.at("obstacles", *iterator);
 		if (isnan(val)) {
 			val = 0.5;
 		}
 		val += 0.01;
 		if (val > 1)
 			val = 1;
-	    rover_map.at("obstacles", *iterator) = val;
+	    obstacle_map.at("obstacles", *iterator) = val;
 	  }
 
 
 	grid_map::Polygon clear_poly;
-	clear_poly.setFrameId(rover_map.getFrameId());
+	clear_poly.setFrameId(obstacle_map.getFrameId());
 
 	clear_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
@@ -100,15 +103,15 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 			));
 
 	// Clear the area that's clear in sonar.
-	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
+	for (grid_map::PolygonIterator iterator(obstacle_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
-		double val = rover_map.at("obstacles", *iterator);
+		double val = obstacle_map.at("obstacles", *iterator);
 		if (!isnan(val)) {
 			val -= 0.05;
 			if (val < 0)
 				val = 0;
 		}
-	    rover_map.at("obstacles", *iterator) = val;
+	    obstacle_map.at("obstacles", *iterator) = val;
 	  }
 }
 
@@ -125,8 +128,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 						message->detections[i].pose, tagpose);
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
-				rover_map.getIndex(pos, ind);
-				rover_map.at("targets", ind) = 1;
+				target_map.getIndex(pos, ind);
+				target_map.at("targets", ind) = 1;
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
@@ -140,7 +143,7 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double y = message->pose.pose.position.y;
 
     grid_map::Position newPos(x, y);
-    rover_map.move(newPos);
+    target_map.move(newPos);
 
     tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
     tf::Matrix3x3 m(q);
@@ -154,13 +157,13 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarget::Response &resp) {
 	bool rval = false;
 	grid_map::Position mypos(currentLocation.x, currentLocation.y);
-	for (grid_map::SpiralIterator it(rover_map, mypos, 2); !it.isPastEnd(); ++it) {
-		if (rover_map.at("targets", *it) == 0) {
+	for (grid_map::SpiralIterator it(target_map, mypos, 2); !it.isPastEnd(); ++it) {
+		if (target_map.at("targets", *it) == 0) {
 			// Found one!
-			resp.result.header.frame_id = rover_map.getFrameId();
+			resp.result.header.frame_id = target_map.getFrameId();
 			resp.result.header.stamp = ros::Time::now();
 			grid_map::Position tagpos;
-			rover_map.getPosition(*it, tagpos);
+			obstacle_map.getPosition(*it, tagpos);
 			resp.result.point.x = tagpos.x();
 			resp.result.point.y = tagpos.y();
 			resp.result.point.z = 0; // No z() in the map.
@@ -172,7 +175,7 @@ bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarg
 }
 
 bool clear_target_map(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
-	rover_map.clear("targets");
+	target_map.clear("targets");
 	return true;
 }
 
@@ -185,15 +188,23 @@ void publishMap(const ros::TimerEvent& event) {
 	// Is still in the place we saw it shrinks. Let's iterate
 	// over the map and apply aging.
 	//
-	grid_map::Matrix &data = rover_map["targets"];
-	for (grid_map::GridMapIterator it(rover_map); !it.isPastEnd(); ++it) {
+	grid_map::Matrix &data = target_map["targets"];
+	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
 		const int i = it.getLinearIndex();
 		data(i) = data(i) * 0.99;
 	}
 
-	rover_map.setTimestamp(time.toNSec());
-	grid_map::GridMapRosConverter::toMessage(rover_map, message);
-	map_publisher.publish(message);
+	if (target_map_publisher.getNumSubscribers() > 0) {
+		target_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(target_map, message);
+		target_map_publisher.publish(message);
+	}
+
+	if (obstacle_map_publisher.getNumSubscribers() > 0) {
+		obstacle_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(obstacle_map, message);
+		obstacle_map_publisher.publish(message);
+	}
 }
 
 int main(int argc, char **argv) {
@@ -234,7 +245,8 @@ int main(int argc, char **argv) {
 
     //	Publishers
 
-    map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/grid_map", 1, false);
+    obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
+    target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
 
     // Services
 
@@ -242,9 +254,13 @@ int main(int argc, char **argv) {
     ros::ServiceServer ctm = mNH.advertiseService(rover + "/map/clear_target_map", clear_target_map);
 
     // Initialize the maps.
-    rover_map = grid_map::GridMap({"obstacles", "targets"});
-    rover_map.setFrameId(rover + "/odom");
-    rover_map.setGeometry(grid_map::Length(6, 6), 0.03);
+    obstacle_map = grid_map::GridMap({"obstacles"});
+    obstacle_map.setFrameId(rover + "/odom");
+    obstacle_map.setGeometry(grid_map::Length(25, 25), 0.5);
+
+    target_map = grid_map::GridMap({"targets"});
+    target_map.setFrameId(rover + "/odom");
+    target_map.setGeometry(grid_map::Length(3, 3), 0.03);
 
     // Publish map updates.
     ros::Timer map_update = mNH.createTimer(ros::Duration(1), publishMap);
@@ -252,5 +268,3 @@ int main(int argc, char **argv) {
     ros::spin();
     return 0;
 }
-
-
