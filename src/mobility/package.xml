@@ -6,7 +6,7 @@
 
   <maintainer email="michael.matera@cabrillo.edu">Mike Matera</maintainer>
 
-  <license>GPLv2</license>
+  <license>MIT</license>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>geometry_msgs</build_depend>
