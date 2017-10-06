@@ -9,8 +9,7 @@ import random
 
 from std_msgs.msg import String
 
-from obstacle_detection.msg import Obstacle 
-from mobility.msg import MoveResult
+from mobility.msg import MoveResult, Obstacle
 
 import mobility.swarmie 
 

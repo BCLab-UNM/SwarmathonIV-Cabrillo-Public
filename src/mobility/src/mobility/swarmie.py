@@ -7,8 +7,7 @@ import math
 import random 
 
 from mobility.srv import Core, FindTarget
-from mobility.msg import MoveResult, MoveRequest
-from obstacle_detection.msg import Obstacle 
+from mobility.msg import MoveResult, MoveRequest, Obstacle
 
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32

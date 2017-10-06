@@ -15,9 +15,7 @@ import rospy
 from std_msgs.msg import String
 
 from mobility.srv import Core
-from mobility.msg import MoveResult
-
-from obstacle_detection.msg import Obstacle 
+from mobility.msg import MoveResult, Obstacle
 
 from mobility.swarmie import Swarmie 
 from ctypes import CDLL, util

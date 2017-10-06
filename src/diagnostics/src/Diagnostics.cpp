@@ -27,7 +27,6 @@ Diagnostics::Diagnostics(std::string name) {
   sonarCenterSubscribe = nodeHandle.subscribe(publishedName + "/sonarCenter", 10, &Diagnostics::sonarCenterTimestampUpdate, this);
   sonarRightSubscribe = nodeHandle.subscribe(publishedName + "/sonarRight", 10, &Diagnostics::sonarRightTimestampUpdate, this);
   bdridgeNodeSubscribe = nodeHandle.subscribe(publishedName + "/bridge/heartbeat", 1, &Diagnostics::bridgeNode,this);
-  obstacleNodeSubscribe = nodeHandle.subscribe(publishedName + "/obstacle/heartbeat", 1, &Diagnostics::obstacleNode,this);
   behaviourNodeSubscribe = nodeHandle.subscribe(publishedName + "/mobility/heartbeat", 1, &Diagnostics::behaviourNode,this);
   ubloxNodeSubscribe = nodeHandle.subscribe(publishedName + "/fix" , 1, &Diagnostics::ubloxNode,this);
 
@@ -150,10 +149,6 @@ void Diagnostics::bridgeNode(std_msgs::String msg) {
     bridgeNodeTimestamp = ros::Time::now();
 }
 
-void Diagnostics::obstacleNode(std_msgs::String msg) {
-    obstacleNodeTimestamp = ros::Time::now();
-}
-
 void Diagnostics::behaviourNode(std_msgs::String msg) {
     behaviourNodeTimestamp = ros::Time::now();
 }
@@ -202,7 +197,6 @@ void Diagnostics::nodeCheckTimerEventHandler(const ros::TimerEvent& event) {
         checkUblox();
     }
 
-    checkObstacle();
     checkBehaviour();
 
 }
@@ -364,20 +358,6 @@ void Diagnostics::checkBridge() {
     else if (bridgeRunning) {
         bridgeRunning = false;
         publishErrorLogMessage("the bridge node is not running");
-    }
-}
-
-void Diagnostics::checkObstacle() {
-
-    if (ros::Time::now() - obstacleNodeTimestamp <= ros::Duration(node_heartbeat_timeout)) {
-        if (!obstacleRunning) {
-            obstacleRunning = true;
-            publishInfoLogMessage("the obstacle node is now running");
-        }
-    }
-    else if (obstacleRunning) {
-        obstacleRunning = false;
-        publishErrorLogMessage("the obstacle node is not running");
     }
 }
 

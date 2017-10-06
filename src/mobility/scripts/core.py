@@ -20,8 +20,7 @@ from dynamic_reconfigure.server import Server
 
 from mobility.cfg import driveConfig 
 from mobility.srv import Core
-from mobility.msg import MoveResult
-from obstacle_detection.msg import Obstacle 
+from mobility.msg import MoveResult, Obstacle
 
 def sync(func) :
     '''This decorator forces serial access based on a file level lock. Crude but effective.''' 

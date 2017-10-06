@@ -27,6 +27,7 @@
 #include <std_srvs/Empty.h>
 
 #include <mobility/FindTarget.h>
+#include <mobility/Obstacle.h>
 
 using namespace std;
 
@@ -35,12 +36,35 @@ string rover;
 grid_map::GridMap obstacle_map;
 grid_map::GridMap target_map;
 
+ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
 ros::Publisher target_map_publisher;
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
+double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
+unsigned int obstacle_status;
+
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
+
+	static unsigned int prev_status = 0;
+	unsigned int next_status = 0;
+
+	// TODO: Implement filtering for sonar.
+
+	if (sonarLeft->range < collisionDistance) {
+		next_status |= mobility::Obstacle::SONAR_LEFT;
+	}
+	if (sonarRight->range < collisionDistance) {
+		next_status |= mobility::Obstacle::SONAR_RIGHT;
+	}
+	if (sonarCenter->range < collisionDistance) {
+		next_status |= mobility::Obstacle::SONAR_CENTER;
+	}
+	if (sonarCenter->range < 0.12) {
+		//block in front of center ultrasound.
+		next_status |= mobility::Obstacle::SONAR_BLOCK;
+	}
 
 	grid_map::Polygon view_poly;
 	view_poly.setFrameId(obstacle_map.getFrameId());
@@ -113,9 +137,21 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 		}
 	    obstacle_map.at("obstacles", *iterator) = val;
 	  }
+
+	if (next_status != prev_status) {
+		mobility::Obstacle msg;
+		msg.msg = next_status;
+		msg.mask = mobility::Obstacle::IS_SONAR;
+		obstaclePublish.publish(msg);
+	}
+
+	prev_status = next_status;
 }
 
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	static unsigned int prev_status = 0;
+	unsigned int next_status = 0;
+
 	if (message->detections.size() > 0) {
 		try {
 			cameraTF->waitForTransform(rover + "/odom", ros::Time::now(),
@@ -123,6 +159,12 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 					message->detections[0].pose.header.stamp, rover + "/map",
 					ros::Duration(0.25));
 			for (int i=0; i<message->detections.size(); i++) {
+
+				if (message->detections[i].id == 0)
+					next_status |= mobility::Obstacle::TAG_TARGET;
+				else if (message->detections[i].id == 256)
+					next_status |= mobility::Obstacle::TAG_HOME;
+
 				geometry_msgs::PoseStamped tagpose;
 				cameraTF->transformPose(rover + "/odom",
 						message->detections[i].pose, tagpose);
@@ -136,6 +178,15 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			return;
 		}
 	}
+
+	if (next_status != prev_status) {
+		mobility::Obstacle msg;
+		msg.msg = next_status;
+		msg.mask = mobility::Obstacle::IS_VISION;
+		obstaclePublish.publish(msg);
+	}
+
+	prev_status = next_status;
 }
 
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
@@ -225,9 +276,11 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, (rover + "_MAP"));
     ros::NodeHandle mNH;
 
+    obstacle_status = mobility::Obstacle::PATH_IS_CLEAR;
+
     // Subscribers
 
-    ros::Subscriber odomSubscriber = mNH.subscribe((rover+ "/odom/filtered"), 10, odometryHandler);
+    ros::Subscriber odomSubscriber = mNH.subscribe((rover + "/odom/filtered"), 10, odometryHandler);
     ros::Subscriber targetSubscriber = mNH.subscribe((rover + "/targets"), 10, targetHandler);
 
     message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(mNH, (rover + "/sonarLeft"), 10);
@@ -244,6 +297,8 @@ int main(int argc, char **argv) {
     cameraTF = new tf::TransformListener(ros::Duration(10));
 
     //	Publishers
+
+    obstaclePublish = mNH.advertise<mobility::Obstacle>((rover + "/obstacle"), 1, true);
 
     obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);

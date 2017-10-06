@@ -18,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   message_generation
   dynamic_reconfigure
-  obstacle_detection
   grid_map_ros
   grid_map_msgs
 )
@@ -30,7 +29,7 @@ generate_dynamic_reconfigure_options(
 )
 
 add_message_files ( 
-	FILES MoveResult.msg MoveRequest.msg
+	FILES MoveResult.msg MoveRequest.msg Obstacle.msg
 )
 
 add_service_files (
@@ -42,7 +41,7 @@ generate_messages(DEPENDENCIES std_msgs geometry_msgs)
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs 
   random_numbers tf apriltags_ros rospy message_runtime 
-  obstacle_detection grid_map_ros grid_map_msgs dynamic_reconfigure
+  grid_map_ros grid_map_msgs dynamic_reconfigure
 )
 
 include_directories(
