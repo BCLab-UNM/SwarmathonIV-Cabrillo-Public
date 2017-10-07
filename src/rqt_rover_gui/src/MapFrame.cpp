@@ -48,6 +48,10 @@ MapFrame::MapFrame(QWidget *parent, Qt::WindowFlags flags) : QFrame(parent)
   popout_window = NULL;
 
   map_data = NULL;
+
+  // Trigger mouseMoveEvent even when button not pressed
+  setMouseTracking(true);
+
 }
 
 // This can't go in the constructor or there will be an infinite regression.
@@ -112,18 +116,17 @@ void MapFrame::paintEvent(QPaintEvent* event) {
 
   map_data->lock();
 
-  // Colorblind friendly colors
   QColor green(17, 192, 131);
   QColor red(255, 65, 30);
 
-  float max_seen_x = -std::numeric_limits<float>::max(); // std::numeric_limits<float>::max() is the max possible floating point value
-  float max_seen_y = -std::numeric_limits<float>::max();
+  max_seen_x = -std::numeric_limits<float>::max(); // std::numeric_limits<float>::max() is the max possible floating point value
+  max_seen_y = -std::numeric_limits<float>::max();
 
-  float min_seen_x = std::numeric_limits<float>::max();
-  float min_seen_y = std::numeric_limits<float>::max();
+  min_seen_x = std::numeric_limits<float>::max();
+  min_seen_y = std::numeric_limits<float>::max();
 
-  float max_seen_width = -std::numeric_limits<float>::max();
-  float max_seen_height = -std::numeric_limits<float>::max();
+  max_seen_width = -std::numeric_limits<float>::max();
+  max_seen_height = -std::numeric_limits<float>::max();
 
   int no_data_offset = 0; // So the "no data" message is not overlayed if there are multiple rovers with no data.
 
@@ -203,11 +206,11 @@ void MapFrame::paintEvent(QPaintEvent* event) {
   max_seen_height > max_seen_width ? max_seen_width = max_seen_height : max_seen_height = max_seen_width;
 
   // Calculate the axis positions
-  int map_origin_x = fm.width(QString::number(-max_seen_height, 'f', 1)+"m");
-  int map_origin_y = 2*fm.height();
+  map_origin_x = fm.width(QString::number(-max_seen_height, 'f', 1)+"m");
+  map_origin_y = 2*fm.height();
 
-  int map_width = this->width()-1;// Minus 1 or will go off the edge
-  int map_height = this->height()-1;//
+  map_width = this->width()-1;// Minus 1 or will go off the edge
+  map_height = this->height()-1;//
 
   int map_center_x = map_origin_x+((map_width-map_origin_x)/2);
   int map_center_y = map_origin_y+((map_height-map_origin_y)/2);
@@ -301,16 +304,18 @@ void MapFrame::paintEvent(QPaintEvent* event) {
   {
     // scale coordinates
     std::vector<QPoint> scaled_target_locations;
-    for(std::vector< pair<float,float> >::iterator it = map_data->getTargetLocations(rover_to_display)->begin(); it < map_data->getTargetLocations(rover_to_display)->end(); ++it) {
+    for(std::vector< pair<float,float> >::iterator it = map_data->getTargetLocations(rover_to_display)->begin(); it < map_data->getTargetLocations(rover_to_display)->end(); ++it)
+    {
       pair<float,float> coordinate  = *it;
       QPoint point;
       point.setX(map_origin_x+coordinate.first*map_width);
       point.setY(map_origin_y+coordinate.second*map_height);
       scaled_target_locations.push_back(point);
     }
-
+    
     std::vector<QPoint> scaled_collection_points;
-    for(std::vector< pair<float,float> >::iterator it = map_data->getCollectionPoints(rover_to_display)->begin(); it < map_data->getCollectionPoints(rover_to_display)->end(); ++it) {
+    for(std::vector< pair<float,float> >::iterator it = map_data->getCollectionPoints(rover_to_display)->begin(); it < map_data->getCollectionPoints(rover_to_display)->end(); ++it)
+    {
       pair<float,float> coordinate  = *it;
       QPoint point;
       point.setX(map_origin_x+coordinate.first*map_width);
@@ -319,40 +324,96 @@ void MapFrame::paintEvent(QPaintEvent* event) {
     }
 
     std::vector<QPoint> scaled_gps_rover_points;
-    for(std::vector< pair<float,float> >::iterator it = map_data->getGPSPath(rover_to_display)->begin(); it < map_data->getGPSPath(rover_to_display)->end(); ++it) {
+    for(std::vector< pair<float,float> >::iterator it = map_data->getGPSPath(rover_to_display)->begin(); it < map_data->getGPSPath(rover_to_display)->end(); ++it)
+    {
       pair<float,float> coordinate  = *it;
-
+      
       float x = map_origin_x+((coordinate.first-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
       float y = map_origin_y+((coordinate.second-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
       scaled_gps_rover_points.push_back( QPoint(x,y) );
     }
 
+
+    // Maintain aspect ratio
+    max_seen_height > max_seen_width ? max_seen_width = max_seen_height : max_seen_height = max_seen_width;
+
+    // Calculate the axis positions
+    map_origin_x = fm.width(QString::number(-max_seen_height, 'f', 1)+"m");
+    map_origin_y = 2*fm.height();
+    
+    map_width = this->width()-1;// Minus 1 or will go off the edge
+    map_height = this->height()-1;//
+    
+    map_center_x = map_origin_x+((map_width-map_origin_x)/2);
+    map_center_y = map_origin_y+((map_height-map_origin_y)/2);
+
+    // The map axes do not need to be redrawn for each rover so this code is
+    // sandwiched between the two rover display list loops
+
+    // Draw the scale bars
+    //painter.setPen(Qt::gray);
+    //painter.drawLine(QPoint(map_center_x, map_origin_y), QPoint(map_center_x, map_height));
+    //painter.drawLine(QPoint(map_origin_x, map_center_y), QPoint(map_width, map_center_y));
+    //painter.setPen(Qt::white);
+
+    // Cross hairs at map display center
+    QPoint axes_origin(map_origin_x,map_origin_y);
+    QPoint x_axis(map_width,map_origin_y);
+    QPoint y_axis(map_origin_x,map_height);
+    painter.drawLine(axes_origin, x_axis);
+    painter.drawLine(axes_origin, y_axis);
+    painter.drawLine(QPoint(map_width, map_origin_y), QPoint(map_width, map_height));
+    painter.drawLine(QPoint(map_origin_x, map_height), QPoint(map_width, map_height));
+
+    // Draw north arrow
+    QPoint northArrow_point(map_center_x, 0);
+    QPoint northArrow_left(map_center_x - 5, 5);
+    QPoint northArrow_right(map_center_x + 5, 5);
+    QRect northArrow_textBox(northArrow_left.x(), northArrow_left.y(), 10, 15);
+    painter.drawLine(northArrow_left, northArrow_right);
+    painter.drawLine(northArrow_left, northArrow_point);
+    painter.drawLine(northArrow_right, northArrow_point);
+    painter.drawText(northArrow_textBox, QString("N"));
+
+    // Draw rover origin crosshairs
+    // painter.setPen(green);
+
+    float initial_x = 0.0; //map_data->getEKFPath(rover_to_display).begin()->first;
+    float initial_y = 0.001; //map_data->getEKFPath(rover_to_display).begin()->second;
+    float rover_origin_x = map_origin_x+((initial_x-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
+    float rover_origin_y = map_origin_y+((initial_y-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
+    painter.setPen(Qt::gray);
+    painter.drawLine(QPoint(rover_origin_x, map_origin_y), QPoint(rover_origin_x, map_height));
+    painter.drawLine(QPoint(map_origin_x, rover_origin_y), QPoint(map_width, rover_origin_y));
+    painter.setPen(Qt::white);
+
     QPainterPath scaled_ekf_rover_path;
-    for(std::vector< pair<float,float> >::iterator it = map_data->getEKFPath(rover_to_display)->begin(); it < map_data->getEKFPath(rover_to_display)->end(); ++it) {
+    for(std::vector< pair<float,float> >::iterator it = map_data->getEKFPath(rover_to_display)->begin(); it < map_data->getEKFPath(rover_to_display)->end(); ++it)
+    {
       pair<float,float> coordinate  = *it;
       QPoint point;
       float x = map_origin_x+((coordinate.first-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
       float y = map_origin_y+((coordinate.second-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
-
+      
       // Move to the starting point of the path without drawing a line
       if (it == map_data->getEKFPath(rover_to_display)->begin()) scaled_ekf_rover_path.moveTo(x, y);
       scaled_ekf_rover_path.lineTo(x, y);
     }
 
     QPainterPath scaled_encoder_rover_path;
-    for(std::vector< pair<float,float> >::iterator it = map_data->getEncoderPath(rover_to_display)->begin(); it < map_data->getEncoderPath(rover_to_display)->end(); ++it) {
-     
+    for(std::vector< pair<float,float> >::iterator it = map_data->getEncoderPath(rover_to_display)->begin(); it < map_data->getEncoderPath(rover_to_display)->end(); ++it)
+    { 
       pair<float,float> coordinate  = *it;
       QPoint point;
       float x = map_origin_x+((coordinate.first-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
       float y = map_origin_y+((coordinate.second-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
-
+      
       // Move to the starting point of the path without drawing a line
       if (it == map_data->getEncoderPath(rover_to_display)->begin()) scaled_encoder_rover_path.moveTo(x, y);
 
       scaled_encoder_rover_path.lineTo(x, y);
     }
-
+    
     QColor rover_color = QColor(255, 255, 255); // white
 
     // if we have properly set a color for simulated rovers initialise the color here
@@ -360,7 +421,7 @@ void MapFrame::paintEvent(QPaintEvent* event) {
     if(unique_simulated_rover_colors.find(rover_to_display) != unique_simulated_rover_colors.end())
     {
       rover_color = unique_simulated_rover_colors[rover_to_display];
-
+      
       if(popout_mapframe)
       {
         popout_mapframe->setUniqueRoverColor(rover_to_display, unique_simulated_rover_colors[rover_to_display]);
@@ -396,32 +457,74 @@ void MapFrame::paintEvent(QPaintEvent* event) {
     painter.setPen(green);
     point_array = &scaled_target_locations[0];
     painter.drawPoints(point_array, scaled_target_locations.size());
-
-    // Draw a yellow circle at the current EKF estimated rover location
-    if(!map_data->getEKFPath(rover_to_display)->empty())
-    {
-      if(display_unique_rover_colors) painter.setPen(rover_color);
-      else painter.setPen(Qt::yellow);
-
-      pair<float,float> current_coordinate;
-      current_coordinate = map_data->getEKFPath(rover_to_display)->back();
-
-      float x = map_origin_x+((current_coordinate.first-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
-      float y = map_origin_y+((current_coordinate.second-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
-      float radius = 2.5;
-
-      painter.drawEllipse(QPointF(x,y), radius, radius);
-      painter.drawText(QPoint(x,y), QString::fromStdString(rover_to_display));
+      
+    // Draw the waypoints for the current rover
+    painter.setPen(Qt::cyan);
+    
+    QPainterPath scaled_waypoint_rover_path;
+    for(map< int, std::tuple<float,float,bool> >::iterator it = map_data->getWaypointPath(rover_to_display)->begin(); it != map_data->getWaypointPath(rover_to_display)->end(); ++it)
+    {	
+      tuple<float,float,bool> coordinate  = it->second; // Get the value from the map
+      
+      float x = map_origin_x+((get<0>(coordinate)-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
+      float y = map_origin_y+((get<1>(coordinate)-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
+      
+      
+      QPoint point(x,y);
+      int default_pen_width = painter.pen().width();
+      QPen previous_pen = painter.pen();
+      QPen pen;
+      if(!get<2>(coordinate))
+      {
+	pen.setColor(Qt::cyan);
+      }
+      else
+      {
+	pen.setColor(Qt::yellow);
+      }
+      pen.setWidth(5);
+      painter.setPen(pen);
+      painter.drawPoint(point);
+      
+      // Draw lines connecting waypoints
+      painter.setPen(previous_pen);
+      
+      painter.setPen(Qt::blue);
+      
+      // Move to the starting point of the path without drawing a line
+      if (it == map_data->getWaypointPath(rover_to_display)->begin())
+      {
+	scaled_waypoint_rover_path.moveTo(x, y);
+      }
+      else
+      {
+	scaled_waypoint_rover_path.lineTo(x, y);
+      }
     }
 
-    map_data->unlock();
+    painter.drawPath(scaled_waypoint_rover_path);
+    
 
-    painter.setPen(Qt::white);
+    if(display_unique_rover_colors) painter.setPen(rover_color);
+    else painter.setPen(Qt::yellow);
+    
+    pair<float,float> current_coordinate;
+    current_coordinate = map_data->getEKFPath(rover_to_display)->back();
+    
+    float x = map_origin_x+((current_coordinate.first-min_seen_x)/max_seen_width)*(map_width-map_origin_x);
+    float y = map_origin_y+((current_coordinate.second-min_seen_y)/max_seen_height)*(map_height-map_origin_y);
+    float radius = 2.5;
+    
+    painter.drawEllipse(QPointF(x,y), radius, radius);
+    painter.drawText(QPoint(x,y), QString::fromStdString(rover_to_display));
 
     hardware_rover_color_index = (hardware_rover_color_index + 1) % 8;
 
+    painter.setPen(Qt::white);
   } // End rover display list set iteration
 
+  map_data->unlock();
+  
   // Diagnostic output
   /*
   font.setPointSizeF( 12 );
@@ -436,7 +539,6 @@ void MapFrame::paintEvent(QPaintEvent* event) {
   painter.drawText(QPoint(0,135), "map_center_x: " + QString::number(map_center_x));
   */
 
-  painter.setPen(Qt::white);
 }
 
 
@@ -504,45 +606,104 @@ void MapFrame::setWhetherToDisplay(string rover, bool yes)
   if(popout_mapframe) popout_mapframe->setWhetherToDisplay(rover, yes);
 }
 
-void MapFrame::mouseReleaseEvent(QMouseEvent *event) {
+void MapFrame::mouseReleaseEvent(QMouseEvent *event)
+{
   previous_translate_x = translate_x;
   previous_translate_y = translate_y;
 }
 
 void MapFrame::mousePressEvent(QMouseEvent *event)
 {
-  previous_clicked_position = event->pos();
-  // emit sendInfoLogMessage("MapFrame: mouse press. x: " + QString::number(mouse_event->pos().x()) + ", y: " + QString::number(mouse_event->pos().y()));
+
+  float waypoint_click_tolerance = 0.25*(scale/10);
+  
+  if ( event->buttons() == Qt::RightButton )
+  {
+    // Solve for map coordinates in terms of frame coordinates
+    float mouse_map_x = ((event->pos().x() - map_origin_x*1.0f)/(map_width-map_origin_x))*max_seen_width + min_seen_x;
+    float mouse_map_y = ((event->pos().y() - map_origin_y*1.0f)/(map_height-map_origin_y))*max_seen_height + min_seen_y;
+
+    emit sendInfoLogMessage("MOX: " + QString::number(map_origin_x) + " map_width: " + QString::number(map_width) + " max_seen_width: " +  QString::number(min_seen_x));
+    
+    // If click is within eplison of an existing waypoint remove the waypoint
+    bool waypoint_removed = false;
+    for(map< int, std::tuple<float,float,bool> >::iterator it = map_data->getWaypointPath(rover_currently_selected)->begin(); it != map_data->getWaypointPath(rover_currently_selected)->end(); ++it)
+    {
+      // Get the distance between the mouse click and the coordinates of the existing waypoints
+      tuple<float,float,bool> coordinate  = it->second;
+      float x1 = get<0>(coordinate);
+      float x2 = mouse_map_x;
+      float y1 = get<1>(coordinate);
+      float y2 = mouse_map_y;
+
+emit sendInfoLogMessage(" x1: " + QString::number(x1)
+                              + " x2: " + QString::number(x2)
+                              + " y1: " + QString::number(y1)
+                              + " y2: " + QString::number(y2)
+                        + " dist: " + QString::number(sqrt( pow( x1 - x2, 2 ) + pow( y1 - y2, 2 ) ) ) + " scale: " + QString::number(scale) );
+      
+      if ( sqrt( pow( x1 - x2, 2 ) + pow( y1 - y2, 2 ) ) < waypoint_click_tolerance ) 
+      {
+        int waypoint_id = it->first;
+        removeWaypoint( rover_currently_selected, waypoint_id );
+        waypoint_removed = true;
+      }
+    }
+    
+    if ( !waypoint_removed )
+    {
+      emit sendInfoLogMessage(" Adding waypoint at x: " + QString::number(mouse_map_x) + " y: " + QString::number(mouse_map_y));
+      addWaypoint(rover_currently_selected, mouse_map_x, mouse_map_y);
+    }
+  }
+  else if ( event->buttons() == Qt::LeftButton )
+  {
+    previous_clicked_position = event->pos();
+  }
+  
+    // emit sendInfoLogMessage("MapFrame: mouse press. x: " + QString::number(mouse_event->pos().x()) + ", y: " + QString::number(mouse_event->pos().y()));
+
 }
 
 void MapFrame::mouseMoveEvent(QMouseEvent *event)
 {
+
+  // Get the mouse pointer position to print on the map
+  mouse_pointer_position = event->pos();
+
   // Do not adjust panning in auto-transform mode.. the changes will not be reflected
-  // and will be applied only when the user clicks on manual panning mode which will
-  // cause undesired results.
-  if (auto_transform == true) return;
+    // and will be applied only when the user clicks on manual panning mode which will
+    // cause undesired results.
+    if (auto_transform == true) return;
 
-  if (event->type() == QEvent::MouseMove) {
-    QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
-    float max_width = this->width();
-    float max_height = this->height();
+    if (event->type() == QEvent::MouseMove )
+    {
+      // Check whether only the left button is down
+      if ( event->buttons() == Qt::LeftButton )
+      {
+        QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+        float max_width = this->width();
+        float max_height = this->height();
+        
+        // start with the previous translate
+        translate_x = previous_translate_x;
+        translate_y = previous_translate_y;
+        
+        // add the scaled translation based on the previous mouse click
+        // and the current mouse position while dragging; multiply the translation
+        // by the given translate speed to keep the map lined up with mouse movement
+        translate_x += translate_speed * (previous_clicked_position.x() - mouse_event->pos().x()) / max_width;
+        translate_y += translate_speed * (previous_clicked_position.y() - mouse_event->pos().y()) / max_height;
+        
+        // debug info log messages
+        // emit sendInfoLogMessage("MapFrame: mouse move: translate_x: " + QString::number(translate_x) + " translate_y: " + QString::number(translate_y) + "\n");
+        // emit sendInfoLogMessage("MapFrame: mouse move: frame_width: " + QString::number(this->width()) + " frame_height: " + QString::number(this->height()));
+        // emit sendInfoLogMessage("MapFrame: mouse move: x: " + QString::number(mouse_event->pos().x()) + " y: " + QString::number(mouse_event->pos().y()));
+        // emit sendInfoLogMessage("MapFrame: mouse move: xp: " + QString::number(previous_clicked_position.x()) + " yp: " + QString::number(previous_clicked_position.y()));
 
-    // start with the previous translate
-    translate_x = previous_translate_x;
-    translate_y = previous_translate_y;
-
-    // add the scaled translation based on the previous mouse click
-    // and the current mouse position while dragging; multiply the translation
-    // by the given translate speed to keep the map lined up with mouse movement
-    translate_x += translate_speed * (previous_clicked_position.x() - mouse_event->pos().x()) / max_width;
-    translate_y += translate_speed * (previous_clicked_position.y() - mouse_event->pos().y()) / max_height;
-
-    // debug info log messages
-    // emit sendInfoLogMessage("MapFrame: mouse move: translate_x: " + QString::number(translate_x) + " translate_y: " + QString::number(translate_y) + "\n");
-    // emit sendInfoLogMessage("MapFrame: mouse move: frame_width: " + QString::number(this->width()) + " frame_height: " + QString::number(this->height()));
-    // emit sendInfoLogMessage("MapFrame: mouse move: x: " + QString::number(mouse_event->pos().x()) + " y: " + QString::number(mouse_event->pos().y()));
-    // emit sendInfoLogMessage("MapFrame: mouse move: xp: " + QString::number(previous_clicked_position.x()) + " yp: " + QString::number(previous_clicked_position.y()));
-  }
+        // Store the current mouse position for use in the map
+      }
+   }
 }
 
 void MapFrame::wheelEvent(QWheelEvent *event)
@@ -669,23 +830,56 @@ void MapFrame::popout()
    }
  }
 
- void MapFrame::addToEncoderRoverPath(std::string rover, float x, float y)
- {
-   if (map_data)
-   {
-      map_data->addToEncoderRoverPath(rover, x, y);
-      emit delayedUpdate();
-   }
+void MapFrame::addToEncoderRoverPath(std::string rover, float x, float y)
+{
+  if (map_data)
+  {
+    map_data->addToEncoderRoverPath(rover, x, y);
+    emit delayedUpdate();
+  }
 }
 
- void MapFrame::addToEKFRoverPath(std::string rover, float x, float y)
- {
-   if (map_data)
-   {
-      map_data->addToEKFRoverPath(rover, x, y);
-      emit delayedUpdate();
-   }
- }
+void MapFrame::addToEKFRoverPath(std::string rover, float x, float y)
+{
+  if (map_data)
+  {
+    map_data->addToEKFRoverPath(rover, x, y);
+    emit delayedUpdate();
+  }
+}
+
+void MapFrame::addWaypoint( string rover, float x, float y ) {
+  if (map_data)
+  {
+    int id = map_data->addToWaypointPath(rover, x, y);
+    cout << "Waypoint created. There are now " << map_data->getWaypointPath(rover_currently_selected)->size() << " waypoints" << endl;
+    emit delayedUpdate();
+    // The y coordinate must be negated to translatAe between the
+    // map frame and the rover frame.
+    emit sendWaypointCmd(ADD, id, x, -y);
+  }
+}
+
+void MapFrame::removeWaypoint( string rover, int id ) {
+  if (map_data)
+  {
+    map_data->removeFromWaypointPath(rover, id );
+    cout << "Waypoint removed. There are now " << map_data->getWaypointPath(rover_currently_selected)->size() << " waypoints" << endl;
+    emit delayedUpdate();
+    emit sendWaypointCmd(REMOVE, id, 0, 0); // x and y are 0 here because they are unused in a remove command
+  }
+}
+
+void MapFrame::receiveWaypointReached(int waypoint_id)
+{
+  map_data->reachedWaypoint(waypoint_id);
+}
+
+void MapFrame::receiveCurrentRoverName( QString rover_name )
+{
+  this->rover_currently_selected = rover_name.toStdString();
+}
+
 
 MapFrame::~MapFrame()
 {

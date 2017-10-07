@@ -36,6 +36,5 @@
   <run_depend>grid_map_msgs</run_depend>
 
   <export>
-
   </export>
 </package>
