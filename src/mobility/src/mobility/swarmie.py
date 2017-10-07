@@ -34,6 +34,9 @@ class PathException(DriveException):
 class AbortException(DriveException):
     pass
 
+class TimeoutException(DriveException):
+    pass
+
 class Swarmie: 
     '''Class that embodies the Swarmie's API''' 
     
@@ -58,14 +61,16 @@ class Swarmie:
         self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
 
     def __drive(self, request, **kwargs):
-        obstacles = ~0 
+        request.obstacles = ~0
         if 'ignore' in kwargs :
-            obstacles = ~kwargs['ignore']
+            request.obstacles = ~kwargs['ignore']
 
-        request.obstacles = obstacles 
+        request.timeout = 120
+        if 'timeout' in kwargs :
+            request.timeout = kwargs['timeout']
 
         value = self.control([request])
-        
+
         if 'throw' not in kwargs or kwargs['throw'] : 
             if value == MoveResult.OBSTACLE_SONAR :
                 raise ObstacleException(value)
@@ -77,6 +82,8 @@ class Swarmie:
                 raise PathException(value)
             elif value == MoveResult.USER_ABORT : 
                 raise AbortException(value)
+            elif value == MoveResult.TIMEOUT :
+                raise TimeoutException(value)
         
         return value
         

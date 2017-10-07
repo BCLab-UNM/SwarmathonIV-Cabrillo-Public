@@ -150,12 +150,25 @@ class State:
             self.Doing.result = result
     
     def _control(self, req):
+        global StateLock
         for r in req.req[:-1] :
             state.Work.put(Task(r, False), False)
         
-        t = Task(req.req[-1], True)
+        r = req.req[-1]
+        t = Task(r, True)
         state.Work.put(t, True)
-        t.sema.acquire()                
+
+        sleep_wait = 0.2
+        sleep_turns = r.timeout / sleep_wait
+        while not t.sema.acquire(blocking=False) :
+            rospy.sleep(sleep_wait)
+            sleep_turns -= 1
+            if sleep_turns == 0 :
+                # Ugh. Is this safe?
+                StateLock.acquire()
+                self._stop_now(MoveResult.TIMEOUT)
+                StateLock.release()
+
         rval = MoveResult()
         rval.result = t.result
         return rval
