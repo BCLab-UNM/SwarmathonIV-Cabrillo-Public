@@ -193,8 +193,8 @@ class Swarmie:
         val = self.__drive(request, throw=False)
         return bool(val & Obstacle.SONAR_BLOCK)
     def pickup(self):
-    '''Picks up the block'''
-      swarmie.set_finger_angle(2) #open
+      '''Picks up the block'''
+      self.set_finger_angle(2) #open
       rospy.sleep(1) #not sure if sleeps are okay here
       self.set_wrist_angle(1)
       rospy.sleep(.3)
@@ -203,9 +203,9 @@ class Swarmie:
       self.wrist_up()
        
     def putdown(self):
-    '''Puts the block down'''
+      '''Puts the block down'''
       self.set_wrist_angle(1)
       rospy.sleep(.5)
       self.set_finger_angle(2) #open
       rospy.sleep(.5)
-      swarmie.wrist_up()          
+      self.wrist_up()          
