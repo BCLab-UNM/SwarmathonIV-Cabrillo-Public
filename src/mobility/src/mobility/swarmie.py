@@ -6,7 +6,7 @@ import rospy
 import math 
 import random 
 
-from mobility.srv import Core, FindTarget
+from mobility.srv import Core, FindTarget, LatestTarget
 from mobility.msg import MoveResult, MoveRequest, Obstacle
 
 from std_srvs.srv import Empty 
@@ -55,10 +55,12 @@ class Swarmie:
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/clear_target_map')
+        rospy.wait_for_service(rover + '/map/get_latest_targets')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
+        self.get_latest_targets = rospy.ServiceProxy(rover + '/map/get_latest_targets', LatestTarget)
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
