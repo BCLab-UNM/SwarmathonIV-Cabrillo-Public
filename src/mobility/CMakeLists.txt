@@ -33,10 +33,10 @@ add_message_files (
 )
 
 add_service_files (
-	FILES Core.srv FindTarget.srv
+	FILES Core.srv FindTarget.srv LatestTarget.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs 
