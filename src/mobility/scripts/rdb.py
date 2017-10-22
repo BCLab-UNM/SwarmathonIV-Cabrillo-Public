@@ -63,14 +63,24 @@ if __name__ == '__main__' :
     print ('Topic data will be displayed. Press CTRL-\ to hide output.')
     readline.parse_and_bind("tab: complete")
     
+    print("Starting the enhanced Interactive Python shell")
+
+    #Systems will have an unmet dependcy run "sudo pip install ipython"
     try :
-        while True : 
-            line = raw_input('>>> ')
-            if line is not None and line != '' :
-                try :
-                    exec (line)
-                except Exception as e :
-                    print (e)
-    except EOFError as e : 
-        print ("Goodbye")
+        from IPython import embed
+        embed() # run the "enhanced" Interactive Python shell
+    except ImportError as e: #failover to Mike's line executor if missing IPython or error
+        print("Missing IPython run 'sudo pip install ipython'\n Failing over")
+        try: 
+            while True : 
+                line = raw_input('>>> ')
+                if line is not None and line != '' :
+                    try :
+                        exec (line)
+                    except Exception as e :
+                        print (e)
+        except EOFError as e : 
+            print ("Goodbye")
+
+    print ("Qapla'!")
 
