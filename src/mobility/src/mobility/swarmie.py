@@ -6,7 +6,7 @@ import rospy
 import math 
 import random 
 
-from mobility.srv import Core, FindTarget
+from mobility.srv import Core, FindTarget, LatestTarget
 from mobility.msg import MoveResult, MoveRequest, Obstacle
 
 from std_srvs.srv import Empty 
@@ -34,6 +34,9 @@ class PathException(DriveException):
 class AbortException(DriveException):
     pass
 
+class TimeoutException(DriveException):
+    pass
+
 class Swarmie: 
     '''Class that embodies the Swarmie's API''' 
     
@@ -52,20 +55,24 @@ class Swarmie:
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/clear_target_map')
+        rospy.wait_for_service(rover + '/map/get_latest_targets')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self.clear_target_map = rospy.ServiceProxy(rover + '/map/clear_target_map', Empty)
+        self.get_latest_targets = rospy.ServiceProxy(rover + '/map/get_latest_targets', LatestTarget)
 
     def __drive(self, request, **kwargs):
-        obstacles = ~0 
+        request.obstacles = ~0
         if 'ignore' in kwargs :
-            obstacles = ~kwargs['ignore']
+            request.obstacles = ~kwargs['ignore']
 
-        request.obstacles = obstacles 
+        request.timeout = 120
+        if 'timeout' in kwargs :
+            request.timeout = kwargs['timeout']
 
         value = self.control([request])
-        
+
         if 'throw' not in kwargs or kwargs['throw'] : 
             if value == MoveResult.OBSTACLE_SONAR :
                 raise ObstacleException(value)
@@ -77,6 +84,8 @@ class Swarmie:
                 raise PathException(value)
             elif value == MoveResult.USER_ABORT : 
                 raise AbortException(value)
+            elif value == MoveResult.TIMEOUT :
+                raise TimeoutException(value)
         
         return value
         
@@ -185,3 +194,20 @@ class Swarmie:
         )
         val = self.__drive(request, throw=False)
         return bool(val & Obstacle.SONAR_BLOCK)
+    def pickup(self):
+      '''Picks up the block'''
+      self.set_finger_angle(2) #open
+      rospy.sleep(1) #not sure if sleeps are okay here
+      self.set_wrist_angle(1)
+      rospy.sleep(.3)
+      self.set_finger_angle(.5) #close
+      rospy.sleep(0.5)
+      self.wrist_up()
+       
+    def putdown(self):
+      '''Puts the block down'''
+      self.set_wrist_angle(1)
+      rospy.sleep(.5)
+      self.set_finger_angle(2) #open
+      rospy.sleep(.5)
+      self.wrist_up()          

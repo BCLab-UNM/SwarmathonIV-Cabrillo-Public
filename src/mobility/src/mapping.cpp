@@ -15,6 +15,7 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <apriltags_ros/AprilTagDetectionArray.h>
+#include <apriltags_ros/AprilTagDetection.h>
 #include <grid_map_ros/grid_map_ros.hpp>
 #include <grid_map_msgs/GridMap.h>
 
@@ -27,6 +28,7 @@
 #include <std_srvs/Empty.h>
 
 #include <mobility/FindTarget.h>
+#include <mobility/LatestTarget.h>
 #include <mobility/Obstacle.h>
 
 using namespace std;
@@ -35,6 +37,8 @@ string rover;
 
 grid_map::GridMap obstacle_map;
 grid_map::GridMap target_map;
+
+apriltags_ros::AprilTagDetectionArray last_detection;
 
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
@@ -45,6 +49,16 @@ tf::TransformListener *cameraTF;
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
 unsigned int obstacle_status;
 
+/* sonarHandler() - Called when there's new data from the sonar array.
+ *
+ * This does two things:
+ *
+ * 1. Check the sonar distances to see if they are <= to the collision distance.
+ *   If so send an obstacle message so that the rover stops.
+ *
+ * 2. Update the obstacle maps based on current sonar readings.
+ *
+ */
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
 
 	static unsigned int prev_status = 0;
@@ -52,6 +66,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// TODO: Implement filtering for sonar.
 
+	// Calculate the obstacle status.
 	if (sonarLeft->range < collisionDistance) {
 		next_status |= mobility::Obstacle::SONAR_LEFT;
 	}
@@ -138,6 +153,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	    obstacle_map.at("obstacles", *iterator) = val;
 	  }
 
+	// Publish the obstacle message if there's an update to it.
 	if (next_status != prev_status) {
 		mobility::Obstacle msg;
 		msg.msg = next_status;
@@ -148,16 +164,33 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	prev_status = next_status;
 }
 
+/* sonarHandler() - Called when there's new Apriltag detection data.
+ *
+ * This does two things:
+ *
+ * 1. Send and obstacle message if there's a visible tag.
+ *
+ * 2. Update the target maps based on current detections.
+ *
+ */
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
 	if (message->detections.size() > 0) {
 		try {
+			// The Apriltags package can detect the pose of the tag. The pose
+			// in the detections array is relative to the camera. This transform
+			// lets us translate the camera coordinates into a world-referenced
+			// frame so we can place them on the map.
 			cameraTF->waitForTransform(rover + "/odom", ros::Time::now(),
 					message->detections[0].pose.header.frame_id,
 					message->detections[0].pose.header.stamp, rover + "/map",
 					ros::Duration(0.25));
+
+			// Remember this detections message.
+			last_detection.detections.clear();
+
 			for (int i=0; i<message->detections.size(); i++) {
 
 				if (message->detections[i].id == 0)
@@ -168,6 +201,14 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 				geometry_msgs::PoseStamped tagpose;
 				cameraTF->transformPose(rover + "/odom",
 						message->detections[i].pose, tagpose);
+
+				// Store the detection in the odom frame.
+				apriltags_ros::AprilTagDetection det;
+				det.id = message->detections[i].id;
+				det.size = message->detections[i].size;
+				det.pose = tagpose;
+				last_detection.detections.push_back(det);
+
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
 				target_map.getIndex(pos, ind);
@@ -189,6 +230,12 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	prev_status = next_status;
 }
 
+/* odometryHandler() - Called when new odometry data is available.
+ *
+ * The target map is high resolution and doesn't cover the whole arena.
+ * Use odometry data to recenter the map on top of the rover. Data that
+ * "falls off" is forgotten.
+ */
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double x = message->pose.pose.position.x;
     double y = message->pose.pose.position.y;
@@ -200,11 +247,22 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
+
+    // Store the current location so we can use it in other places.
     currentLocation.x = x;
     currentLocation.y = y;
     currentLocation.theta = yaw;
 }
 
+/* Python API
+ *
+ * find_nearest_target() - Return the position of the nearest tag. Fail
+ *   if there are no tags in the map.
+ *
+ * The service definition is in:
+ * 	srv/FindTarget.srv
+ *
+ */
 bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarget::Response &resp) {
 	bool rval = false;
 	grid_map::Position mypos(currentLocation.x, currentLocation.y);
@@ -225,8 +283,20 @@ bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarg
 	return rval;
 }
 
+/* Python API
+ *
+ * clear_target_map() - Forget all the targets on the map.
+ *
+ * FIXME: This is probably not a good idea. find_nearest_target should
+ * be smart enough to tell recent detections from old ones.
+ */
 bool clear_target_map(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
 	target_map.clear("targets");
+	return true;
+}
+
+bool get_latest_targets(mobility::LatestTarget::Request &req, mobility::LatestTarget::Response &rsp) {
+	rsp.detections = last_detection;
 	return true;
 }
 
@@ -278,8 +348,17 @@ int main(int argc, char **argv) {
 
     obstacle_status = mobility::Obstacle::PATH_IS_CLEAR;
 
-    // Subscribers
+    // Transform Listener
+    //
+    // C++ Tutorial Here:
+    // 		http://wiki.ros.org/tf/Tutorials/Writing%20a%20tf%20listener%20%28C%2B%2B%29
+    cameraTF = new tf::TransformListener(ros::Duration(10));
 
+    // Subscribers
+    //
+    // C++ Tutorial Here:
+    // 		http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28c%2B%2B%29
+    //
     ros::Subscriber odomSubscriber = mNH.subscribe((rover + "/odom/filtered"), 10, odometryHandler);
     ros::Subscriber targetSubscriber = mNH.subscribe((rover + "/targets"), 10, targetHandler);
 
@@ -292,10 +371,6 @@ int main(int argc, char **argv) {
     message_filters::Synchronizer<sonarSyncPolicy> sonarSync(sonarSyncPolicy(10), sonarLeftSubscriber, sonarCenterSubscriber, sonarRightSubscriber);
     sonarSync.registerCallback(boost::bind(&sonarHandler, _1, _2, _3));
 
-    // Transform Listener
-
-    cameraTF = new tf::TransformListener(ros::Duration(10));
-
     //	Publishers
 
     obstaclePublish = mNH.advertise<mobility::Obstacle>((rover + "/obstacle"), 1, true);
@@ -304,9 +379,12 @@ int main(int argc, char **argv) {
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
 
     // Services
-
+    //
+    // This is the API into the Python control code
+    //
     ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
     ros::ServiceServer ctm = mNH.advertiseService(rover + "/map/clear_target_map", clear_target_map);
+    ros::ServiceServer tag = mNH.advertiseService(rover + "/map/get_latest_targets", get_latest_targets);
 
     // Initialize the maps.
     obstacle_map = grid_map::GridMap({"obstacles"});
@@ -317,7 +395,7 @@ int main(int argc, char **argv) {
     target_map.setFrameId(rover + "/odom");
     target_map.setGeometry(grid_map::Length(3, 3), 0.03);
 
-    // Publish map updates.
+    // Periodically publish map updates
     ros::Timer map_update = mNH.createTimer(ros::Duration(1), publishMap);
 
     ros::spin();
