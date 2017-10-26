@@ -19,9 +19,8 @@ trap finish EXIT
 if ! catkin profile list | grep -q rover-deploy; then
     echo "Setting up the rover-deploy catkin profile."
     catkin profile add rover-deploy
-    catkin profile set rover-deploy
-    catkin config --install
-    catkin config -x="-rover-deploy"
+    catkin config --profile rover-deploy --install
+    catkin config --profile rover-deploy -x="-rover-deploy"
 fi
 
 # Build the current workspace
