@@ -71,7 +71,7 @@ class Swarmie:
         if 'timeout' in kwargs :
             request.timeout = kwargs['timeout']
 
-        value = self.control([request])
+        value = self.control([request]).result.result
 
         if 'throw' not in kwargs or kwargs['throw'] : 
             if value == MoveResult.OBSTACLE_SONAR :

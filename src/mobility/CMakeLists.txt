@@ -53,7 +53,7 @@ add_executable(
   src/mapping.cpp
 )
 
-add_dependencies(mapping ${catkin_EXPORTED_TARGETS})
+add_dependencies(mapping ${catkin_EXPORTED_TARGETS} mobility_gencpp)
 
 target_link_libraries(
   mapping

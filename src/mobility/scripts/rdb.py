@@ -41,10 +41,23 @@ if __name__ == '__main__' :
     quiet = False   
     
     if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-    
-    rover = sys.argv[1]
+        robolist = []
+        for topic in rospy.get_published_topics():
+            if topic[1] == 'sensor_msgs/Imu':
+                robolist.append(topic[0].split('/')[1])
+        robolist=list(set(robolist))
+        if len(robolist) < 1:
+            print('\033[91m',"No Rovers Detected",'\033[0m')
+            print ('usage:', sys.argv[0], '<rovername>')
+            exit (-1)
+        else: 
+            rover = robolist[0] #in the future view subscribed topics and to pick a different rover
+            print("Detected rovers", robolist)
+            print('\033[92m',"Auto selected:",rover,'\033[0m')
+    else: 
+        rover = sys.argv[1]
+
+    print("rospy.get_name()", rospy.get_name())
 
     swarmie = Swarmie(rover)
     print ('Connected.')
