@@ -1,11 +1,15 @@
 *~
 \#*#
 build
+build-rover-deploy
 devel
+devel-rover-deploy
 install
+install-rover-deploy
 **/CMakeLists.txt.user*
 *.swp
 logs
+logs-rover-deploy
 proj
 .catkin_tools
 .catkin_workspace

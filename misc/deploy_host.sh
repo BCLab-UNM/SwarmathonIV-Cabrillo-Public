@@ -15,16 +15,24 @@ function finish {
 
 trap finish EXIT
 
+# Check that the rover-deploy profile exists. 
+if ! catkin profile list | grep -q rover-deploy; then
+    echo "Setting up the rover-deploy catkin profile."
+    catkin profile add rover-deploy
+    catkin profile set rover-deploy
+    catkin config --install
+    catkin config -x="-rover-deploy"
+fi
+
 # Build the current workspace
 cd $(catkin locate)
-catkin build --no-status --no-color
-
+catkin build --profile rover-deploy --no-status --no-color
 
 # Package the build products, scripts, launch configs and stuff
 echo "Copying installation files."
 
 # Launch configurations run from the /proj directory by default.
-cp -R install/ $TEMPDIR
+cp -R install-rover-deploy/ $TEMPDIR
 cp -R camera_info/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
@@ -39,7 +47,7 @@ trap finish EXIT
 cd $TEMPDIR
 pwd
 source /opt/ros/kinetic/setup.bash
-source ./install/setup.bash
+source ./install-rover-deploy/setup.bash
 ./misc/rover_onboard_node_launch.sh 
 
 EOF
