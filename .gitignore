@@ -1,11 +1,9 @@
 *~
 \#*#
 build
-build-rover-deploy
 devel
-devel-rover-deploy
 install
-install-rover-deploy
+deploy
 **/CMakeLists.txt.user*
 *.swp
 logs
