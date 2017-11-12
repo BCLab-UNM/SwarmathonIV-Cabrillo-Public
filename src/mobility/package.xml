@@ -21,6 +21,7 @@
   <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>grid_map_ros</build_depend>
   <build_depend>grid_map_msgs</build_depend>
+  <build_depend>nav_msgs</build_depend>
 
   <run_depend>geometry_msgs</run_depend>
   <run_depend>roscpp</run_depend>
@@ -34,6 +35,7 @@
   <run_depend>dynamic_reconfigure</run_depend>
   <run_depend>grid_map_ros</run_depend>
   <run_depend>grid_map_msgs</run_depend>
+  <run_depend>nav_msgs</run_depend>
 
   <export>
   </export>

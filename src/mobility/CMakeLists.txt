@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   grid_map_ros
   grid_map_msgs
+  nav_msgs
 )
 
 catkin_python_setup()
@@ -33,15 +34,16 @@ add_message_files (
 )
 
 add_service_files (
-	FILES Core.srv FindTarget.srv LatestTarget.srv
+	FILES Core.srv FindTarget.srv LatestTarget.srv GetMap.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs 
   random_numbers tf apriltags_ros rospy message_runtime 
   grid_map_ros grid_map_msgs dynamic_reconfigure
+  nav_msgs
 )
 
 include_directories(
@@ -74,3 +76,4 @@ install(TARGETS mapping
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
+	

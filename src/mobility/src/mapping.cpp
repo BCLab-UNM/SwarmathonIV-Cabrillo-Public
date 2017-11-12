@@ -18,6 +18,7 @@
 #include <apriltags_ros/AprilTagDetection.h>
 #include <grid_map_ros/grid_map_ros.hpp>
 #include <grid_map_msgs/GridMap.h>
+#include <grid_map_ros/GridMapRosConverter.hpp>
 
 #include <std_msgs/UInt8.h>
 #include <sensor_msgs/Range.h>
@@ -26,10 +27,12 @@
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_srvs/Empty.h>
+#include <sensor_msgs/Image.h>
 
 #include <mobility/FindTarget.h>
 #include <mobility/LatestTarget.h>
 #include <mobility/Obstacle.h>
+#include <mobility/GetMap.h>
 
 using namespace std;
 
@@ -43,11 +46,41 @@ apriltags_ros::AprilTagDetectionArray last_detection;
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
 ros::Publisher target_map_publisher;
+ros::Publisher home_image_publisher;
+
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
 unsigned int obstacle_status;
+
+double poseToYaw(const geometry_msgs::Pose &pose) {
+    tf::Quaternion q(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    return yaw;
+}
+
+void publishObstacleMap() {
+	if (obstacle_map_publisher.getNumSubscribers() > 0) {
+		ros::Time time = ros::Time::now();
+		grid_map_msgs::GridMap message;
+		obstacle_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(obstacle_map, message);
+		obstacle_map_publisher.publish(message);
+	}
+}
+
+void publishTargetMap() {
+	if (target_map_publisher.getNumSubscribers() > 0) {
+		ros::Time time = ros::Time::now();
+		grid_map_msgs::GridMap message;
+		target_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(target_map, message);
+		target_map_publisher.publish(message);
+	}
+}
 
 /* sonarHandler() - Called when there's new data from the sonar array.
  *
@@ -162,6 +195,8 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	}
 
 	prev_status = next_status;
+
+	publishObstacleMap();
 }
 
 /* sonarHandler() - Called when there's new Apriltag detection data.
@@ -177,46 +212,63 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
+	//
+	// Aging. As time goes by, the probability that a block
+	// Is still in the place we saw it shrinks. Let's iterate
+	// over the map and apply aging.
+	//
+	grid_map::Matrix &data = target_map["home"];
+	grid_map::Matrix &tdata = target_map["target"];
+	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
+		const int i = it.getLinearIndex();
+		data(i) *= 0.999;
+		tdata(i) *= 0.999;
+	}
+
 	if (message->detections.size() > 0) {
 		try {
 			// The Apriltags package can detect the pose of the tag. The pose
 			// in the detections array is relative to the camera. This transform
 			// lets us translate the camera coordinates into a world-referenced
 			// frame so we can place them on the map.
-			cameraTF->waitForTransform(rover + "/odom", ros::Time::now(),
-					message->detections[0].pose.header.frame_id,
-					message->detections[0].pose.header.stamp, rover + "/map",
-					ros::Duration(0.25));
+			//
+			// This ensures that the transform is ready to be used below.
+			//
+			cameraTF->waitForTransform(
+					rover + "/odom",   // Target frame
+					message->detections[0].pose.header.frame_id, // Source frame
+					message->detections[0].pose.header.stamp,    // Time
+					ros::Duration(0.1) // How long to wait for the tf.
+			);
 
 			// Remember this detections message.
 			last_detection.detections.clear();
 
 			for (int i=0; i<message->detections.size(); i++) {
 
-				if (message->detections[i].id == 0)
-					next_status |= mobility::Obstacle::TAG_TARGET;
-				else if (message->detections[i].id == 256)
-					next_status |= mobility::Obstacle::TAG_HOME;
-
 				geometry_msgs::PoseStamped tagpose;
 				cameraTF->transformPose(rover + "/odom",
 						message->detections[i].pose, tagpose);
 
-				// Store the detection in the odom frame.
-				apriltags_ros::AprilTagDetection det;
-				det.id = message->detections[i].id;
-				det.size = message->detections[i].size;
-				det.pose = tagpose;
-				last_detection.detections.push_back(det);
+				// Store the detection in the camera frame.
+				last_detection.detections.push_back(message->detections[i]);
 
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
 				target_map.getIndex(pos, ind);
-				target_map.at("targets", ind) = 1;
+
+				if (message->detections[i].id == 0) {
+					next_status |= mobility::Obstacle::TAG_TARGET;
+					target_map.at("target", ind) = 1;
+				}
+				else if (message->detections[i].id == 256) {
+					next_status |= mobility::Obstacle::TAG_HOME;
+					target_map.at("home", ind) = 1;
+					target_map.at("home_yaw", ind) = poseToYaw(tagpose.pose);
+				}
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
-			return;
 		}
 	}
 
@@ -228,6 +280,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	}
 
 	prev_status = next_status;
+
+	publishTargetMap();
 }
 
 /* odometryHandler() - Called when new odometry data is available.
@@ -243,15 +297,10 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     grid_map::Position newPos(x, y);
     target_map.move(newPos);
 
-    tf::Quaternion q(message->pose.pose.orientation.x, message->pose.pose.orientation.y, message->pose.pose.orientation.z, message->pose.pose.orientation.w);
-    tf::Matrix3x3 m(q);
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-
     // Store the current location so we can use it in other places.
     currentLocation.x = x;
     currentLocation.y = y;
-    currentLocation.theta = yaw;
+    currentLocation.theta = poseToYaw(message->pose.pose);
 }
 
 /* Python API
@@ -267,7 +316,7 @@ bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarg
 	bool rval = false;
 	grid_map::Position mypos(currentLocation.x, currentLocation.y);
 	for (grid_map::SpiralIterator it(target_map, mypos, 2); !it.isPastEnd(); ++it) {
-		if (target_map.at("targets", *it) == 0) {
+		if (target_map.at("target", *it) == 0) {
 			// Found one!
 			resp.result.header.frame_id = target_map.getFrameId();
 			resp.result.header.stamp = ros::Time::now();
@@ -285,47 +334,30 @@ bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarg
 
 /* Python API
  *
- * clear_target_map() - Forget all the targets on the map.
+ * get_latest_targets() - Return the last ArilTagDetectionArray that had tags in it.
  *
- * FIXME: This is probably not a good idea. find_nearest_target should
- * be smart enough to tell recent detections from old ones.
+ * The service definition is in:
+ * 	srv/LatestTarget.srv
+ *
  */
-bool clear_target_map(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
-	target_map.clear("targets");
-	return true;
-}
-
 bool get_latest_targets(mobility::LatestTarget::Request &req, mobility::LatestTarget::Response &rsp) {
 	rsp.detections = last_detection;
 	return true;
 }
 
-void publishMap(const ros::TimerEvent& event) {
-	ros::Time time = ros::Time::now();
-	grid_map_msgs::GridMap message;
-
-	//
-	// Aging. As time goes by, the probability that a block
-	// Is still in the place we saw it shrinks. Let's iterate
-	// over the map and apply aging.
-	//
-	grid_map::Matrix &data = target_map["targets"];
-	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
-		const int i = it.getLinearIndex();
-		data(i) = data(i) * 0.99;
-	}
-
-	if (target_map_publisher.getNumSubscribers() > 0) {
-		target_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(target_map, message);
-		target_map_publisher.publish(message);
-	}
-
-	if (obstacle_map_publisher.getNumSubscribers() > 0) {
-		obstacle_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(obstacle_map, message);
-		obstacle_map_publisher.publish(message);
-	}
+/* Python API
+ *
+ * get_obstacle_map() - Return a view of the obstacles grid_map. The map is
+ *    translated into a nav_msgs/OccupancyGrid for easy use in Python.
+ *
+ * The service definition is in:
+ * 	srv/GetMap.srv
+ *
+ */
+bool get_obstacle_map(mobility::GetMap::Request &req, mobility::GetMap::Response &rsp) {
+	nav_msgs::OccupancyGrid grid;
+	grid_map::GridMapRosConverter::toOccupancyGrid(obstacle_map, "obstacles", 0, 1, rsp.grid);
+	return true;
 }
 
 int main(int argc, char **argv) {
@@ -377,26 +409,24 @@ int main(int argc, char **argv) {
 
     obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
+    home_image_publisher = mNH.advertise<sensor_msgs::Image>(rover + "/home_map_image", 1, false);
 
     // Services
     //
     // This is the API into the Python control code
     //
     ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
-    ros::ServiceServer ctm = mNH.advertiseService(rover + "/map/clear_target_map", clear_target_map);
     ros::ServiceServer tag = mNH.advertiseService(rover + "/map/get_latest_targets", get_latest_targets);
+    ros::ServiceServer map = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
 
     // Initialize the maps.
     obstacle_map = grid_map::GridMap({"obstacles"});
     obstacle_map.setFrameId(rover + "/odom");
     obstacle_map.setGeometry(grid_map::Length(25, 25), 0.5);
 
-    target_map = grid_map::GridMap({"targets"});
+    target_map = grid_map::GridMap({"target", "home", "home_yaw"});
     target_map.setFrameId(rover + "/odom");
-    target_map.setGeometry(grid_map::Length(3, 3), 0.03);
-
-    // Periodically publish map updates
-    ros::Timer map_update = mNH.createTimer(ros::Duration(1), publishMap);
+    target_map.setGeometry(grid_map::Length(3, 3), 0.01);
 
     ros::spin();
     return 0;
