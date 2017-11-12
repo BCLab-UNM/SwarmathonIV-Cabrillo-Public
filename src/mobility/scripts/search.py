@@ -9,7 +9,8 @@ import random
 
 from std_msgs.msg import String
 
-from mobility.msg import MoveResult, Obstacle
+from mobility.msg import MoveResult
+from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 

@@ -11,8 +11,8 @@ import tf
 from std_msgs.msg import String
 import angles 
 
-from mobility.msg import MoveResult, Obstacle
-from mobility.srv import FindTarget
+from mobility.msg import MoveResult
+from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
