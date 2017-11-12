@@ -109,12 +109,16 @@ class Swarmie:
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/get_latest_targets')
         rospy.wait_for_service(rover + '/map/get_obstacle_map')
+        rospy.wait_for_service(rover + '/start_magnetometer_calibration')
+        rospy.wait_for_service(rover + '/store_magnetometer_calibration')
         print ('Connected.')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self.get_latest_targets = rospy.ServiceProxy(rover + '/map/get_latest_targets', LatestTarget)
         self.get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
+        self.start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
+        self.store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
