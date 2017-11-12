@@ -9,8 +9,10 @@ import rospy
 import math 
 import random 
 
-from mobility.srv import Core, FindTarget, LatestTarget, GetMap
-from mobility.msg import MoveResult, MoveRequest, Obstacle
+from mobility.srv import Core
+from mapping.srv import FindTarget, LatestTarget, GetMap
+from mobility.msg import MoveResult, MoveRequest
+from swarmie_msgs.msg import Obstacle 
 
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
@@ -102,10 +104,12 @@ class Swarmie:
         self.finger_publisher = rospy.Publisher(rover + '/fingerAngle/cmd', Float32, queue_size=1, latch=True)
         self.wrist_publisher = rospy.Publisher(rover + '/wristAngle/cmd', Float32, queue_size=1, latch=True)
 
+        print ('Waiting to connect to services.')
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/get_latest_targets')
         rospy.wait_for_service(rover + '/map/get_obstacle_map')
+        print ('Connected.')
 
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self.find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)

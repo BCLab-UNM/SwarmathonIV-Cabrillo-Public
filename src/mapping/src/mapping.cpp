@@ -29,10 +29,10 @@
 #include <std_srvs/Empty.h>
 #include <sensor_msgs/Image.h>
 
-#include <mobility/FindTarget.h>
-#include <mobility/LatestTarget.h>
-#include <mobility/Obstacle.h>
-#include <mobility/GetMap.h>
+#include <swarmie_msgs/Obstacle.h>
+#include <mapping/FindTarget.h>
+#include <mapping/LatestTarget.h>
+#include <mapping/GetMap.h>
 
 using namespace std;
 
@@ -101,17 +101,17 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Calculate the obstacle status.
 	if (sonarLeft->range < collisionDistance) {
-		next_status |= mobility::Obstacle::SONAR_LEFT;
+		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
 	}
 	if (sonarRight->range < collisionDistance) {
-		next_status |= mobility::Obstacle::SONAR_RIGHT;
+		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
 	}
 	if (sonarCenter->range < collisionDistance) {
-		next_status |= mobility::Obstacle::SONAR_CENTER;
+		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
 	if (sonarCenter->range < 0.12) {
 		//block in front of center ultrasound.
-		next_status |= mobility::Obstacle::SONAR_BLOCK;
+		next_status |= swarmie_msgs::Obstacle::SONAR_BLOCK;
 	}
 
 	grid_map::Polygon view_poly;
@@ -188,9 +188,9 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Publish the obstacle message if there's an update to it.
 	if (next_status != prev_status) {
-		mobility::Obstacle msg;
+		swarmie_msgs::Obstacle msg;
 		msg.msg = next_status;
-		msg.mask = mobility::Obstacle::IS_SONAR;
+		msg.mask = swarmie_msgs::Obstacle::IS_SONAR;
 		obstaclePublish.publish(msg);
 	}
 
@@ -258,11 +258,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 				target_map.getIndex(pos, ind);
 
 				if (message->detections[i].id == 0) {
-					next_status |= mobility::Obstacle::TAG_TARGET;
+					next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
 					target_map.at("target", ind) = 1;
 				}
 				else if (message->detections[i].id == 256) {
-					next_status |= mobility::Obstacle::TAG_HOME;
+					next_status |= swarmie_msgs::Obstacle::TAG_HOME;
 					target_map.at("home", ind) = 1;
 					target_map.at("home_yaw", ind) = poseToYaw(tagpose.pose);
 				}
@@ -273,9 +273,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	}
 
 	if (next_status != prev_status) {
-		mobility::Obstacle msg;
+		swarmie_msgs::Obstacle msg;
 		msg.msg = next_status;
-		msg.mask = mobility::Obstacle::IS_VISION;
+		msg.mask = swarmie_msgs::Obstacle::IS_VISION;
 		obstaclePublish.publish(msg);
 	}
 
@@ -312,7 +312,7 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
  * 	srv/FindTarget.srv
  *
  */
-bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarget::Response &resp) {
+bool find_neareset_target(mapping::FindTarget::Request &req, mapping::FindTarget::Response &resp) {
 	bool rval = false;
 	grid_map::Position mypos(currentLocation.x, currentLocation.y);
 	for (grid_map::SpiralIterator it(target_map, mypos, 2); !it.isPastEnd(); ++it) {
@@ -340,7 +340,7 @@ bool find_neareset_target(mobility::FindTarget::Request &req, mobility::FindTarg
  * 	srv/LatestTarget.srv
  *
  */
-bool get_latest_targets(mobility::LatestTarget::Request &req, mobility::LatestTarget::Response &rsp) {
+bool get_latest_targets(mapping::LatestTarget::Request &req, mapping::LatestTarget::Response &rsp) {
 	rsp.detections = last_detection;
 	return true;
 }
@@ -354,7 +354,7 @@ bool get_latest_targets(mobility::LatestTarget::Request &req, mobility::LatestTa
  * 	srv/GetMap.srv
  *
  */
-bool get_obstacle_map(mobility::GetMap::Request &req, mobility::GetMap::Response &rsp) {
+bool get_obstacle_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
 	nav_msgs::OccupancyGrid grid;
 	grid_map::GridMapRosConverter::toOccupancyGrid(obstacle_map, "obstacles", 0, 1, rsp.grid);
 	return true;
@@ -378,7 +378,7 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, (rover + "_MAP"));
     ros::NodeHandle mNH;
 
-    obstacle_status = mobility::Obstacle::PATH_IS_CLEAR;
+    obstacle_status = swarmie_msgs::Obstacle::PATH_IS_CLEAR;
 
     // Transform Listener
     //
@@ -405,7 +405,7 @@ int main(int argc, char **argv) {
 
     //	Publishers
 
-    obstaclePublish = mNH.advertise<mobility::Obstacle>((rover + "/obstacle"), 1, true);
+    obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>((rover + "/obstacle"), 1, true);
 
     obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>mobility</name>
-  <version>0.2.0</version>
-  <description>Algorithmic implementation of random search as a finite state machine</description>
+  <name>mapping</name>
+  <version>0.1.0</version>
+  <description>A package to collect rover data and make maps.</description>
 
   <maintainer email="michael.matera@cabrillo.edu">Mike Matera</maintainer>
 
@@ -13,12 +13,9 @@
   <build_depend>roscpp</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>random_numbers</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>apriltags_ros</build_depend>
-  <build_depend>rospy</build_depend>
   <build_depend>message_generation</build_depend>
-  <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>grid_map_ros</build_depend>
   <build_depend>grid_map_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
@@ -28,12 +25,9 @@
   <run_depend>roscpp</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>std_msgs</run_depend>
-  <run_depend>random_numbers</run_depend>
   <run_depend>tf</run_depend>
   <run_depend>apriltags_ros</run_depend>
-  <run_depend>rospy</run_depend>
   <run_depend>message_runtime</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
   <run_depend>grid_map_ros</run_depend>
   <run_depend>grid_map_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
