@@ -46,7 +46,6 @@ apriltags_ros::AprilTagDetectionArray last_detection;
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
 ros::Publisher target_map_publisher;
-ros::Publisher home_image_publisher;
 
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
@@ -409,7 +408,6 @@ int main(int argc, char **argv) {
 
     obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
-    home_image_publisher = mNH.advertise<sensor_msgs::Image>(rover + "/home_map_image", 1, false);
 
     // Services
     //
