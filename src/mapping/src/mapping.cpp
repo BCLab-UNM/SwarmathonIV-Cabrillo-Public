@@ -220,8 +220,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	grid_map::Matrix &tdata = target_map["target"];
 	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
 		const int i = it.getLinearIndex();
-		data(i) *= 0.999;
-		tdata(i) *= 0.999;
+		data(i) *= 0.99;
+		tdata(i) *= 0.99;
 	}
 
 	if (message->detections.size() > 0) {
