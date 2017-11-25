@@ -16,6 +16,9 @@ from swarmie_msgs.msg import Obstacle
 
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
+from nav_msgs.msg import Odometry
+
+from mobility import sync, synchronized, Location 
 
 class DriveException(Exception):
     def __init__(self, st):
@@ -132,7 +135,19 @@ class Swarmie:
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
         self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
-        
+
+        # Subscribe to useful topics 
+        rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
+        rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
+
+    @sync
+    def _odom(self, msg) : 
+        self.OdomLocation = Location(msg)
+            
+    @sync    
+    def _map(self, msg) : 
+        self.MapLocation = Location(msg)
+
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
         if 'ignore' in kwargs :
@@ -359,3 +374,17 @@ class Swarmie:
         '''Finish calibrating the magnetometer on a rover.'''
         self._store_magnetometer_calibration()
         
+    def get_odom_location(self):
+        '''Returns the location according to Odometery. This location will not 
+        jump arround and is locally accurate but will drift over time.'''
+        with synchronized() :
+            return self.OdomLocation
+    
+    def get_gps_location(self):
+        '''Returns the location acording to Odometry and GPS. This location will jump
+        around because of GPS and, because GPS is not always reliable, may be way way 
+        off. Averaging this location for a long time with good GPS signal will be correct
+        within a couple of meters.'''
+        with synchronized() :
+            return self.MapLocation
+    

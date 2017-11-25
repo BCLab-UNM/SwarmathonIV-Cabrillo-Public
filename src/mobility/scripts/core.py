@@ -27,16 +27,7 @@ from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 from angles import shortest_angular_distance
 
-def sync(func) :
-    '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
-    def wrapper(self, *args, **kwargs):
-        global StateLock
-        try:
-            StateLock.acquire()
-            return func(self, *args, **kwargs)
-        finally:
-            StateLock.release()
-    return wrapper
+from mobility import sync, Location 
 
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
@@ -49,30 +40,6 @@ class Task :
         else:
             self.sema = None 
             
-class Location: 
-    '''A class that encodes a handler provided location and accessor methods''' 
-    def __init__(self, odo):
-        self.Odometry = odo 
-    
-    def get_pose(self):
-        quat = [self.Odometry.pose.pose.orientation.x, 
-                self.Odometry.pose.pose.orientation.y, 
-                self.Odometry.pose.pose.orientation.z, 
-                self.Odometry.pose.pose.orientation.w, 
-                ]        
-        (r, p, y) = tf.transformations.euler_from_quaternion(quat)
-        pose = Pose2D()
-        pose.x = self.Odometry.pose.pose.position.x 
-        pose.y = self.Odometry.pose.pose.position.y 
-        pose.theta = y 
-        return pose
-
-    def at_goal(self, goal):
-        '''Determine if the pose is within acceptable distance of this location''' 
-        dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
-                          goal.y - self.Odometry.pose.pose.position.y);
-        return (dist < State.GOAL_DISTANCE_OK)
-                    
 class State: 
     '''Global robot state variables''' 
 
@@ -124,7 +91,6 @@ class State:
         rospy.Subscriber(rover + '/mode', UInt8, self._mode)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
-        rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
 
         # Services 
         self.control = rospy.Service(rover + '/control', Core, self._control);
@@ -227,10 +193,6 @@ class State:
     def _odom(self, msg) : 
         self.OdomLocation = Location(msg)
             
-    @sync    
-    def _map(self, msg) : 
-        self.MapLocation = Location(msg)
-
     def drive(self, linear, angular, mode):
         t = Twist() 
         t.linear.x = linear
@@ -310,7 +272,7 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
+            if self.OdomLocation.at_goal(self.Goal, State.GOAL_DISTANCE_OK) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
@@ -329,7 +291,7 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
+            if self.OdomLocation.at_goal(self.Goal, State.GOAL_DISTANCE_OK) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
@@ -381,18 +343,17 @@ def do_initial_config(rover):
     print ('Initial configuration sent.')
     
 def main() :     
-    global StateLock 
     global state
     
     if len(sys.argv) < 2 :
         print('usage:', sys.argv[0], '<rovername>')
         exit (-1)
     
-    StateLock = threading.Lock()
     rover = sys.argv[1]
     rospy.init_node(rover + '_MOBILITY')
-    #thread.start_new_thread(do_initial_config, (rover,))
     state = State(rover)
+
+    thread.start_new_thread(do_initial_config, (rover,))
 
     rospy.spin()
 
