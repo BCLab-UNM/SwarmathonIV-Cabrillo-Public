@@ -112,6 +112,8 @@ class Swarmie:
     
     def __init__(self, rover):
         self.rover_name = rover 
+        self.Obstacles = 0
+
         rospy.init_node(rover + '_CONTROLLER')
 
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
@@ -139,6 +141,7 @@ class Swarmie:
         # Subscribe to useful topics 
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
+        rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
 
     @sync
     def _odom(self, msg) : 
@@ -147,6 +150,11 @@ class Swarmie:
     @sync    
     def _map(self, msg) : 
         self.MapLocation = Location(msg)
+
+    @sync
+    def _obstacle(self, msg) :
+        self.Obstacles &= ~msg.mask 
+        self.Obstacles |= msg.msg 
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -388,3 +396,26 @@ class Swarmie:
         with synchronized() :
             return self.MapLocation
     
+    def get_obstacle_condition(self):
+        '''Returns the current obstacle condition. The presence of obstacles is indicated
+        by bits in the returned integer. 
+        
+        The definition of the bits can be found in:
+            src/swarmie_msgs/msg/Obstacle.msg
+        
+        Bit definitions:
+            
+            bit 1: SONAR_LEFT
+            bit 2: SONAR_RIGHT
+            bit 3: SONAR_CENTER
+            bit 4: SONAR_BLOCK
+            bit 8: TAG_TARGET
+            bit 9: TAG_HOME
+
+        Bit masks:
+        
+            IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
+            IS_VISION = TAG_TARGET | TAG_HOME 
+        '''
+        with synchronized() : 
+            return self.Obstacles
