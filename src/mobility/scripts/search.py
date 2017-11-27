@@ -45,10 +45,10 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-            
+
     try: 
         for move in range(10) :
-            if rospy.is_shutdown : 
+            if rospy.is_shutdown() : 
                 exit(-1)
             try:
                 wander()
