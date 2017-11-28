@@ -9,7 +9,8 @@ import random
 
 from std_msgs.msg import String
 
-from mobility.msg import MoveResult, Obstacle
+from mobility.msg import MoveResult
+from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
@@ -44,10 +45,10 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-            
+
     try: 
         for move in range(10) :
-            if rospy.is_shutdown : 
+            if rospy.is_shutdown() : 
                 exit(-1)
             try:
                 wander()

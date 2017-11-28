@@ -7,7 +7,9 @@ import rospy
 import angles
 import math
 import copy
+import thread
 import threading
+
 from Queue import Queue 
 
 import tf
@@ -17,21 +19,15 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
 from dynamic_reconfigure.server import Server
+from dynamic_reconfigure.client import Client
 
 from mobility.cfg import driveConfig 
 from mobility.srv import Core
-from mobility.msg import MoveResult, Obstacle
+from mobility.msg import MoveResult
+from swarmie_msgs.msg import Obstacle
+from angles import shortest_angular_distance
 
-def sync(func) :
-    '''This decorator forces serial access based on a file level lock. Crude but effective.''' 
-    def wrapper(self, *args, **kwargs):
-        global StateLock
-        try:
-            StateLock.acquire()
-            return func(self, *args, **kwargs)
-        finally:
-            StateLock.release()
-    return wrapper
+from mobility import sync, Location 
 
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
@@ -44,30 +40,6 @@ class Task :
         else:
             self.sema = None 
             
-class Location: 
-    '''A class that encodes a handler provided location and accessor methods''' 
-    def __init__(self, odo):
-        self.Odometry = odo 
-    
-    def get_pose(self):
-        quat = [self.Odometry.pose.pose.orientation.x, 
-                self.Odometry.pose.pose.orientation.y, 
-                self.Odometry.pose.pose.orientation.z, 
-                self.Odometry.pose.pose.orientation.w, 
-                ]        
-        (r, p, y) = tf.transformations.euler_from_quaternion(quat)
-        pose = Pose2D()
-        pose.x = self.Odometry.pose.pose.position.x 
-        pose.y = self.Odometry.pose.pose.position.y 
-        pose.theta = y 
-        return pose
-
-    def at_goal(self, goal):
-        '''Determine if the pose is within acceptable distance of this location''' 
-        dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
-                          goal.y - self.Odometry.pose.pose.position.y);
-        return (dist < State.GOAL_DISTANCE_OK)
-                    
 class State: 
     '''Global robot state variables''' 
 
@@ -84,22 +56,15 @@ class State:
     DRIVE_MODE_STOP = 0
     DRIVE_MODE_PID  = 1 
     
-    # Tunable parameters 
-    DRIVE_SPEED_SLOPE = 1 
-    DRIVE_SPEED_MIN   = 0.1 
-    DRIVE_SPEED_MAX   = 0.5
-    
-    TURN_SPEED_SLOPE  = 2
-    TURN_SPEED_MIN    = 0.1
-    TURN_SPEED_MAX    = 0.7
-    
-    GOAL_DISTANCE_OK  = 0.1
+    # Tune these with dynaimc reconfigure.
+    DRIVE_SPEED                = 0
+    REVERSE_SPEED              = 0 
+    TURN_SPEED                 = 0
+    HEADING_RESTORE_FACTOR     = 0
+    GOAL_DISTANCE_OK           = 0
+    ROTATE_THRESHOLD           = 0
+    DRIVE_ANGLE_ABORT          = 0
 
-    ROTATE_THRESHOLD  = math.pi / 16 
-    DRIVE_ANGLE_ABORT = math.pi / 2 
-
-    STOP_THRESHOLD    = 0.1
-               
     def __init__(self, rover):
         self.MapLocation = Location(None)
         self.OdomLocation =  Location(None)
@@ -112,19 +77,27 @@ class State:
         self.dbg_msg = None
         self.Obstacles = 0 
         
+        # Configuration 
+        State.DRIVE_SPEED = rospy.get_param("DRIVE_SPEED", default=0.3)
+        State.REVERSE_SPEED = rospy.get_param("REVERSE_SPEED", default=0.2)
+        State.TURN_SPEED = rospy.get_param("TURN_SPEED", default=0.6)
+        State.HEADING_RESTORE_FACTOR = rospy.get_param("HEADING_RESTORE_FACTOR", default=2)
+        State.GOAL_DISTANCE_OK = rospy.get_param("GOAL_DISTANCE_OK", default=0.1)
+        State.ROTATE_THRESHOLD = rospy.get_param("ROTATE_THRESHOLD", default=math.pi/16)
+        State.DRIVE_ANGLE_ABORT = rospy.get_param("DRIVE_ANGLE_ABORT", default=math.pi/4)
+
         # Subscribers
         #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
         rospy.Subscriber(rover + '/mode', UInt8, self._mode)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
-        rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
 
         # Services 
         self.control = rospy.Service(rover + '/control', Core, self._control);
         
         # Publishers    
         self.status = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
-        self.infoLog = rospy.Publisher(rover + '/infoLog', String, queue_size=1, latch=True)
+        self.infoLog = rospy.Publisher('/infoLog', String, queue_size=1, latch=True)
         self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=1, latch=True)
         self.fingerAngle = rospy.Publisher(rover + '/fingerAngle', Float32, queue_size=1, latch=True)
         self.wristAngle = rospy.Publisher(rover + '/wristAngle', Float32, queue_size=1, latch=True)
@@ -175,15 +148,13 @@ class State:
     
     @sync
     def _reconfigure(self, config, level):
-        State.DRIVE_SPEED_SLOPE = config['DRIVE_SPEED_SLOPE']
-        State.DRIVE_SPEED_MIN   = config['DRIVE_SPEED_MIN']
-        State.DRIVE_SPEED_MAX   = config['DRIVE_SPEED_MAX']
-        State.TURN_SPEED_SLOPE  = config['TURN_SPEED_SLOPE']
-        State.TURN_SPEED_MIN    = config['TURN_SPEED_MIN']
-        State.TURN_SPEED_MAX    = config['TURN_SPEED_MAX']
-        State.GOAL_DISTANCE_OK  = config['GOAL_DISTANCE_OK']
-        State.ROTATE_THRESHOLD  = config['ROTATE_THRESHOLD']
-        State.DRIVE_ANGLE_ABORT = config['DRIVE_ANGLE_ABORT']
+        State.DRIVE_SPEED = config["DRIVE_SPEED"]
+        State.REVERSE_SPEED = config["REVERSE_SPEED"]
+        State.TURN_SPEED = config["TURN_SPEED"]
+        State.HEADING_RESTORE_FACTOR = config["HEADING_RESTORE_FACTOR"]
+        State.GOAL_DISTANCE_OK = config["GOAL_DISTANCE_OK"]
+        State.ROTATE_THRESHOLD = config["ROTATE_THRESHOLD"]
+        State.DRIVE_ANGLE_ABORT = config["DRIVE_ANGLE_ABORT"]
         self.print_info_log('Mobility parameter reconfiguration done.')
         return config 
     
@@ -222,10 +193,6 @@ class State:
     def _odom(self, msg) : 
         self.OdomLocation = Location(msg)
             
-    @sync    
-    def _map(self, msg) : 
-        self.MapLocation = Location(msg)
-
     def drive(self, linear, angular, mode):
         t = Twist() 
         t.linear.x = linear
@@ -305,29 +272,36 @@ class State:
             cur = self.OdomLocation.get_pose()
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
+            if self.OdomLocation.at_goal(self.Goal, State.GOAL_DISTANCE_OK) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT :
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
                     
-            elif abs(heading_error) > math.pi / 2 :
-                self.Doing.result = MoveResult.PATH_FAIL
-                self.CurrentState = State.STATE_STOP
+            elif abs(heading_error) > State.DRIVE_ANGLE_ABORT / 2 :
+                self._stop_now(MoveResult.PATH_FAIL)
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
-                self.drive(get_speed(self.Start, self.Goal, cur), 0, State.DRIVE_MODE_PID)
+                self.drive(get_speed(self.Start, self.Goal, cur),
+                           heading_error * State.HEADING_RESTORE_FACTOR,
+                           State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
             self.print_debug('REVERSE')
             self.__check_obstacles()
             cur = self.OdomLocation.get_pose()
+            heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             goal_angle = angles.shortest_angular_distance(math.pi + cur.theta, math.atan2(self.Goal.y - cur.y, self.Goal.x - cur.x))
-            if self.OdomLocation.at_goal(self.Goal) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
+            if self.OdomLocation.at_goal(self.Goal, State.GOAL_DISTANCE_OK) or abs(goal_angle) > State.DRIVE_ANGLE_ABORT : 
                 self.Goal = None
                 self.CurrentState = State.STATE_IDLE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
+            elif abs(heading_error) > State.DRIVE_ANGLE_ABORT / 2 :
+                self._stop_now(MoveResult.PATH_FAIL)
+                self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
-                self.drive(-0.2, 0, State.DRIVE_MODE_PID)
+                self.drive(-State.REVERSE_SPEED, 
+                           heading_error * State.HEADING_RESTORE_FACTOR, 
+                           State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_TIMED : 
             self.print_debug('TIMED')
@@ -346,65 +320,41 @@ class State:
 def get_turn(start, end, current):
     dist_from_start = angles.shortest_angular_distance(current.theta, end.theta)
     if dist_from_start < 0 :
-        return -0.3
+        return -State.TURN_SPEED
     else:
-        return 0.3 
-    
-def xget_turn(start, end, current):
-    dist_from_start = angles.shortest_angular_distance(start.theta, current.theta)
-    dist_to_end = angles.shortest_angular_distance(current.theta, end.theta) - State.ROTATE_THRESHOLD
-    
-    def dist_to_turn(dist):
-        speed = dist * State.TURN_SPEED_SLOPE
-        if speed > 0 : 
-            if speed > State.TURN_SPEED_MAX : 
-                speed = State.TURN_SPEED_MAX
-            elif speed < State.TURN_SPEED_MIN : 
-                speed = State.TURN_SPEED_MIN
-        else :
-            if speed < -State.TURN_SPEED_MAX :
-                speed = -State.TURN_SPEED_MAX
-            elif speed > -State.TURN_SPEED_MIN :
-                speed = -State.TURN_SPEED_MIN
-                         
-        return speed
-
-    to = dist_to_turn(dist_to_end)
-    if to > 0 :
-        return -min(to, -abs(dist_to_turn(dist_from_start)))
-    else:
-        return -max(to, abs(dist_to_turn(dist_from_start)))
+        return State.TURN_SPEED
 
 def get_speed(start, end, current):
-    return 0.3
-    
-def xget_speed(start, end, current):
-    dist_from_start = abs(math.hypot(start.x - current.x, start.y - current.y))
-    dist_to_end = abs(math.hypot(current.x - end.x, current.y - end.y)) - State.GOAL_DISTANCE_OK
-    
-    def dist_to_speed(dist):
-        speed = dist * State.DRIVE_SPEED_SLOPE
-        if speed > State.DRIVE_SPEED_MAX:
-            speed = State.DRIVE_SPEED_MAX
-        elif speed < State.DRIVE_SPEED_MIN :
-            speed = State.DRIVE_SPEED_MIN 
-        
-        return speed
+    return State.DRIVE_SPEED
 
-    return min(dist_to_speed(dist_from_start), dist_to_speed(dist_to_end))    
-     
+def do_initial_config(rover):
+    # Do initial configuration. 
+    params = {
+        "DRIVE_SPEED": State.DRIVE_SPEED,
+        "REVERSE_SPEED": State.REVERSE_SPEED,
+        "TURN_SPEED": State.TURN_SPEED,
+        "HEADING_RESTORE_FACTOR": State.HEADING_RESTORE_FACTOR,
+        "GOAL_DISTANCE_OK": State.GOAL_DISTANCE_OK,
+        "ROTATE_THRESHOLD": State.ROTATE_THRESHOLD,
+        "DRIVE_ANGLE_ABORT": State.DRIVE_ANGLE_ABORT,
+        }
+    dyn_client = Client(rover + '_MOBILITY') 
+    dyn_client.update_configuration(params)
+    print ('Initial configuration sent.')
+    
 def main() :     
-    global StateLock 
     global state
-
+    
     if len(sys.argv) < 2 :
         print('usage:', sys.argv[0], '<rovername>')
         exit (-1)
     
-    StateLock = threading.Lock()
     rover = sys.argv[1]
     rospy.init_node(rover + '_MOBILITY')
     state = State(rover)
+
+    thread.start_new_thread(do_initial_config, (rover,))
+
     rospy.spin()
 
 if __name__ == '__main__' : 
