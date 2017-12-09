@@ -21,7 +21,7 @@ from nav_msgs.msg import Odometry
 import threading 
 swarmie_lock = threading.Lock()
 
-from mobility import sync, synchronized, Location 
+from mobility import sync, Location 
 
 class DriveException(Exception):
     def __init__(self, st):
@@ -390,14 +390,14 @@ class Swarmie:
     def get_odom_location(self):
         '''Returns a mobility.Location according to Odometery. This location will not 
         jump arround and is locally accurate but will drift over time.'''
-        with synchronized(swarmie_lock) :
+        with swarmie_lock :
             return self.OdomLocation
     
     def get_gps_location(self):
         '''Returns a mobility.Location that is the output of the EKF that fuses GPS.
         This value has varying accuracy. The accuracy is reported in a covariance matrix. 
         If you want to wait for a __good__ reading use wait_for_fix()'''
-        with synchronized(swarmie_lock) :
+        with swarmie_lock :
             return self.MapLocation
 
     def wait_for_fix(self, distance=4, time=30):    
@@ -444,5 +444,5 @@ class Swarmie:
             IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
             IS_VISION = TAG_TARGET | TAG_HOME 
         '''
-        with synchronized(swarmie_lock) : 
+        with swarmie_lock : 
             return self.Obstacles

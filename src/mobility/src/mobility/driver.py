@@ -30,7 +30,7 @@ from angles import shortest_angular_distance
 import threading 
 package_lock = threading.Lock()
 
-from mobility import sync, synchronized, Location 
+from mobility import sync, Location 
 
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
@@ -140,7 +140,7 @@ class State:
             sleep_turns -= 1
             if sleep_turns == 0 :
                 # Ugh. Is this safe?
-                with synchronized(package_lock) :
+                with package_lock :
                     self._stop_now(MoveResult.TIMEOUT)
 
         rval = MoveResult()

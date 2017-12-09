@@ -6,26 +6,16 @@ import math
 import tf
 
 from functools import wraps
-from contextlib import contextmanager
 
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Pose2D
-
-@contextmanager
-def synchronized(lock):
-    '''A context manager to mark a critical section that needs to hold the global lock'''
-    try:
-        lock.acquire()
-        yield
-    finally:
-        lock.release()
 
 def sync(lock):
     '''This decorator forces serial access based on a package level lock. Crude but effective.''' 
     def _sync(func) :
         @wraps(func)
         def wrapper(*args, **kwargs):
-            with synchronized(lock) :
+            with lock :
                 return func(*args, **kwargs)
         return wrapper
     return _sync
