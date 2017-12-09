@@ -57,3 +57,5 @@ class Location:
                           goal.y - self.Odometry.pose.pose.position.y)
         return dist < distance
                     
+    def get_variances(self):
+        return (self.Odometry.pose.covariance[0:15:7])

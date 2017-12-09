@@ -383,18 +383,40 @@ class Swarmie:
         self._store_magnetometer_calibration()
         
     def get_odom_location(self):
-        '''Returns the location according to Odometery. This location will not 
+        '''Returns a mobility.Location according to Odometery. This location will not 
         jump arround and is locally accurate but will drift over time.'''
         with synchronized() :
             return self.OdomLocation
     
     def get_gps_location(self):
-        '''Returns the location acording to Odometry and GPS. This location will jump
-        around because of GPS and, because GPS is not always reliable, may be way way 
-        off. Averaging this location for a long time with good GPS signal will be correct
-        within a couple of meters.'''
+        '''Returns a mobility.Location that is the output of the EKF that fuses GPS.
+        This value has varying accuracy. The accuracy is reported in a covariance matrix. 
+        If you want to wait for a __good__ reading use wait_for_fix()'''
         with synchronized() :
             return self.MapLocation
+
+    def wait_for_fix(self, distance=4, time=30):    
+        '''Wait until the GPS fix is reasonably accurate. This could take a while!
+
+        Arguments: 
+
+            distance: (float) The desired accuracty (+/- distance meters) with a likelyhood 
+                of 50%. Defaults to 4 meters.
+
+            time: (int) The number of seconds to wait for a good GPS measurement before giving up
+                Defaults to 30 seconds. 
+
+        Returns: 
+
+            A mobility.Location if the fix was successful. None if we waited until the timeout. 
+        '''        
+        for i in xrange(time) : 
+            loc = self.get_gps_location()
+            vx, vy, vz = loc.get_variances()
+            if math.sqrt(vy) < distance : 
+                return loc 
+            rospy.sleep(1)
+        return None
     
     def get_obstacle_condition(self):
         '''Returns the current obstacle condition. The presence of obstacles is indicated
