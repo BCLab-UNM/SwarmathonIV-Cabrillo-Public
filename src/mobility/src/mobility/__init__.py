@@ -11,27 +11,24 @@ from contextlib import contextmanager
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Pose2D
 
-_SingletonStateLock = threading.Lock()
-
 @contextmanager
-def synchronized():
+def synchronized(lock):
     '''A context manager to mark a critical section that needs to hold the global lock'''
-    global _SingletonStateLock
     try:
-        _SingletonStateLock.acquire()
+        lock.acquire()
         yield
     finally:
-        _SingletonStateLock.release()
+        lock.release()
 
-def sync(func) :
+def sync(lock):
     '''This decorator forces serial access based on a package level lock. Crude but effective.''' 
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        func.__doc__
-        global _SingletonStateLock
-        with synchronized() :
-            return func(self, *args, **kwargs)
-    return wrapper
+    def _sync(func) :
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with synchronized(lock) :
+                return func(*args, **kwargs)
+        return wrapper
+    return _sync
 
 class Location: 
     '''A class that encodes an EKF provided location and accessor methods''' 
