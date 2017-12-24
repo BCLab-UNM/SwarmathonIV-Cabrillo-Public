@@ -43,7 +43,6 @@ catkin_package(
 catkin_install_python (
 	PROGRAMS 
 	scripts/core.py 
-	scripts/task.py 
 	scripts/rdb.py 
 	scripts/init.py 
 	scripts/search.py 

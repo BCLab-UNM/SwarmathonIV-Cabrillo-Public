@@ -4,6 +4,7 @@
   <arg name="round" default="prelim"/>
   <arg name="single" default="true"/>
   <arg name="startsim" default="false"/>
+  <arg name="gazebo" default="false"/>
 
   <node name="rqt_rover_gui" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
 
@@ -15,5 +16,6 @@
     <param name="round" value="$(arg round)"/>
     <param name="single" value="$(arg single)"/>
     <param name="startsim" value="$(arg startsim)"/>
+    <param name="gazebo" value="$(arg gazebo)"/>
   </node>
 </launch>

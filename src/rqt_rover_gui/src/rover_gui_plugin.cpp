@@ -279,6 +279,12 @@ namespace rqt_rover_gui
     	}
     }
 
+    bool doview;
+    if (nh.getParam("gazebo", doview)) {
+		emit sendInfoLogMessage("Setting visualization checkbox.");
+    	ui.start_visualization_on_build_checkbox->setChecked(doview);
+    }
+
     bool dostart;
     if (nh.getParam("startsim", dostart)) {
     	if (dostart) {
