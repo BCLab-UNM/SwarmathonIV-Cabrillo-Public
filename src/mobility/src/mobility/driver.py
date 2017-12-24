@@ -46,10 +46,6 @@ class Task :
 class State: 
     '''Global robot state variables''' 
 
-    MODE_MANUAL     = 1 
-    MODE_AUTO       = 2
-    MODE_ALL_AUTO   = 3 
-    
     STATE_IDLE      = 0
     STATE_TURN      = 1
     STATE_DRIVE     = 2 
@@ -92,27 +88,23 @@ class State:
 
         # Subscribers
         #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
-        rospy.Subscriber(rover + '/mode', UInt8, self._mode)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
 
         # Services 
         self.control = rospy.Service(rover + '/control', Core, self._control);
         
-        # Publishers    
-        self.status = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
-        self.infoLog = rospy.Publisher('/infoLog', String, queue_size=1, latch=True)
+        # Publishers
         self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=1, latch=True)
         self.fingerAngle = rospy.Publisher(rover + '/fingerAngle', Float32, queue_size=1, latch=True)
         self.wristAngle = rospy.Publisher(rover + '/wristAngle', Float32, queue_size=1, latch=True)
         self.driveControl = rospy.Publisher(rover + '/driveControl', Twist, queue_size=10)
-        self.heartbeat = rospy.Publisher(rover + '/mobility/heartbeat', String, queue_size=1, latch=True)
 
         # Configuration 
         self.config_srv = Server(driveConfig, self._reconfigure)
 
         # Start a thread to do initial configuration.
-        thread.start_new_thread(self.do_initial_config, (rover,))
+        thread.start_new_thread(self.do_initial_config, ())
         
     def _stop_now(self, result) :
         self.CurrentState = State.STATE_IDLE
@@ -156,7 +148,7 @@ class State:
         State.GOAL_DISTANCE_OK = config["GOAL_DISTANCE_OK"]
         State.ROTATE_THRESHOLD = config["ROTATE_THRESHOLD"]
         State.DRIVE_ANGLE_ABORT = config["DRIVE_ANGLE_ABORT"]
-        self.print_info_log('Mobility parameter reconfiguration done.')
+        self.print_debug('Mobility parameter reconfiguration done.')
         return config 
     
     @sync(package_lock)
@@ -164,7 +156,7 @@ class State:
         pass 
 
     @sync(package_lock)
-    def _mode(self, msg) :
+    def set_mode(self, msg) :
         if msg.data == 1 :
             self._stop_now(MoveResult.USER_ABORT)
     
@@ -198,11 +190,6 @@ class State:
         t.angular.z = angular
         self.driveControl.publish(t)
         
-    def print_info_log(self, msg):
-        s = String()
-        s.data = msg 
-        self.infoLog.publish(s)
-
     def print_debug(self, msg):
         if self.dbg_msg is None or self.dbg_msg != msg: 
             s = String()
@@ -210,11 +197,6 @@ class State:
             self.state_machine.publish(s)
         self.dbg_msg = msg 
         
-    def print_status(self, msg):
-        s = String()
-        s.data = msg 
-        self.status.publish(s)
-
     @sync(package_lock)
     def run(self) :            
         if self.CurrentState == State.STATE_IDLE : 

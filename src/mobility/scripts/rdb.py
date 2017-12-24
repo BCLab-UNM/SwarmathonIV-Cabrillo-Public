@@ -23,8 +23,15 @@ from ctypes import CDLL, util
 
 redraw = CDLL(util.find_library('readline')).rl_forced_update_display
 
+msg_hist = {}
+
 def logHandler(source, msg): 
-    if not quiet : 
+    global msg_hist 
+    update = False
+    if source not in msg_hist or msg_hist[source] != msg.data :
+        update = True 
+    msg_hist[source] = msg.data
+    if not quiet and update: 
         print (source, msg.data)
         redraw()
         

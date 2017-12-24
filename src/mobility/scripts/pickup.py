@@ -21,17 +21,27 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 def get_block_location():
     global tlist
     global rovername 
-    block = swarmie.find_nearest_target() 
+    
+    while True : 
+        
+        # Find the nearest block
+        blocks = swarmie.get_latest_targets()        
+        blocks = sorted(blocks.detections.detections, key=lambda x : abs(x.pose.pose.position.x))
+        nearest = blocks[0]
 
-    # FIXME: Why do I have to time shift the TF. This is a problem.
-    block.result.header.stamp.secs = block.result.header.stamp.secs  + 1 
-    tlist.waitForTransform(rovername + '/base_link', 
-                            block.result.header.frame_id, block.result.header.stamp, 
-                            rospy.Duration(3))
-    rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
-
-    r = math.hypot(rel_block.point.x, rel_block.point.y)
-    theta = angles.shortest_angular_distance(math.pi/2, math.acos(rel_block.point.x));
+        try: 
+            tlist.waitForTransform(rovername + '/base_link', 
+                           nearest.pose.header.frame_id, nearest.pose.header.stamp, 
+                           rospy.Duration(1.0))
+        except tf.Exception as e : 
+            print ('Fuck you.')
+            continue
+        
+        nearest_rel = tlist.transformPose(rovername + '/base_link', nearest.pose)
+        break
+    
+    r = math.hypot(nearest_rel.pose.position.x, nearest_rel.pose.position.y)
+    theta = angles.shortest_angular_distance(math.pi/2, math.acos(nearest_rel.pose.position.x));
 
     return r, theta
 
@@ -61,9 +71,6 @@ def approach():
     except rospy.ServiceException as e:
         print ("There doesn't seem to be any blocks on the map.", e)
 
-    except tf.TransformException as e: 
-        print ("Transform failed: ", e)
-
     swarmie.fingers_open()
     swarmie.wrist_middle()
     return False
@@ -71,13 +78,12 @@ def approach():
 def recover():
     global swarmie 
     print ("Missed, trying to recover.")
-    swarmie.clear_target_map()
     
     try :
         swarmie.drive(-0.5);
-        swarmie.turn(math.pi/2)
-        swarmie.turn(-math.pi)
-        swarmie.turn(math.pi/2)
+        #swarmie.turn(math.pi/2)
+        #swarmie.turn(-math.pi)
+        #swarmie.turn(math.pi/2)
     except: 
         # Hopefully this means we saw something.
         pass
@@ -94,6 +100,9 @@ def main():
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)       
     tlist = tf.TransformListener() 
+
+    print ('Waiting for camera/base_link tf to become available.')
+    tlist.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
 
     for i in range(3) : 
         if approach() :
