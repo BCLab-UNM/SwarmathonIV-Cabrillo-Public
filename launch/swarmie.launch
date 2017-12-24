@@ -174,15 +174,16 @@
       <param name="frame_id" value="$(arg name)/base_link"/>
     </node>
 
-    <node name="$(arg name)_CAMERA" pkg="video_stream_opencv" type="video_stream" respawn="true">
-      <param name="video_stream_provider" value="/dev/video0"/>
-      <param name="camera_info_file" value="file://$(env HOME)/rover_workspace/camera_info/head_camera.yaml"/>
-      <param name="width" value="320"/>
-      <param name="height" value="240"/>
-
+    <node name="$(arg name)_CAMERA" pkg="usb_cam" type="usb_cam_node">
+      <param name="video_device" value="/dev/video0"/>
+      <param name="camera_info_url" value="file://$(env HOME)/rover_workspace/camera_info/head_camera.yaml"/>
+      <param name="camera_name" value="head_camera"/>
+      <param name="image_width" value="320"/>
+      <param name="image_height" value="240"/>
+      <param name="framerate" value="30"/>
+      <param name="camera_frame_id" value="$(arg name)/camera_link"/>
       <remap from="/camera" to="/$(arg name)/camera/image"/>
     </node>
-    
   </group>
   
 </launch>
