@@ -11,9 +11,9 @@ from mobility.driver import State
 from mobility.task import Task 
 
 def heartbeat(event):
-    global heartbeat_pub, status_pub    
+    global heartbeat_pub, status_pub, task
     heartbeat_pub.publish("ok")
-    status_pub.publish('online')
+    status_pub.publish(task.get_task())
 
 def mode(msg):
     global driver, task 

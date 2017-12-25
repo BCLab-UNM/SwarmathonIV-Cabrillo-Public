@@ -42,6 +42,8 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
+    swarmie.fingers_open()
+    swarmie.wrist_middle()
 
     try: 
         for move in range(5) :

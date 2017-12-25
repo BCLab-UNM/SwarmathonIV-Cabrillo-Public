@@ -467,3 +467,12 @@ class Swarmie:
             (dict) : { 'x' : x_location, 'y' : y_location }
         '''
         return rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})
+
+    def has_home_gps_location(self):
+        '''Check to see if the home location parameter is set.
+        
+        Returns:
+            (bool): True if the parameter exists, False otherwise.
+        '''
+        return rospy.has_param('/' + self.rover_name + '/home_gps')
+    

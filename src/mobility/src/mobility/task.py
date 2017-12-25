@@ -37,10 +37,11 @@ class Task :
         self.rover = rover
         self.current_state = Task.STATE_IDLE 
         self.rover_mode = 1 
+        self.has_block = False
         self.launcher = roslaunch.scriptapi.ROSLaunch()
         self.launcher.start()
         
-        self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=1, latch=False)
+        self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
 
     @sync(task_lock)
     def set_mode(self, msg) :
@@ -52,10 +53,25 @@ class Task :
         self.state_publisher.publish(s)
         
     def launch(self, prog):
-        self.print_state("Launching task: " + prog)
         node = roslaunch.core.Node('mobility', prog, args=self.rover)
         self.task = self.launcher.launch(node)
 
+    @sync(task_lock)
+    def get_task(self) :
+        if self.current_state == Task.STATE_IDLE : 
+            return "idle"
+        elif self.current_state == Task.STATE_INIT : 
+            return "init"
+        elif self.current_state == Task.STATE_SEARCH :
+            return "search"
+        elif self.current_state == Task.STATE_PICKUP : 
+            return "pickup"
+        elif self.current_state == Task.STATE_GOHOME : 
+            return "gohome"
+        elif self.current_state == Task.STATE_DROPOFF : 
+            return "dropoff"        
+        return "unknown"
+        
     @sync(task_lock)
     def run(self):
         if self.rover_mode == 1 :
@@ -63,51 +79,65 @@ class Task :
             if self.task is not None and self.task.is_alive() : 
                 self.print_state('Forcibly killing ' + self.task.name)
                 self.task.stop()
-            return 
-
-        if self.task is not None and self.task.is_alive() :
-            return 
-
-        if self.task is not None :
-            self.print_state('Task exited: ' + str(self.task.exit_code))
         
-        if self.current_state == Task.STATE_IDLE : 
+        elif self.task is not None and self.task.is_alive() :
+            # Wait for the task to complete.
+            pass 
+        
+        elif self.current_state == Task.STATE_IDLE : 
             self.launch(Task.PROG_INIT)
             self.current_state = Task.STATE_INIT 
             
-        if self.current_state == Task.STATE_INIT : 
+        elif self.current_state == Task.STATE_INIT : 
             if self.task.exit_code == 0 :
+                self.print_state('Init succeeded. Starting search.')
                 self.launch(Task.PROG_SEARCH)
-                self.current_State = Task.STATE_SEARCH
+                self.current_state = Task.STATE_SEARCH
             else:
                 # FIXME: What should happen when init fails? 
+                self.print_state('Init failed! FIXME!.')
                 self.launch(Task.PROG_INIT)
                             
         elif self.current_state == Task.STATE_SEARCH :
             if self.task.exit_code == 0 : 
+                self.print_state('Search succeeded. Do pickup.')
                 self.launch(Task.PROG_PICKUP)
                 self.current_state = Task.STATE_PICKUP 
             else: 
+                self.print_state('Search failed. Going back home.')
                 self.launch(Task.PROG_GOHOME)
-                self.current_state = Task.STATE_GOGHOME 
+                self.current_state = Task.STATE_GOHOME 
             
         elif self.current_state == Task.STATE_PICKUP : 
             if self.task.exit_code == 0 :
+                self.print_state('Pickup success. Going back home.')
+                self.has_block = True
                 self.launch(Task.PROG_GOHOME)
                 self.current_state = Task.STATE_GOHOME 
             else:
+                self.print_state('Pickup failed. Back to search.')
                 self.launch(Task.PROG_SEARCH)
                 self.current_state = Task.STATE_SEARCH 
                 
         elif self.current_state == Task.STATE_GOHOME : 
             if self.task.exit_code == 0 :
-                self.launch(Task.PROG_DROPOFF)
-                self.current_state = Task.STATE_DROPOFF
+                if self.has_block : 
+                    self.print_state('Home found and I have a block. Do drop off.')
+                    self.launch(Task.PROG_DROPOFF)
+                    self.current_state = Task.STATE_DROPOFF
+                else:
+                    self.print_state('Recalibrated home. Back to searching.')
+                    self.launch(Task.PROG_SEARCH)
+                    self.current_state = Task.STATE_SEARCH
+                    
             else:
                 # FIXME: What happens when we don't find home?
+                self.print_state('Home NOT found. Try again.')
                 self.launch(Task.PROG_GOHOME)
                 self.current_state = Task.STATE_GOHOME 
                         
-        elif self.current_State == Task.STATE_DROPOFF : 
+        elif self.current_state == Task.STATE_DROPOFF : 
+            self.print_state('Dropoff complete. Back to searching.')
+            self.has_block = False
             self.launch(Task.PROG_SEARCH)
-            self.current_state(Task.STATE_SEARCH)
+            self.current_state = Task.STATE_SEARCH
