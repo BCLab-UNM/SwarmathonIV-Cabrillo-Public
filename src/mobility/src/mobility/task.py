@@ -10,6 +10,11 @@ import roslaunch
 
 from std_msgs.msg import UInt8, String
 
+import threading 
+task_lock = threading.Lock()
+
+from mobility import sync
+
 '''Node that coordinates the overall robot task''' 
 
 class Task : 
@@ -37,6 +42,7 @@ class Task :
         
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=1, latch=False)
 
+    @sync(task_lock)
     def set_mode(self, msg) :
         self.rover_mode = msg.data
                 
@@ -50,6 +56,7 @@ class Task :
         node = roslaunch.core.Node('mobility', prog, args=self.rover)
         self.task = self.launcher.launch(node)
 
+    @sync(task_lock)
     def run(self):
         if self.rover_mode == 1 :
             self.current_state = Task.STATE_IDLE 
@@ -59,7 +66,6 @@ class Task :
             return 
 
         if self.task is not None and self.task.is_alive() :
-            self.print_state('Waiting for ' + self.task.name)
             return 
 
         if self.task is not None :

@@ -416,11 +416,11 @@ class Swarmie:
             A mobility.Location if the fix was successful. None if we waited until the timeout. 
         '''        
         for i in xrange(time) : 
+            rospy.sleep(1)
             loc = self.get_gps_location()
             vx, vy, vz = loc.get_variances()
             if math.sqrt(vy) < distance : 
                 return loc 
-            rospy.sleep(1)
         return None
     
     def get_obstacle_condition(self):
@@ -446,3 +446,24 @@ class Swarmie:
         '''
         with swarmie_lock : 
             return self.Obstacles
+
+    def set_home_gps_location(self, loc):
+        '''Remember the home GPS location reading. The location can be recalled by other 
+        control programs. 
+        
+        Arguments:
+        
+            loc: (mobility.Location) The GPS coordinates to remember. 
+        '''
+        rospy.set_param('/' + self.rover_name + '/home_gps', 
+                        {'x' : loc.Odometry.pose.pose.position.x, 
+                         'y' : loc.Odometry.pose.pose.position.y})
+    
+    def get_home_gps_location(self):
+        '''Recall the home GPS location.
+        
+        Returns: 
+        
+            (dict) : { 'x' : x_location, 'y' : y_location }
+        '''
+        return rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})
