@@ -19,13 +19,7 @@ def mode(msg):
     global driver, task 
     driver.set_mode(msg)
     task.set_mode(msg) 
-    print ('fuck you')
-    
-def run(event):
-    global driver, task 
-    driver.run() 
-    task.run()
-    
+        
 def main() :     
     global driver, task, status_pub, info_pub, heartbeat_pub
     
@@ -49,9 +43,12 @@ def main() :
 
     # Timers
     rospy.Timer(rospy.Duration(1), heartbeat)
-    rospy.Timer(rospy.Duration(0.1), run)
 
-    rospy.spin()
+    r = rospy.Rate(10) # 10hz
+    while not rospy.is_shutdown():
+        driver.run() 
+        task.run()
+        r.sleep()
 
 if __name__ == '__main__' : 
     main()
