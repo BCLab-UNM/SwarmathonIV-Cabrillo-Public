@@ -219,11 +219,23 @@ class State:
                     if self.Doing.request.r < 0 :
                         self.Doing.request.theta = 0
         
+                    req_theta = self.Doing.request.theta 
+                    if req_theta > 0 : 
+                        req_theta += State.ROTATE_THRESHOLD / 2.0 
+                    elif req_theta < 0 :
+                        req_theta -= State.ROTATE_THRESHOLD / 2.0
+
+                    req_r = self.Doing.request.r 
+                    if req_r > 0 : 
+                        req_r += State.GOAL_DISTANCE_OK / 2.0
+                    elif req_r < 0 :
+                        req_r -= State.GOAL_DISTANCE_OK / 2.0
+                    
                     cur = self.OdomLocation.get_pose()
                     self.Goal = Pose2D()
-                    self.Goal.theta = cur.theta + self.Doing.request.theta
-                    self.Goal.x = cur.x + self.Doing.request.r * math.cos(self.Goal.theta)
-                    self.Goal.y = cur.y + self.Doing.request.r * math.sin(self.Goal.theta)
+                    self.Goal.theta = cur.theta + req_theta
+                    self.Goal.x = cur.x + req_r * math.cos(self.Goal.theta)
+                    self.Goal.y = cur.y + req_r * math.sin(self.Goal.theta)
                     self.Start = cur
                     
                     if self.Doing.request.r < 0 :

@@ -8,6 +8,7 @@ import sys
 import rospy
 import math 
 import random 
+import angles 
 
 from mobility.srv import Core
 from mapping.srv import FindTarget, LatestTarget, GetMap
@@ -17,6 +18,7 @@ from swarmie_msgs.msg import Obstacle
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Point 
 
 import threading 
 swarmie_lock = threading.Lock()
@@ -260,7 +262,7 @@ class Swarmie:
         Args: 
             theta (radians) Degrees to turn 
 
-            SEE: Keyword Arguments for drive commands             
+            SEE: Keyword Arguments for drive commands
 
         Returns/Raises:
             Documented in move()
@@ -476,3 +478,41 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_gps')
     
+    def drive_to(self, place, **kwargs):
+        '''Drive directly to a particular point in space. The point must be in 
+        the odometry reference frame. 
+        
+        Arguments:
+        
+            place: (geometry_msgs.msg.Point) The place to drive.
+
+            SEE: Keyword Arguments for drive commands 
+            
+        Returns/Raises:
+            Documented in drive()
+            
+        '''
+        loc = self.get_odom_location().get_pose()
+        dist = math.hypot(loc.y - place.y, loc.x - place.x)
+        angle = angles.shortest_angular_distance(loc.theta, 
+                                                 math.atan2(place.y - loc.y,
+                                                            place.x - loc.x))
+        self.turn(angle, **kwargs)
+        self.drive(dist, **kwargs)
+    
+    def set_heading(self, heading, **kwargs):
+        '''Turn to face an absolute heading in radians. (zero is east)
+        
+        Arguments:
+        
+            heading: (float) The heading in radians.
+
+            SEE: Keyword Arguments for drive commands 
+            
+        Returns/Raises:
+            Documented in drive()
+            
+        '''
+        loc = self.get_odom_location().get_pose()
+        angle = angles.shortest_angular_distance(loc.theta, heading)
+        self.turn(angle, **kwargs)
