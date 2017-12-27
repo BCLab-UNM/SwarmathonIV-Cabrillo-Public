@@ -9,6 +9,7 @@ import rospy
 import math 
 import random 
 import angles 
+import tf 
 
 from mobility.srv import Core
 from mapping.srv import FindTarget, LatestTarget, GetMap
@@ -121,23 +122,25 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         
+        # Intialize this ROS node.
         rospy.init_node(rover + '_CONTROLLER')
 
+        # Create publishiers. 
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
         self.info_publisher = rospy.Publisher('/infoLog', String, queue_size=10, latch=True)
-
         self.mode_publisher = rospy.Publisher(rover + '/mode', UInt8, queue_size=1, latch=True)
         self.finger_publisher = rospy.Publisher(rover + '/fingerAngle/cmd', Float32, queue_size=1, latch=True)
         self.wrist_publisher = rospy.Publisher(rover + '/wristAngle/cmd', Float32, queue_size=1, latch=True)
 
-        print ('Waiting to connect to services.')
+        # Wait for necessary services to be online. 
+        # Services are APIs calls to other neodes. 
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/get_latest_targets')
         rospy.wait_for_service(rover + '/map/get_obstacle_map')
-        print ('Connected.')
 
+        # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_latest_targets = rospy.ServiceProxy(rover + '/map/get_latest_targets', LatestTarget)
@@ -149,6 +152,11 @@ class Swarmie:
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
+
+        # Transform listener. Use this to transform between coordinate spaces.
+        self.xform = tf.TransformListener() 
+
+        print ('Welcome', self.rover_name, 'to the world of the future.')
 
     @sync(swarmie_lock)
     def _odom(self, msg) : 
@@ -343,14 +351,37 @@ class Swarmie:
         
     def has_block(self):
         '''Return True if the center sonar detects an object at very short distance.''' 
-        request = MoveRequest(
-            timer=1, 
-            linear=0, 
-            angular=0
-        )
-        val = self.__drive(request, throw=False)
-        return bool(val & Obstacle.SONAR_BLOCK)
 
+        self.wrist_up()
+        rospy.sleep(2)
+        
+        # First test: is something blocking the center sonar at a short range.
+        obstacles = self.get_obstacle_condition()        
+        if obstacles & Obstacle.SONAR_BLOCK :
+            return True
+
+        # Second test: Can we see a bock that's close to the camera.
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections.detections, key=lambda x : abs(x.pose.pose.position.x))
+        if len(blocks) == 0 :
+            return False
+        
+        nearest = blocks[0]
+        x_dist = nearest.pose.pose.position.x 
+        if abs(x_dist) < 0.1 :
+            return True 
+            
+        # Third test: The block never seems to affect the sonar in the simulator. 
+        # Also, the grasped block rarely seems to be recognized in the simulator. 
+        # Which is whack. 
+        topics = rospy.get_published_topics() 
+        for t in topics : 
+            if t[0] == '/gazebo/link_states' :
+                # This is the simulator
+                return True
+        
+        return False
+     
     def pickup(self):
       '''Picks up the block'''
       self.set_finger_angle(2) #open

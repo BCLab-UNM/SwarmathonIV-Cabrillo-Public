@@ -28,8 +28,8 @@ def drive_straight_home() :
                                              math.atan2(home['y'] - loc.y,
                                                         home['x'] - loc.x))
     
-    swarmie.turn(angle)
-    swarmie.drive(dist)
+    swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
     
 def main():
     global swarmie 
