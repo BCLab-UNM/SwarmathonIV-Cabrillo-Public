@@ -12,7 +12,7 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, LatestTarget, GetMap
+from mapping.srv import FindTarget, GetMap
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
@@ -20,6 +20,7 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point 
+from apriltags_ros.msg import AprilTagDetectionArray 
 
 import threading 
 swarmie_lock = threading.Lock()
@@ -121,6 +122,7 @@ class Swarmie:
         self.Obstacles = 0
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
+        self.Targets = AprilTagDetectionArray()
         
         # Intialize this ROS node.
         rospy.init_node(rover + '_CONTROLLER')
@@ -142,7 +144,6 @@ class Swarmie:
         # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
-        self._get_latest_targets = rospy.ServiceProxy(rover + '/map/get_latest_targets', LatestTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
         self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
@@ -151,6 +152,7 @@ class Swarmie:
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
+        rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
 
         # Transform listener. Use this to transform between coordinate spaces.
         self.xform = tf.TransformListener() 
@@ -169,6 +171,10 @@ class Swarmie:
     def _obstacle(self, msg) :
         self.Obstacles &= ~msg.mask 
         self.Obstacles |= msg.msg 
+
+    @sync(swarmie_lock)
+    def _targets(self, msg) : 
+        self.Targets = msg
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -402,6 +408,10 @@ class Swarmie:
     def find_nearest_target(self) :
         '''Return a XXX that is the odom location of the nearest target on the map.''' 
         return self._find_nearest_target()
+    
+    def get_latest_targets(self) :
+        '''Return the latest apriltags_ros.msg.ArpilTagDetectionArray. (it might be out of date)'''
+        return self.Targets
     
     def get_obstacle_map(self):
         '''Return a XXX that is the obstacle map.'''
