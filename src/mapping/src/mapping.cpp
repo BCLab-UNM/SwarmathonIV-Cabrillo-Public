@@ -31,7 +31,6 @@
 
 #include <swarmie_msgs/Obstacle.h>
 #include <mapping/FindTarget.h>
-#include <mapping/LatestTarget.h>
 #include <mapping/GetMap.h>
 
 using namespace std;
@@ -40,8 +39,6 @@ string rover;
 
 grid_map::GridMap obstacle_map;
 grid_map::GridMap target_map;
-
-apriltags_ros::AprilTagDetectionArray last_detection;
 
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
@@ -240,17 +237,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 					ros::Duration(0.1) // How long to wait for the tf.
 			);
 
-			// Remember this detections message.
-			last_detection.detections.clear();
-
 			for (int i=0; i<message->detections.size(); i++) {
 
 				geometry_msgs::PoseStamped tagpose;
 				cameraTF->transformPose(rover + "/odom",
 						message->detections[i].pose, tagpose);
-
-				// Store the detection in the camera frame.
-				last_detection.detections.push_back(message->detections[i]);
 
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
@@ -333,19 +324,6 @@ bool find_neareset_target(mapping::FindTarget::Request &req, mapping::FindTarget
 
 /* Python API
  *
- * get_latest_targets() - Return the last ArilTagDetectionArray that had tags in it.
- *
- * The service definition is in:
- * 	srv/LatestTarget.srv
- *
- */
-bool get_latest_targets(mapping::LatestTarget::Request &req, mapping::LatestTarget::Response &rsp) {
-	rsp.detections = last_detection;
-	return true;
-}
-
-/* Python API
- *
  * get_obstacle_map() - Return a view of the obstacles grid_map. The map is
  *    translated into a nav_msgs/OccupancyGrid for easy use in Python.
  *
@@ -414,7 +392,6 @@ int main(int argc, char **argv) {
     // This is the API into the Python control code
     //
     ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
-    ros::ServiceServer tag = mNH.advertiseService(rover + "/map/get_latest_targets", get_latest_targets);
     ros::ServiceServer map = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
 
     // Initialize the maps.

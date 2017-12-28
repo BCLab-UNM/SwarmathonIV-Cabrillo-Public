@@ -137,7 +137,6 @@ class Swarmie:
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
-        rospy.wait_for_service(rover + '/map/get_latest_targets')
         rospy.wait_for_service(rover + '/map/get_obstacle_map')
 
         # Connect to services.
@@ -403,10 +402,6 @@ class Swarmie:
     def find_nearest_target(self) :
         '''Return a XXX that is the odom location of the nearest target on the map.''' 
         return self._find_nearest_target()
-    
-    def get_latest_targets(self) :
-        '''Return the latest target detection array. (it might be long out of date)'''
-        return self._get_latest_targets()
     
     def get_obstacle_map(self):
         '''Return a XXX that is the obstacle map.'''
