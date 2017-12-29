@@ -14,4 +14,4 @@ proj
 *.pyc
 install
 misc/logs
-
+src/.idea
