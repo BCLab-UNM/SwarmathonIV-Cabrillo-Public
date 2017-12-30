@@ -1,2 +1,2 @@
 ---
-nav_msgs/OccupancyGrid grid
+grid_map_msgs/GridMap map

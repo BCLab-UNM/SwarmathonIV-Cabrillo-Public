@@ -21,11 +21,18 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point 
 from apriltags_ros.msg import AprilTagDetectionArray 
+from rospy.numpy_msg import numpy_msg
+from grid_map_msgs.msg import GridMap
+from mapping import RoverMap 
 
 import threading 
 swarmie_lock = threading.Lock()
 
 from mobility import sync, Location 
+
+def grid_map_fucky(self, key):
+    return self.data[0].data 
+    
 
 class DriveException(Exception):
     def __init__(self, st):
@@ -140,11 +147,16 @@ class Swarmie:
         rospy.wait_for_service(rover + '/control')
         rospy.wait_for_service(rover + '/map/find_nearest_target')
         rospy.wait_for_service(rover + '/map/get_obstacle_map')
+        rospy.wait_for_service(rover + '/map/get_target_map')
 
+        # Numpy-ify the GridMap 
+        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
+        
         # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
+        self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
         self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
         self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
 
@@ -414,9 +426,15 @@ class Swarmie:
         return self.Targets
     
     def get_obstacle_map(self):
-        '''Return a XXX that is the obstacle map.'''
-        return self._get_obstacle_map()
+        '''Return a mapping.msg.RoverMap that is the obstacle map.
+            See ./src/mapping/src/mapping/__init__.py for documentation of RoverMap'''
+        return RoverMap(self._get_obstacle_map())
 
+    def get_target_map(self):
+        '''Return a mapping.msg.RoverMap that is the targets map.
+            See ./src/mapping/src/mapping/__init__.py for documentation of RoverMap'''
+        return RoverMap(self._get_target_map())
+    
     def start_magnetometer_calibration(self):
         '''Start calibrating the magnetometer on a rover.'''
         self._start_magnetometer_calibration()
