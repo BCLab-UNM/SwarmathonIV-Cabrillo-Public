@@ -25,5 +25,9 @@ def main():
     swarmie.drive(-1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     swarmie.turn(math.pi, ignore=Obstacle.IS_SONAR)
     
+    # Recalibrate the home location because we're here. 
+    odom_location = swarmie.get_odom_location()
+    swarmie.set_home_odom_location(odom_location)
+
 if __name__ == '__main__' : 
     main()

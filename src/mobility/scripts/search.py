@@ -53,8 +53,9 @@ def main():
                 wander()
             
             except HomeException : 
-                # TODO: Recalibrate the map.
                 print ("I saw home!")
+                odom_location = swarmie.get_odom_location()
+                swarmie.set_home_odom_location(odom_location)
                 turnaround()
                 
     except TagException : 

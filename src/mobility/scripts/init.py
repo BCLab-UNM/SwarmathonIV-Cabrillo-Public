@@ -45,7 +45,10 @@ def main():
     # Wait up to two minutes for an good GPS fix. 
     # TODO: Can we ever get a fix this good in real life? 
     home = swarmie.wait_for_fix(distance=3, time=120) 
-    
+
+    home_odom = swarmie.get_odom_location()
+    swarmie.set_home_odom_location(home_odom)
+
     if home is None : 
         swarmie.print_infoLog(rovername + ' failed to get a GPS fix!')        
     else:

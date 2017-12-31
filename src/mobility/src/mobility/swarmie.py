@@ -169,6 +169,9 @@ class Swarmie:
         # Transform listener. Use this to transform between coordinate spaces.
         self.xform = tf.TransformListener() 
 
+        # Wait for sensors and tf to have data (this sucks)
+        rospy.sleep(1)
+        
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
     @sync(swarmie_lock)
@@ -379,7 +382,7 @@ class Swarmie:
 
         # Second test: Can we see a bock that's close to the camera.
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections.detections, key=lambda x : abs(x.pose.pose.position.x))
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
         if len(blocks) == 0 :
             return False
         
@@ -519,10 +522,10 @@ class Swarmie:
         '''Recall the home GPS location.
         
         Returns: 
-        
-            (dict) : { 'x' : x_location, 'y' : y_location }
+
+            (geometry_msgs.msg.Point) : The location of home.
         '''
-        return rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})
+        return Point(**rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})) 
 
     def has_home_gps_location(self):
         '''Check to see if the home location parameter is set.
@@ -531,6 +534,38 @@ class Swarmie:
             (bool): True if the parameter exists, False otherwise.
         '''
         return rospy.has_param('/' + self.rover_name + '/home_gps')
+    
+    def set_home_odom_location(self, loc):
+        '''Remember the home odometry location. The location can be recalled by other 
+        control programs. Set this every time we see the nest to minimize the effect
+        of drift. 
+        
+        Arguments:
+        
+            loc: (mobility.Location) The coordinates to remember. 
+        '''
+        rospy.set_param('/' + self.rover_name + '/home_odom', 
+                        {'x' : loc.Odometry.pose.pose.position.x, 
+                         'y' : loc.Odometry.pose.pose.position.y})
+    
+    def get_home_odom_location(self):
+        '''Recall the home odometry location. This is probably the most reliable memory
+        of the location of the nest. Odometry drifts, so if we haven't seen home in a 
+        while this will be off. 
+        
+        Returns: 
+
+            (geometry_msgs.msg.Point) : The location of home.
+        '''
+        return Point(**rospy.get_param('/' + self.rover_name + '/home_odom', {'x' : 0, 'y' : 0})) 
+
+    def has_home_odom_location(self):
+        '''Check to see if the home odometry location parameter is set.
+        
+        Returns:
+            (bool): True if the parameter exists, False otherwise.
+        '''
+        return rospy.has_param('/' + self.rover_name + '/home_odom')
     
     def drive_to(self, place, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
