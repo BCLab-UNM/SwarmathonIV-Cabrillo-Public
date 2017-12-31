@@ -411,6 +411,7 @@ class Swarmie:
       self.set_finger_angle(.5) #close
       rospy.sleep(0.5)
       self.wrist_up()
+      return(self.has_block())
        
     def putdown(self):
       '''Puts the block down'''
