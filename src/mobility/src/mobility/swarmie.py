@@ -19,7 +19,7 @@ from swarmie_msgs.msg import Obstacle
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point 
+from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
 from rospy.numpy_msg import numpy_msg
 from grid_map_msgs.msg import GridMap
@@ -28,11 +28,7 @@ from mapping import RoverMap
 import threading 
 swarmie_lock = threading.Lock()
 
-from mobility import sync, Location 
-
-def grid_map_fucky(self, key):
-    return self.data[0].data 
-    
+from mobility import sync
 
 class DriveException(Exception):
     def __init__(self, st):
@@ -59,69 +55,63 @@ class AbortException(DriveException):
 class TimeoutException(DriveException):
     pass
 
+class Location: 
+    '''A class that encodes an EKF provided location and accessor methods''' 
+
+    def __init__(self, odo):
+        self.Odometry = odo 
+    
+    def get_pose(self):
+        '''Return a std_msgs.Pose from this Location. Useful because Pose 
+        has angles represented as roll, pitch, yaw.
+        
+        Returns:
+        
+        * (`std_msgs.msg.Pose`) The pose. 
+        '''
+        quat = [self.Odometry.pose.pose.orientation.x, 
+                self.Odometry.pose.pose.orientation.y, 
+                self.Odometry.pose.pose.orientation.z, 
+                self.Odometry.pose.pose.orientation.w, 
+                ]        
+        (r, p, y) = tf.transformations.euler_from_quaternion(quat)
+        pose = Pose2D()
+        pose.x = self.Odometry.pose.pose.position.x 
+        pose.y = self.Odometry.pose.pose.position.y 
+        pose.theta = y 
+        return pose
+
+    def at_goal(self, goal, distance):
+        '''Determine if the pose is within acceptable distance of this location
+        
+        Returns:
+        
+        * (`bool`) True if within the target distance.
+
+        ''' 
+        dist = math.hypot(goal.x - self.Odometry.pose.pose.position.x, 
+                          goal.y - self.Odometry.pose.pose.position.y)
+
+        return dist < distance
+
+    def get_variances(self):
+        '''Return the X, Y and Z variances from the covariance matrix of this location. 
+        Variance is defined as the expectation of the squared deviation of a random 
+        variable from its mean. 
+        
+        https://en.wikipedia.org/wiki/Variance
+        
+        Returns: 
+        
+        * (`tuple`): `(vX, vY, vZ)`
+        '''
+        return (self.Odometry.pose.covariance[0:15:7])
+
 class Swarmie: 
     '''Class that embodies the Swarmie's API
     
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
-    
-    The following commands move the rover: 
-        
-        circle()
-        drive()
-        timed_drive()
-        turn()
-        wait()
-             
-    Keyword Arguments for drive commands:
-    
-        ignore (Obstacle) 
-          Obstacle messages that will be ignored while driving. 
-        
-        throw (bool) 
-          Raise a DriveException if an obstacle is encountered (default True). 
-        
-        timeout (int) 
-          The command will fail after this number of seconds (defulat: 120)
-    
-    Drive Command Return and Raise 
-    
-        Drive commands return a mobility_msgs.msg.MoveResult which contains an
-        integer. Values are described in 
-        
-          src/mobility/msg/MoveResult.msg
-          
-        Unless throw=False is given the return value will be converted into an
-        exception. The following exceptions are defined:
-        
-        DriveException(Exception)
-            Base class for driving exceptions. 
-            
-        VisionException(DriveException)
-            Base class for exceptions caused by seeing a tag
-            
-        TagException(VisionException)
-            Exception caused when the target tag (0) is seen.
-        
-        HomeException(VisionException)
-            Exception caused when the home tag (256) is seen. 
-            
-        ObstacleException(DriveException)
-            Exception caused when sonar senses the rover is close to an obstacle.
-            
-        PathException(DriveException)
-            Exception caused when the rover encounters an error while driving.
-            If the rover detects a large angle between itself and its goal this 
-            happens. It's usually because the rover has driven over some kind of 
-            obstacle.  
-            
-        AbortException(DriveException)
-            Exception caused when the user places the rover into manual mode while
-            it was driving. 
-
-        TimeoutException(DriveException)
-            Exception caused when the drive command fails to complete in the amount
-            of time specified with the timeout= argument. 
     ''' 
     
     def __init__(self, rover):
@@ -235,10 +225,11 @@ class Swarmie:
         
         Args:        
             
-            SEE: Keyword Arguments for drive commands 
+        * See keyword arguments for drive commands 
 
-        Returns/Raises:
-            Documented in drive()            
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
         ''' 
         if random.randint(0,1) == 0 :
             return self.timed_drive(15, 0.1, 0.62, **kwargs)
@@ -249,14 +240,16 @@ class Swarmie:
         '''Send the specified velocity command for a given period of time.
         
         Args:
-            time (float) The duration of the timed command. 
-            linear (float) The linear velocity of the rover (m/s) 
-            angular (float) The angular velocity of the rover (radians/s) 
+        
+        * time (float) The duration of the timed command. 
+        * linear (float) The linear velocity of the rover (m/s) 
+        * angular (float) The angular velocity of the rover (radians/s) 
 
             SEE: Keyword Arguments for drive commands 
             
-        Returns/Raises:
-            Documented in drive()
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
         '''
         req = MoveRequest(
             timer=time, 
@@ -269,14 +262,43 @@ class Swarmie:
         '''Drive the specfied distance
         
         Args:
-            distance (float) Meters to drive. 
         
-            SEE: Keyword Arguments for drive commands 
+        * `distance` (`float`) Meters to drive. 
+        
+        Keyword arguments:
+    
+        * `ignore` (`int`) - Bitmask with Obstacle messages that will be ignored while driving.         
+        * `throw` (`bool`) - Raise a DriveException if an obstacle is encountered (default True). 
+        * `timeout` (`int`) - The command will fail after this number of seconds (defulat: 120)
 
         Returns:
             
-            Obstacle: Indicating what obstacle was hit (0 for success)
-            This function will only return an obstacle message if throw=False is passed. 
+        * If `throw=False` was given returns a `mobility_msgs.msg.MoveResult` containing an integer. \
+         Values are described in `src/mobility/msg/MoveResult.msg`    
+
+        * If `throw=True` (the default) is given the return value will be converted into an exception. \
+        The following exceptions are defined:
+        
+            * `mobility.swarmie.DriveException` - Base class for driving exceptions. 
+
+            * `mobility.swarmie.VisionException` - Base class for exceptions caused by seeing a tag            
+
+            * `mobility.swarmie.TagException` - Exception caused when the target tag (0) is seen.
+
+            * `mobility.swarmie.HomeException` - Exception caused when the home tag (256) is seen. 
+
+            * `mobility.swarmie.ObstacleException` - Exception caused when sonar senses the rover \
+            is close to an obstacle.  
+
+            * `mobility.swarmie.PathException` - Exception caused when the rover encounters an \
+            error while driving. If the rover detects a large angle between itself and its goal this \
+            happens. It's usually because the rover has driven over some kind of obstacle.              
+
+            * `mobility.swarmie.AbortException` - Exception caused when the user places the rover into \
+            manual mode while it was driving. 
+
+            * `mobility.swarmie.TimeoutException` - Exception caused when the drive command fails to \
+            complete in the amount of time specified with the `timeout=` argument. 
              
         '''
         req = MoveRequest(
@@ -288,12 +310,12 @@ class Swarmie:
         '''Turn theta degrees 
         
         Args: 
-            theta (radians) Degrees to turn 
+        
+        * `theta` (float) Radians to turn 
 
-            SEE: Keyword Arguments for drive commands
-
-        Returns/Raises:
-            Documented in move()
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
         '''
         req = MoveRequest(
             theta=theta, 
@@ -304,10 +326,12 @@ class Swarmie:
         '''Wait for a period of time. This can be used to check for obstacles
         
         Args:
-            time (float) seconds to wait. 
+
+        * `time` (`float`) seconds to wait. 
             
-        Returns/Raises:
-            Documented in move()        
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
         '''
         req = MoveRequest(
             timer=time, 
@@ -319,7 +343,8 @@ class Swarmie:
         '''Set the wrist angle to the specified angle
         
         Args:
-            angle (float) Wrist angle in radians. 
+        
+        * `angle` (`float`) Wrist angle in radians. 
         '''
         self.wrist_publisher.publish(Float32(angle))
 
@@ -327,7 +352,8 @@ class Swarmie:
         '''Set the finger angle to the spedified angle
         
         Args:
-            angle (float) Finger angle in radians.
+        
+        * `angle` (`float`) Finger angle in radians.
         '''
         self.finger_publisher.publish(Float32(angle))
         
@@ -370,7 +396,16 @@ class Swarmie:
         self.status_publisher.publish(s)
         
     def has_block(self):
-        '''Return True if the center sonar detects an object at very short distance.''' 
+        '''Try to determine if a block is in our grasp. 
+        
+        Uses the algorithm: 
+        
+        * Raise the wrist all the way up. 
+        * Check if the center sonar is blocked at a close distance. If so, return `True`
+        * Check if we can see a block that's very close. If so, return `True`
+        * Check if this is the simulator. If so, return `True`
+        * Return `False`
+        ''' 
 
         self.wrist_up()
         rospy.sleep(2)
@@ -421,21 +456,21 @@ class Swarmie:
       self.wrist_up()          
 
     def find_nearest_target(self) :
-        '''Return a XXX that is the odom location of the nearest target on the map.''' 
+        '''Broken: Return a XXX that is the odom location of the nearest target on the map.''' 
         return self._find_nearest_target()
     
     def get_latest_targets(self) :
-        '''Return the latest apriltags_ros.msg.ArpilTagDetectionArray. (it might be out of date)'''
+        '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
         return self.Targets
     
     def get_obstacle_map(self):
-        '''Return a mapping.msg.RoverMap that is the obstacle map.
-            See ./src/mapping/src/mapping/__init__.py for documentation of RoverMap'''
+        '''Return a `mapping.msg.RoverMap` that is the obstacle map.
+            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_obstacle_map())
 
     def get_target_map(self):
-        '''Return a mapping.msg.RoverMap that is the targets map.
-            See ./src/mapping/src/mapping/__init__.py for documentation of RoverMap'''
+        '''Return a `mapping.msg.RoverMap` that is the targets map.
+            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
     def start_magnetometer_calibration(self):
@@ -447,15 +482,15 @@ class Swarmie:
         self._store_magnetometer_calibration()
         
     def get_odom_location(self):
-        '''Returns a mobility.Location according to Odometery. This location will not 
+        '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
         jump arround and is locally accurate but will drift over time.'''
         with swarmie_lock :
             return self.OdomLocation
     
     def get_gps_location(self):
-        '''Returns a mobility.Location that is the output of the EKF that fuses GPS.
+        '''Returns a `mobility.swarmie.Location` that is the output of the EKF that fuses GPS.
         This value has varying accuracy. The accuracy is reported in a covariance matrix. 
-        If you want to wait for a __good__ reading use wait_for_fix()'''
+        If you want to wait for a __good__ reading use `mobility.swarmie.Swarmie.wait_for_fix`'''
         with swarmie_lock :
             return self.MapLocation
 
@@ -464,15 +499,15 @@ class Swarmie:
 
         Arguments: 
 
-            distance: (float) The desired accuracty (+/- distance meters) with a likelyhood 
-                of 50%. Defaults to 4 meters.
+        * `distance`: (`float`) The desired accuracty (+/- distance meters) with a likelyhood \
+            of 50%. Defaults to 4 meters.
 
-            time: (int) The number of seconds to wait for a good GPS measurement before giving up
-                Defaults to 30 seconds. 
+        * `time`: (`int`) The number of seconds to wait for a good GPS measurement before giving up. \
+            Defaults to 30 seconds. 
 
         Returns: 
 
-            A mobility.Location if the fix was successful. None if we waited until the timeout. 
+        * A `mobility.swarmie.Location` if the fix was successful. None if we waited until the timeout. 
         '''        
         for i in xrange(time) : 
             rospy.sleep(1)
@@ -486,8 +521,7 @@ class Swarmie:
         '''Returns the current obstacle condition. The presence of obstacles is indicated
         by bits in the returned integer. 
         
-        The definition of the bits can be found in:
-            src/swarmie_msgs/msg/Obstacle.msg
+        The definition of the bits can be found in `src/swarmie_msgs/msg/Obstacle.msg`
         
         Bit definitions:
             
@@ -512,7 +546,7 @@ class Swarmie:
         
         Arguments:
         
-            loc: (mobility.Location) The GPS coordinates to remember. 
+        * loc: (`mobility.swarmie.Location`) The GPS coordinates to remember. 
         '''
         rospy.set_param('/' + self.rover_name + '/home_gps', 
                         {'x' : loc.Odometry.pose.pose.position.x, 
@@ -523,7 +557,7 @@ class Swarmie:
         
         Returns: 
 
-            (geometry_msgs.msg.Point) : The location of home.
+        * (`geometry_msgs.msg.Point`) : The location of home.
         '''
         return Point(**rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})) 
 
@@ -531,7 +565,8 @@ class Swarmie:
         '''Check to see if the home location parameter is set.
         
         Returns:
-            (bool): True if the parameter exists, False otherwise.
+        
+        * (`bool`): True if the parameter exists, False otherwise.
         '''
         return rospy.has_param('/' + self.rover_name + '/home_gps')
     
@@ -542,7 +577,7 @@ class Swarmie:
         
         Arguments:
         
-            loc: (mobility.Location) The coordinates to remember. 
+        * loc: (`mobility.swarmie.Location`) The coordinates to remember. 
         '''
         rospy.set_param('/' + self.rover_name + '/home_odom', 
                         {'x' : loc.Odometry.pose.pose.position.x, 
@@ -555,7 +590,7 @@ class Swarmie:
         
         Returns: 
 
-            (geometry_msgs.msg.Point) : The location of home.
+        * (`geometry_msgs.msg.Point`) : The location of home.
         '''
         return Point(**rospy.get_param('/' + self.rover_name + '/home_odom', {'x' : 0, 'y' : 0})) 
 
@@ -563,7 +598,8 @@ class Swarmie:
         '''Check to see if the home odometry location parameter is set.
         
         Returns:
-            (bool): True if the parameter exists, False otherwise.
+        
+        * (`bool`): `True` if the parameter exists, `False` otherwise.
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
@@ -573,12 +609,11 @@ class Swarmie:
         
         Arguments:
         
-            place: (geometry_msgs.msg.Point) The place to drive.
+        * `place`: (`geometry_msgs.msg.Point`): The place to drive.
 
-            SEE: Keyword Arguments for drive commands 
-            
-        Returns/Raises:
-            Documented in drive()
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
             
         '''
         loc = self.get_odom_location().get_pose()
@@ -594,12 +629,11 @@ class Swarmie:
         
         Arguments:
         
-            heading: (float) The heading in radians.
+        * `heading`: (`float`) The heading in radians.
 
-            SEE: Keyword Arguments for drive commands 
-            
-        Returns/Raises:
-            Documented in drive()
+        Keyword Arguments/Returns/Raises:
+        
+        * See `mobility.swarmie.Swarmie.drive`
             
         '''
         loc = self.get_odom_location().get_pose()

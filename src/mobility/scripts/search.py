@@ -9,7 +9,7 @@ import random
 
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie, Location, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 '''Searcher node.''' 
 
