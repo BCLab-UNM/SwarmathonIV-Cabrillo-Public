@@ -53,7 +53,7 @@ def approach():
             print(e)
             return False
             
-        swarmie.drive_to(block, ignore=Obstacle.IS_VISION)
+        swarmie.drive_to(block, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
    
         # Grab
         swarmie.pickup()
