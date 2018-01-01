@@ -365,17 +365,17 @@ void parseData(string str) {
 				rightTicks = atoi(dataSet.at(3).c_str());
 				odomTS = atof(dataSet.at(4).c_str()) / 1000; // Seconds
 
-				double rightWheelDistance = ticksToMeters(rightTicks) * 1; // darren testing
+				double rightWheelDistance = ticksToMeters(rightTicks);
 				double leftWheelDistance = ticksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
-				double dtheta = diffToTheta(rightWheelDistance * .85, leftWheelDistance); // darren testing
+				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance);
 
 			    //Accumulate angles to calculate absolute heading
 			    odomTheta += dtheta;
 
 			    //Decompose linear distance into its component values
-			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2; // darren testing
+			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2;
 			    double x = meanWheelDistance * cos(dtheta);
 			    double y = meanWheelDistance * sin(dtheta);
 
