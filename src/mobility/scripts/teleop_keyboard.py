@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#! /usr/bin/env python
 """
 Modified from ros-teleop/teleop_twist_keyboard.
 https://github.com/ros-teleop/teleop_twist_keyboard
@@ -6,64 +6,46 @@ Uses Swarmie API to drive the rover with keyboard.
 
 Questions/comments:
 - Would be nice to be able to call stop_now() or something to stop
-the rover immediately. Since right now, all obstacles are ignored
-while driving.
+the rover immediately.
+TODO: See if you can implement a stop_now(). Might have to send Swarmie calls into new threads.
+TODO: add a reset params function?
 """
+from __future__ import print_function
 import math
 import sys
 import select
 import termios
 import textwrap
+import traceback
 import tty
 import rospy
+import rosnode
 
 import dynamic_reconfigure.client
 from swarmie_msgs.msg import Obstacle
-from mobility.swarmie import Swarmie
+from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 msg = """
 Reading from the keyboard and driving using Swarmie API!
+--------------------------------------------------------
+CTRL-C to quit
 -----------------    -------------------
 Moving around:       Fingers (use the shift key):
         i            U         O
    j    k    l       (close)   (open)
         ,                       
 
-Wrist:
------------------
-t : up
-g : middle
-b : down
+Wrist:               Driving Parameters:
+-----------------    -----------------------------------
+t : up               1/2 : -/+ drive speed by 10%
+g : middle           3/4 : -/+ reverse speed by 10%
+b : down             5/6 : -/+ turn speed by 10%
+                     c/e : -/+ drive distance by 10%
+                     v/r : -/+ turn angle by 10%
 
-anything else : stop
+anything else : stop (not implemented)
+--------------------------------------------------------"""
 
-q/z : increase/decrease drive speed by 10%
-Q/Z : increase/decrease reverse speed by 10%
-w/x : incread/decrease turn speed by 10%
-e/c : increase/decrease drive distance by 10%
-r/v : increase/decrease turn angle by 10%
-
-Toggle Obstacles to ignore:
------------------
-Press * for the menu (not implemented)
-
-CTRL-C to quit
-"""
-
-obstacle_msg = """
-Toggle Obstacles to ignore:
------------------
-PATH_IS_CLEAR    = 0
-SONAR_LEFT       = 1
-SONAR_RIGHT      = 2
-SONAR_CENTER     = 4
-SONAR_BLOCK      = 8
-TAG_TARGET       = 256
-TAG_HOME         = 512
-
-IS_SONAR         = 15
-IS_VISION        = 768
-"""
 
 
 def get_key():
@@ -74,19 +56,67 @@ def get_key():
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
     return key
 
+def obstacle_msg(ignore_obstacles):
+    obstacles = [
+        ['PATH_IS_CLEAR', 0],
+        ['SONAR_LEFT', 1],
+        ['SONAR_RIGHT', 2],
+        ['SONAR_CENTER', 4],
+        ['SONAR_BLOCK', 8],
+        ['TAG_TARGET', 256],
+        ['TAG_HOME', 512],
+        ['IS_SONAR', 15],
+        ['IS_VISION', 768]
+    ]
+    msg = """
+    Toggle Obstacles to ignore (* = currently ignored):
+    -----------------
+    (!) {:<14}= 0{}
+    (L) {:<14}= 1{}
+    (R) {:<14}= 2{}
+    (C) {:<14}= 4{}
+    (B) {:<14}= 8{}
+    (T) {:<14}= 256{}
+    (H) {:<14}= 512{}
+
+    (S) {:<14}= 15{}
+    (V) {:<14}= 768{}
+    """
+    msg_formatter = []
+    if ignore_obstacles == 0:
+        msg_formatter = ['*', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']
+    else:
+        msg_formatter.append('')
+        for i in xrange(1, len(obstacles)):
+            if obstacles[i][1] & ignore_obstacles == obstacles[i][1]:
+                msg_formatter.append('*')
+            else:
+                msg_formatter.append(' ')
+    result = []
+    for obstacle, formatter in zip(obstacles, msg_formatter):
+        result.append(obstacle[0])
+        result.append(formatter)
+    return textwrap.dedent(msg.format(*result))
+
+
 
 def params_msg(drive_speed, reverse_speed, turn_speed, drive_dist, turn_theta):
-    msg = '''currently:
-    drive speed (q/z): {}
-    reverse speed (Q/Z): {}
-    turn speed (w/x): {}
-    drive dist (e/c): {}
-    turn theta (r/v): {}'''
+    msg = '''Currently:
+    {:<20}: {:.2f} (m/s)
+    {:<20}: {:.2f} (m/s)
+    {:<20}: {:.2f} (rad/s)
+    {:<20}: {:.2f} (m)
+    {:<20}: {:.2f} (rad)'''
     return textwrap.dedent(msg.format(
+        'drive speed (1/2)',
         drive_speed,
+        'reverse speed (3/4)',
         reverse_speed,
+        'turn speed (5/6)',
         turn_speed,
+        'drive dist (c/e)',
         drive_dist,
+        'turn theta (v/r)',
         turn_theta
     ))
 
@@ -101,17 +131,38 @@ def update_params(config):
 def main():
 
     if len(sys.argv) < 2:
-        print('usage:', sys.argv[0], '<rovername>')
-        exit(-1)
+        rovers = set()
+        nodes = rosnode.get_node_names()
+        for node in nodes:
+            if 'MOBILITY' in node:
+                node = node.lstrip('/')
+                rovername = node.split('_')[0]
+                rovers.add(rovername)
+        if len(rovers) == 0:
+            print('\033[91m',"No Rovers Detected",'\033[0m')
+            print('usage:', sys.argv[0], '<rovername>')
+            exit(-1)
+        elif len(rovers) == 1:
+            rovername = rovers.pop()
+            print('Detected rovers: ', rovername)
+            print('\033[92m',"Auto selected:",rovername,'\033[0m')
+        else:
+            print('Detected rovers:')
+            for rover in rovers:
+                print(rover)
+            rovername = ''
+            while rovername not in rovers:
+                rovername = raw_input('Which rover would you like to connect to? ')
+    else:
+        rovername = sys.argv[1]
 
-    rovername = sys.argv[1]
     swarmie = Swarmie(rovername, anonymous=True)
 
     global settings
+    settings = termios.tcgetattr(sys.stdin)
+
     global params
     params = {}
-
-    settings = termios.tcgetattr(sys.stdin)
     params['drive_dist'] = 0.5
     params['turn_theta'] = math.pi / 2
 
@@ -133,12 +184,21 @@ def main():
         # '>':(-1,-1,0,0),
         # 'M':(-1,1,0,0),
     }
-
     turn_bindings = {
         'j': 1,  # turn left, positive theta
         'l': -1,  # turn right, negative theta
     }
-
+    obstacle_bindings = {
+        '!': Obstacle.PATH_IS_CLEAR,
+        'L': Obstacle.SONAR_LEFT,
+        'C': Obstacle.SONAR_CENTER,
+        'R': Obstacle.SONAR_RIGHT,
+        'B': Obstacle.SONAR_BLOCK,
+        'T': Obstacle.TAG_TARGET,
+        'H': Obstacle.TAG_HOME,
+        'S': Obstacle.IS_SONAR,
+        'V': Obstacle.IS_VISION
+    }
     claw_bindings = {
         'O': swarmie.fingers_open,  # fingers open
         'U': swarmie.fingers_close,  # fingers close
@@ -146,90 +206,110 @@ def main():
         'g': swarmie.wrist_middle,  # wrist middle
         'b': swarmie.wrist_down,  # wrist down
     }
-
     param_bindings = {
-        'q': ['drive_speed', 1.1],
-        'z': ['drive_speed', 0.9],
-        'Q': ['reverse_speed', 1.1],
-        'Z': ['reverse_speed', 0.9],
-        'w': ['turn_speed', 1.1],
-        'x': ['turn_speed', 0.9],
+        '2': ['drive_speed', 1.1],
+        '1': ['drive_speed', 0.9],
+        '4': ['reverse_speed', 1.1],
+        '3': ['reverse_speed', 0.9],
+        '6': ['turn_speed', 1.1],
+        '5': ['turn_speed', 0.9],
         'e': ['drive_dist', 1.1],
         'c': ['drive_dist', 0.9],
         'r': ['turn_theta', 1.1],
         'v': ['turn_theta', 0.9],
     }
-
     param_client = dynamic_reconfigure.client.Client(
         rovername + '_MOBILITY',
         config_callback=update_params
     )
     server_config = param_client.get_configuration()
-    ignore_obstacles = Obstacle.IS_SONAR | Obstacle.IS_VISION
+    ignore_obstacles = Obstacle.IS_VISION | Obstacle.IS_SONAR
 
-    status = 0
+    # status = 0
 
     try:
-        print msg
-        print params_msg(
-            params['drive_speed'],
-            params['reverse_speed'],
-            params['turn_speed'],
-            params['drive_dist'],
-            params['turn_theta']
-        )
         while True:
+            print (msg)
+            print (obstacle_msg(ignore_obstacles))
+            print (params_msg(
+                params['drive_speed'],
+                params['reverse_speed'],
+                params['turn_speed'],
+                params['drive_dist'],
+                params['turn_theta']
+            ))
             key = get_key()
-            if key in drive_bindings.keys():
-                dist = params['drive_dist']
-                if drive_bindings[key] < 0:
-                    dist = -dist
-                swarmie.drive(dist, ignore=ignore_obstacles)
-            elif key in turn_bindings.keys():
-                theta = params['turn_theta']
-                if turn_bindings[key] < 0:
-                    theta = -theta
-                swarmie.turn(theta, ignore=ignore_obstacles)
-            elif key in claw_bindings.keys():
-                claw_bindings[key]()  # call the function at that key
-            elif key in param_bindings.keys():
-                params[param_bindings[key][0]] *= param_bindings[key][1]
-                if param_bindings[key][0] == 'drive_speed':
-                    param_client.update_configuration(
-                        {'DRIVE_SPEED': params['drive_speed']}
-                    )
-                elif param_bindings[key][0] == 'reverse_speed':
-                    param_client.update_configuration(
-                        {'REVERSE_SPEED': params['reverse_speed']}
-                    )
-                elif param_bindings[key][0] == 'turn_speed':
-                    param_client.update_configuration(
-                        {'TURN_SPEED': params['turn_speed']}
-                    )
-                # Update params once now to make sure no params were
-                # set to invalid values.
-                server_config = param_client.get_configuration()
-                update_params(server_config)
-
-                print params_msg(
-                    params['drive_speed'],
-                    params['reverse_speed'],
-                    params['turn_speed'],
-                    params['drive_dist'],
-                    params['turn_theta']
+            try:
+                if key in drive_bindings.keys():
+                    dist = params['drive_dist']
+                    if drive_bindings[key] < 0:
+                        dist = -dist
+                    swarmie.drive(dist, ignore=ignore_obstacles)
+                elif key in turn_bindings.keys():
+                    theta = params['turn_theta']
+                    if turn_bindings[key] < 0:
+                        theta = -theta
+                    swarmie.turn(theta, ignore=ignore_obstacles)
+                elif key in claw_bindings.keys():
+                    claw_bindings[key]()  # call the function at that key
+                elif key in param_bindings.keys():
+                    params[param_bindings[key][0]] *= param_bindings[key][1]
+                    if param_bindings[key][0] == 'drive_speed':
+                        param_client.update_configuration(
+                            {'DRIVE_SPEED': params['drive_speed']}
+                        )
+                    elif param_bindings[key][0] == 'reverse_speed':
+                        param_client.update_configuration(
+                            {'REVERSE_SPEED': params['reverse_speed']}
+                        )
+                    elif param_bindings[key][0] == 'turn_speed':
+                        param_client.update_configuration(
+                            {'TURN_SPEED': params['turn_speed']}
+                        )
+                    # Update params once now to make sure no params were
+                    # set to invalid values.
+                    server_config = param_client.get_configuration()
+                    update_params(server_config)
+                elif key in obstacle_bindings.keys():
+                    if obstacle_bindings[key] == 0:
+                        ignore_obstacles = 0
+                    else:
+                        if (obstacle_bindings[key] & ignore_obstacles
+                            == obstacle_bindings[key]):
+                            ignore_obstacles ^= obstacle_bindings[key]
+                        else:
+                            ignore_obstacles |= obstacle_bindings[key]
+                else:
+                    swarmie.stop()
+                    if (key == '\x03'):
+                        break
+            except TagException as e:
+                print('\033[91m','*****I saw a tag!*****','\033[0m')
+                rospy.sleep(1)
+            except HomeException as e:
+                print('\033[91m','*****I saw Home!*****','\033[0m')
+                rospy.sleep(1)
+            except ObstacleException as e:
+                print(
+                    '\033[91m',
+                    "*****There's an obstacle in front of me*****",
+                    '\033[0m'
                 )
-                if (status == 9):
-                    print msg
-                status = (status + 1) % 10
-            else:
-                swarmie.stop()
-                if (key == '\x03'):
-                    break
+                rospy.sleep(1)
+            except (PathException, AbortException) as e:
+                print('\033[91m','*****Exception:*****','\033[0m')
+                for exception in traceback.format_exception_only(type(e), e):
+                    print(exception)
+                rospy.sleep(1)
+
 
             swarmie.stop()
 
     except Exception as e:
-        print e
+        print('Something went wrong:')
+        for exception in traceback.format_exception_only(type(e), e):
+            print(exception)
+        traceback.print_exc()
 
     finally:
         swarmie.stop()
