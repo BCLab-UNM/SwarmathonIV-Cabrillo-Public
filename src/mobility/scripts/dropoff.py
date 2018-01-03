@@ -2,19 +2,28 @@
 
 from __future__ import print_function
 
-import sys
+import sys 
+import math 
 import rospy 
-import math
-import random 
 
-from std_msgs.msg import String
+from swarmie_msgs.msg import Obstacle
 
-from mobility.msg import MoveResult, Obstacle
-
-import mobility.swarmie 
+from mobility.swarmie import Swarmie
 
 def main():
-    exit(0)
+    global swarmie 
+    global rovername 
+    
+    if len(sys.argv) < 2 :
+        print ('usage:', sys.argv[0], '<rovername>')
+        exit (-1)
+
+    rovername = sys.argv[1]
+    swarmie = Swarmie(rovername)
+
+    swarmie.putdown() 
+    swarmie.drive(-1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    swarmie.turn(math.pi, ignore=Obstacle.IS_SONAR)
     
 if __name__ == '__main__' : 
     main()

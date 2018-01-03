@@ -7,11 +7,9 @@ import rospy
 import math
 import random 
 
-from std_msgs.msg import String
+from swarmie_msgs.msg import Obstacle
 
-from mobility.msg import MoveResult, Obstacle
-
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import Swarmie, Location, TagException, HomeException, ObstacleException, PathException, AbortException
 
 '''Searcher node.''' 
 
@@ -44,10 +42,12 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-            
+    swarmie.fingers_open()
+    swarmie.wrist_middle()
+
     try: 
-        for move in range(10) :
-            if rospy.is_shutdown : 
+        for move in range(5) :
+            if rospy.is_shutdown() : 
                 exit(-1)
             try:
                 wander()

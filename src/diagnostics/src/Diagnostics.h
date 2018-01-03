@@ -42,7 +42,6 @@ public:
   void sonarCenterTimestampUpdate(const sensor_msgs::Range::ConstPtr& message);
   void sonarRightTimestampUpdate(const sensor_msgs::Range::ConstPtr& message);
   void bridgeNode(std_msgs::String msg);
-  void behaviourNode(std_msgs::String msg);
   void ubloxNode(const sensor_msgs::NavSatFixConstPtr& message);
   
   // This function sends an array of floats
@@ -75,7 +74,6 @@ private:
 
   void checkBridge();
   void checkObstacle();
-  void checkBehaviour();
   void checkUblox();
     
   bool checkGPSExists();
@@ -104,7 +102,6 @@ private:
   ros::Subscriber sonarCenterSubscribe;
   ros::Subscriber sonarRightSubscribe;
   ros::Subscriber bdridgeNodeSubscribe;
-  ros::Subscriber behaviourNodeSubscribe;
   ros::Subscriber ubloxNodeSubscribe;
   
   float sensorCheckInterval = 2; // Check sensors every 2 seconds
@@ -129,7 +126,6 @@ private:
   bool sonarCenterConnected = false;
   bool sonarRightConnected = false;
   bool bridgeRunning = true;
-  bool behaviourRunning = true;
   bool ubloxRunning = true;
 
   //time last message was received
@@ -141,7 +137,6 @@ private:
   ros::Time sonarCenterTimestamp;
   ros::Time sonarRightTimestamp;
   ros::Time bridgeNodeTimestamp;
-  ros::Time behaviourNodeTimestamp;
   ros::Time ubloxNodeTimestamp;
 
   // Max time since last heartbeat before notifying the user - in seconds

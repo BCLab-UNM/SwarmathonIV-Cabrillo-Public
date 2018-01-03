@@ -7,33 +7,35 @@ import rospy
 import math
 import random 
 import tf
-
-from std_msgs.msg import String
 import angles 
 
-from mobility.msg import MoveResult, Obstacle
-from mobility.srv import FindTarget
+from std_msgs.msg import String
+from geometry_msgs.msg import Point 
+
+from mobility.msg import MoveResult
+from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 '''Pickup node.''' 
 
 def get_block_location():
-    global tlist
-    global rovername 
-    block = swarmie.find_nearest_target() 
+    global rovername, swarmie 
+    
+        
+    # Find the nearest block
+    blocks = swarmie.get_latest_targets()        
+    blocks = sorted(blocks.detections.detections, key=lambda x : abs(x.pose.pose.position.x))
+    nearest = blocks[0]
 
-    # FIXME: Why do I have to time shift the TF. This is a problem.
-    block.result.header.stamp.secs = block.result.header.stamp.secs  + 1 
-    tlist.waitForTransform(rovername + '/base_link', 
-                            block.result.header.frame_id, block.result.header.stamp, 
-                            rospy.Duration(3))
-    rel_block = tlist.transformPoint(rovername + '/base_link', block.result)
+    swarmie.xform.waitForTransform(rovername + '/odom', 
+                    nearest.pose.header.frame_id, nearest.pose.header.stamp, 
+                    rospy.Duration(3.0))
+        
+    point = swarmie.xform.transformPose(rovername + '/odom', nearest.pose).pose.position
+    print ('Transform says that the block is at: ', point)
+    return point
 
-    r = math.hypot(rel_block.point.x, rel_block.point.y)
-    theta = angles.shortest_angular_distance(math.pi/2, math.acos(rel_block.point.x));
-
-    return r, theta
 
 def approach():
     global swarmie 
@@ -42,17 +44,19 @@ def approach():
         swarmie.fingers_open()
         swarmie.wrist_down()
 
-        r, theta = get_block_location()
-   
-        # Drive to the block
-        swarmie.turn(theta, ignore=Obstacle.IS_VISION)
-        swarmie.drive(r, ignore=Obstacle.IS_VISION)
 
+        # Drive to the block
+        try: 
+            block = get_block_location()
+        except tf.Exception as e : 
+            # Something went wrong and we can't locate the block.
+            print(e)
+            return False
+            
+        swarmie.drive_to(block, ignore=Obstacle.IS_VISION)
+   
         # Grab
-        swarmie.fingers_close()
-        rospy.sleep(0.5)
-        swarmie.wrist_up()
-        rospy.sleep(1)
+        swarmie.pickup()
 
         if swarmie.has_block() :
             swarmie.wrist_middle()
@@ -61,9 +65,6 @@ def approach():
     except rospy.ServiceException as e:
         print ("There doesn't seem to be any blocks on the map.", e)
 
-    except tf.TransformException as e: 
-        print ("Transform failed: ", e)
-
     swarmie.fingers_open()
     swarmie.wrist_middle()
     return False
@@ -71,19 +72,17 @@ def approach():
 def recover():
     global swarmie 
     print ("Missed, trying to recover.")
-    swarmie.clear_target_map()
     
     try :
         swarmie.drive(-0.5);
-        swarmie.turn(math.pi/2)
-        swarmie.turn(-math.pi)
-        swarmie.turn(math.pi/2)
+        #swarmie.turn(math.pi/2)
+        #swarmie.turn(-math.pi)
+        #swarmie.turn(math.pi/2)
     except: 
         # Hopefully this means we saw something.
         pass
 
 def main():
-    global tlist
     global swarmie 
     global rovername 
     
@@ -93,7 +92,9 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)       
-    tlist = tf.TransformListener() 
+
+    print ('Waiting for camera/base_link tf to become available.')
+    swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
 
     for i in range(3) : 
         if approach() :
