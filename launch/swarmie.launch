@@ -187,7 +187,7 @@
     -->
     <node name="$(arg name)_CAMERA" pkg="usb_cam" type="usb_cam_node" respawn="true">
       <param name="video_device" value="/dev/video0"/>
-      <param name="camera_info_url" value="file://$(env HOME)/rover_workspace/camera_info/head_camera.yaml"/>
+      <param name="camera_info_url" value="file://$(find mobility)/camera_info/head_camera.yaml"/>
       <param name="camera_name" value="head_camera"/>
       <param name="image_width" value="320"/>
       <param name="image_height" value="240"/>

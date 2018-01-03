@@ -41,7 +41,6 @@ echo "Copying installation files."
 
 # Launch configurations run from the /proj directory by default.
 cp -R deploy/install/ $TEMPDIR
-cp -R camera_info/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
 cat <<EOF > $TEMPDIR/bootstrap.sh
