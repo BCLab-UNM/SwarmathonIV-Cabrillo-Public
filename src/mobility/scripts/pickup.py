@@ -25,7 +25,7 @@ def get_block_location():
         
     # Find the nearest block
     blocks = swarmie.get_latest_targets()        
-    blocks = sorted(blocks.detections.detections, key=lambda x : abs(x.pose.pose.position.x))
+    blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
     nearest = blocks[0]
 
     swarmie.xform.waitForTransform(rovername + '/odom', 

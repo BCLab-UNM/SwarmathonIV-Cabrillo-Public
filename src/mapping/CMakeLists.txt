@@ -25,10 +25,10 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_python_setup()
 
 add_service_files (
-	FILES FindTarget.srv LatestTarget.srv GetMap.srv
+	FILES FindTarget.srv GetMap.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs grid_map_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs 

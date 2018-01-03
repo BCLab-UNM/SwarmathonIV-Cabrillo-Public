@@ -31,7 +31,6 @@
 
 #include <swarmie_msgs/Obstacle.h>
 #include <mapping/FindTarget.h>
-#include <mapping/LatestTarget.h>
 #include <mapping/GetMap.h>
 
 using namespace std;
@@ -40,8 +39,6 @@ string rover;
 
 grid_map::GridMap obstacle_map;
 grid_map::GridMap target_map;
-
-apriltags_ros::AprilTagDetectionArray last_detection;
 
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
@@ -95,6 +92,9 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
+
+	// Update the timestamp in the Obstacle map.
+	obstacle_map.setTimestamp(ros::Time::now().toNSec());
 
 	// TODO: Implement filtering for sonar.
 
@@ -211,6 +211,9 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
+	// Update the timestamp in the target map.
+	target_map.setTimestamp(ros::Time::now().toNSec());
+
 	//
 	// Aging. As time goes by, the probability that a block
 	// Is still in the place we saw it shrinks. Let's iterate
@@ -240,17 +243,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 					ros::Duration(0.1) // How long to wait for the tf.
 			);
 
-			// Remember this detections message.
-			last_detection.detections.clear();
-
 			for (int i=0; i<message->detections.size(); i++) {
 
 				geometry_msgs::PoseStamped tagpose;
 				cameraTF->transformPose(rover + "/odom",
 						message->detections[i].pose, tagpose);
-
-				// Store the detection in the camera frame.
-				last_detection.detections.push_back(message->detections[i]);
 
 				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
 				grid_map::Index ind;
@@ -293,7 +290,12 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double x = message->pose.pose.position.x;
     double y = message->pose.pose.position.y;
 
-    grid_map::Position newPos(x, y);
+	// Update the timestamp in both maps.
+	uint64_t now = ros::Time::now().toNSec();
+	obstacle_map.setTimestamp(now);
+	target_map.setTimestamp(now);
+
+	grid_map::Position newPos(x, y);
     target_map.move(newPos);
 
     // Store the current location so we can use it in other places.
@@ -333,29 +335,27 @@ bool find_neareset_target(mapping::FindTarget::Request &req, mapping::FindTarget
 
 /* Python API
  *
- * get_latest_targets() - Return the last ArilTagDetectionArray that had tags in it.
- *
- * The service definition is in:
- * 	srv/LatestTarget.srv
- *
- */
-bool get_latest_targets(mapping::LatestTarget::Request &req, mapping::LatestTarget::Response &rsp) {
-	rsp.detections = last_detection;
-	return true;
-}
-
-/* Python API
- *
- * get_obstacle_map() - Return a view of the obstacles grid_map. The map is
- *    translated into a nav_msgs/OccupancyGrid for easy use in Python.
+ * get_obstacle_map() - Return a view of the obstacles grid_map.
  *
  * The service definition is in:
  * 	srv/GetMap.srv
  *
  */
 bool get_obstacle_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-	nav_msgs::OccupancyGrid grid;
-	grid_map::GridMapRosConverter::toOccupancyGrid(obstacle_map, "obstacles", 0, 1, rsp.grid);
+	grid_map::GridMapRosConverter::toMessage(obstacle_map, rsp.map);
+	return true;
+}
+
+/* Python API
+ *
+ * get_target_map() - Return a view of the targets grid_map.
+ *
+ * The service definition is in:
+ * 	srv/GetMap.srv
+ *
+ */
+bool get_target_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
+	grid_map::GridMapRosConverter::toMessage(target_map, rsp.map);
 	return true;
 }
 
@@ -414,8 +414,8 @@ int main(int argc, char **argv) {
     // This is the API into the Python control code
     //
     ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
-    ros::ServiceServer tag = mNH.advertiseService(rover + "/map/get_latest_targets", get_latest_targets);
-    ros::ServiceServer map = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
+    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
+    ros::ServiceServer tmap = mNH.advertiseService(rover + "/map/get_target_map", get_target_map);
 
     // Initialize the maps.
     obstacle_map = grid_map::GridMap({"obstacles"});

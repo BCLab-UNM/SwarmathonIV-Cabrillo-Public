@@ -29,6 +29,7 @@ fi
     catkin config --profile rover-deploy -d='deploy/devel'
     catkin config --profile rover-deploy -i='deploy/install'
     catkin config --profile rover-deploy --install
+    catkin config --profile rover-deploy --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ) > /dev/null
 

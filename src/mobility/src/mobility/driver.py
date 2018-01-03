@@ -30,7 +30,8 @@ from angles import shortest_angular_distance
 import threading 
 package_lock = threading.Lock()
 
-from mobility import sync, Location 
+from mobility import sync
+from mobility.swarmie import Location
 
 class Task : 
     '''A robot relative place to navigate to. Expressed as r and theta''' 
