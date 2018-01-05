@@ -40,8 +40,8 @@ Wrist:               Driving Parameters:
 t : up               1/2 : -/+ drive speed by 10%
 g : middle           3/4 : -/+ reverse speed by 10%
 b : down             5/6 : -/+ turn speed by 10%
-                     c/e : -/+ drive distance by 10%
-                     v/r : -/+ turn angle by 10%
+                     I/< : -/+ drive distance by 10%
+                     J/L : -/+ turn angle by 10%
 
 anything else : stop (not implemented)
 --------------------------------------------------------"""
@@ -72,10 +72,10 @@ def obstacle_msg(ignore_obstacles):
     Toggle Obstacles to ignore (* = currently ignored):
     -----------------
     (!) {:<14}= 0{}
-    (L) {:<14}= 1{}
-    (R) {:<14}= 2{}
-    (C) {:<14}= 4{}
-    (B) {:<14}= 8{}
+    (a) {:<14}= 1{}
+    (s) {:<14}= 2{}
+    (d) {:<14}= 4{}
+    (f) {:<14}= 8{}
     (T) {:<14}= 256{}
     (H) {:<14}= 512{}
 
@@ -114,9 +114,9 @@ def params_msg(drive_speed, reverse_speed, turn_speed, drive_dist, turn_theta):
         reverse_speed,
         'turn speed (5/6)',
         turn_speed,
-        'drive dist (c/e)',
+        'drive dist (I/<)',
         drive_dist,
-        'turn theta (v/r)',
+        'turn theta (J/L)',
         turn_theta
     ))
 
@@ -190,10 +190,10 @@ def main():
     }
     obstacle_bindings = {
         '!': Obstacle.PATH_IS_CLEAR,
-        'L': Obstacle.SONAR_LEFT,
-        'C': Obstacle.SONAR_CENTER,
-        'R': Obstacle.SONAR_RIGHT,
-        'B': Obstacle.SONAR_BLOCK,
+        'a': Obstacle.SONAR_LEFT,
+        's': Obstacle.SONAR_CENTER,
+        'd': Obstacle.SONAR_RIGHT,
+        'f': Obstacle.SONAR_BLOCK,
         'T': Obstacle.TAG_TARGET,
         'H': Obstacle.TAG_HOME,
         'S': Obstacle.IS_SONAR,
@@ -213,10 +213,10 @@ def main():
         '3': ['reverse_speed', 0.9],
         '6': ['turn_speed', 1.1],
         '5': ['turn_speed', 0.9],
-        'e': ['drive_dist', 1.1],
-        'c': ['drive_dist', 0.9],
-        'r': ['turn_theta', 1.1],
-        'v': ['turn_theta', 0.9],
+        'I': ['drive_dist', 1.1],
+        '<': ['drive_dist', 0.9],
+        'L': ['turn_theta', 1.1],
+        'J': ['turn_theta', 0.9],
     }
     param_client = dynamic_reconfigure.client.Client(
         rovername + '_MOBILITY',
