@@ -8,6 +8,8 @@ Questions/comments:
 - Would be nice to be able to call stop_now() or something to stop
 the rover immediately.
 TODO: See if you can implement a stop_now(). Might have to send Swarmie calls into new threads.
+Now that the driver code doesn't spam the controller with zero
+velocity twists, I can probably find a way to implement stop now.
 TODO: add a reset params function?
 """
 from __future__ import print_function

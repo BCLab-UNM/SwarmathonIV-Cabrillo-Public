@@ -65,6 +65,9 @@ class State:
     ROTATE_THRESHOLD           = 0
     DRIVE_ANGLE_ABORT          = 0
 
+    # max num of zero velocity Twist messages to publish consecutively
+    DONT_SPAM_CONTROLLER = 5
+
     def __init__(self, rover):
         self.rover = rover
         self.MapLocation = Location(None)
@@ -76,7 +79,8 @@ class State:
         self.Doing = None
         self.Work = Queue()
         self.dbg_msg = None
-        self.Obstacles = 0 
+        self.Obstacles = 0
+        self.stopCounter = State.DONT_SPAM_CONTROLLER
         
         # Configuration 
         State.DRIVE_SPEED = rospy.get_param("DRIVE_SPEED", default=0.3)
@@ -208,10 +212,13 @@ class State:
                     self.Doing.sema.release()
                 self.Doing = None
                 
-            if self.Work.empty() : 
-                self.drive(0,0,State.DRIVE_MODE_STOP)
+            if self.Work.empty() :
+                if self.stopCounter > 0:
+                    self.drive(0,0,State.DRIVE_MODE_STOP)
+                    self.stopCounter -= 1
             else:
                 self.Doing = self.Work.get(False)
+                self.stopCounter = State.DONT_SPAM_CONTROLLER
     
                 if self.Doing.request.timer > 0 :
                     self.TimerCount = self.Doing.request.timer * 10
