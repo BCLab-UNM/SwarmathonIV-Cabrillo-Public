@@ -82,6 +82,7 @@ class State:
         self.Obstacles = 0 
         self.JoystickCommand = Joy() 
         self.JoystickCommand.axes = [0,0,0,0,0,0]
+        self.KeyboardCommand = Twist()
         
         # Configuration 
         State.DRIVE_SPEED = rospy.get_param("DRIVE_SPEED", default=0.3)
@@ -94,6 +95,7 @@ class State:
 
         # Subscribers
         rospy.Subscriber(rover + '/joystick', Joy, self._joystick, queue_size=10)
+        rospy.Subscriber(rover + '/keyboard', Twist, self._keyboard, queue_size=10)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
 
@@ -155,12 +157,16 @@ class State:
         State.ROTATE_THRESHOLD = config["ROTATE_THRESHOLD"]
         State.DRIVE_ANGLE_ABORT = config["DRIVE_ANGLE_ABORT"]
         self.print_debug('Mobility parameter reconfiguration done.')
-        return config 
+        return config
 
     @sync(package_lock)
     def _joystick(self, joy_command):
-        self.JoystickCommand = joy_command 
-    
+        self.JoystickCommand = joy_command
+
+    @sync(package_lock)
+    def _keyboard(self, key_command):
+        self.KeyboardCommand = key_command
+
     @sync(package_lock)
     def set_mode(self, msg) :
         if msg.data == 1 :
@@ -217,6 +223,10 @@ class State:
                 # Let the joystick drive.
                 lin = self.JoystickCommand.axes[4] * State.DRIVE_SPEED
                 ang = self.JoystickCommand.axes[3] * State.TURN_SPEED
+                # Let the keyboard drive if joystick isn't active.
+                if abs(lin) < 0.1 and abs(ang) < 0.1 :
+                    lin = self.KeyboardCommand.linear.x * State.DRIVE_SPEED
+                    ang = self.KeyboardCommand.angular.z * State.TURN_SPEED
                 if abs(lin) < 0.1 and abs(ang) < 0.1 :
                     self.drive(0, 0, State.DRIVE_MODE_STOP)
                 else:

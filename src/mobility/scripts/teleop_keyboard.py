@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+
 """
 Modified from ros-teleop/teleop_twist_keyboard.
 https://github.com/ros-teleop/teleop_twist_keyboard
@@ -8,8 +8,6 @@ Questions/comments:
 - Would be nice to be able to call stop_now() or something to stop
 the rover immediately.
 TODO: See if you can implement a stop_now(). Might have to send Swarmie calls into new threads.
-Now that the driver code doesn't spam the controller with zero
-velocity twists, I can probably find a way to implement stop now.
 TODO: add a reset params function?
 """
 from __future__ import print_function
@@ -75,8 +73,8 @@ def obstacle_msg(ignore_obstacles):
     -----------------
     (!) {:<14}= 0{}
     (a) {:<14}= 1{}
-    (s) {:<14}= 2{}
-    (d) {:<14}= 4{}
+    (d) {:<14}= 2{}
+    (s) {:<14}= 4{}
     (f) {:<14}= 8{}
     (T) {:<14}= 256{}
     (H) {:<14}= 512{}
@@ -158,7 +156,7 @@ def main():
     else:
         rovername = sys.argv[1]
 
-    swarmie = Swarmie(rovername, anonymous=True)
+    swarmie = Swarmie(rovername, node_suffix='_teleop_keyboard')
 
     global settings
     settings = termios.tcgetattr(sys.stdin)
@@ -167,10 +165,6 @@ def main():
     params = {}
     params['drive_dist'] = 0.5
     params['turn_theta'] = math.pi / 2
-
-
-    # pub = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
-    # rospy.init_node('teleop_keyboard')
 
     drive_bindings = {
         'i': 1,  # positive
@@ -202,11 +196,11 @@ def main():
         'V': Obstacle.IS_VISION
     }
     claw_bindings = {
-        'O': swarmie.fingers_open,  # fingers open
-        'U': swarmie.fingers_close,  # fingers close
-        't': swarmie.wrist_up,  # wrist up
-        'g': swarmie.wrist_middle,  # wrist middle
-        'b': swarmie.wrist_down,  # wrist down
+        'O': swarmie.fingers_open,
+        'U': swarmie.fingers_close,
+        't': swarmie.wrist_up,
+        'g': swarmie.wrist_middle,
+        'b': swarmie.wrist_down,
     }
     param_bindings = {
         '2': ['drive_speed', 1.1],
@@ -225,9 +219,9 @@ def main():
         config_callback=update_params
     )
     server_config = param_client.get_configuration()
-    ignore_obstacles = Obstacle.IS_VISION | Obstacle.IS_SONAR
+    ignore_obstacles = Obstacle.PATH_IS_CLEAR
 
-    # status = 0
+    status_msgs = []
 
     try:
         while True:
@@ -240,6 +234,9 @@ def main():
                 params['drive_dist'],
                 params['turn_theta']
             ))
+            for status in status_msgs:
+                print(status)
+            status_msgs = []
             key = get_key()
             try:
                 if key in drive_bindings.keys():
@@ -282,30 +279,18 @@ def main():
                         else:
                             ignore_obstacles |= obstacle_bindings[key]
                 else:
-                    swarmie.stop()
                     if (key == '\x03'):
                         break
             except TagException as e:
-                print('\033[91m','*****I saw a tag!*****','\033[0m')
-                rospy.sleep(1)
+                status_msgs.append('\033[91m*****I saw a tag!*****\033[0m')
             except HomeException as e:
-                print('\033[91m','*****I saw Home!*****','\033[0m')
-                rospy.sleep(1)
+                status_msgs.append('\033[91m*****I saw Home!*****\033[0m')
             except ObstacleException as e:
-                print(
-                    '\033[91m',
-                    "*****There's an obstacle in front of me*****",
-                    '\033[0m'
-                )
-                rospy.sleep(1)
+                status_msgs.append("\033[91m*****There's an obstacle in front of me*****\033[0m")
             except (PathException, AbortException) as e:
-                print('\033[91m','*****Exception:*****','\033[0m')
+                status_msgs.append('\033[91m*****Exception:*****\033[0m')
                 for exception in traceback.format_exception_only(type(e), e):
-                    print(exception)
-                rospy.sleep(1)
-
-
-            swarmie.stop()
+                    status_msgs.append(exception)
 
     except Exception as e:
         print('Something went wrong:')
@@ -314,7 +299,6 @@ def main():
         traceback.print_exc()
 
     finally:
-        swarmie.stop()
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
 
 

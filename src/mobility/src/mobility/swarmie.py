@@ -123,8 +123,8 @@ class Swarmie:
 
         Keyword arguments:
 
-        * `anonymous` (`bool`) - Optional argument to start up this node anonymously. Used by teleop_keyboard to \
-        avoid shutting down other instances of the node, like when simultaneously running rdb.
+        * `node_suffix` (`string`) - Optional argument to start up this node
+        without killing the main /rover_CONTROLLER node. Used by teleop_keyboard
         '''
         self.rover_name = rover 
         self.Obstacles = 0
@@ -133,8 +133,8 @@ class Swarmie:
         self.Targets = AprilTagDetectionArray()
         
         # Intialize this ROS node.
-        if 'anonymous' in kwargs and kwargs['anonymous'] is True:
-            rospy.init_node(rover + '_CONTROLLER', anonymous=True)
+        if 'node_suffix' in kwargs and kwargs['node_suffix']:
+            rospy.init_node(rover + '_CONTROLLER' + kwargs['node_suffix'])
         else:
             rospy.init_node(rover + '_CONTROLLER')
 
