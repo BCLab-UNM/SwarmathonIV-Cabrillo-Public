@@ -1,5 +1,6 @@
 #include <math.h>
 #include <ros/ros.h>
+#include <ros/console.h>
 
 #include <boost/thread.hpp>
 
@@ -243,7 +244,10 @@ double metersToTicks(double meters) {
 }
 
 double diffToTheta(double right, double left) {
-	return (right - left) / wheelBase;
+    double tantheta = (right - left) / wheelBase;
+    double val = atan(tantheta);
+	ROS_DEBUG_STREAM("diffToTheta right: "<<right<<" left: "<<left<<" ret: "<<val);
+	return val;
 }
 
 double thetaToDiff(double theta) {
@@ -369,7 +373,7 @@ void parseData(string str) {
 				double leftWheelDistance = ticksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
-				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance);
+				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance) * .65; // darren testing
 
 			    //Accumulate angles to calculate absolute heading
 			    odomTheta += dtheta;
