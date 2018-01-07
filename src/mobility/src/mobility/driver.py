@@ -79,8 +79,9 @@ class State:
         self.Doing = None
         self.Work = Queue()
         self.dbg_msg = None
-        self.Obstacles = 0
-        self.stopCounter = State.DONT_SPAM_CONTROLLER
+        self.Obstacles = 0 
+        self.JoystickCommand = Joy() 
+        self.JoystickCommand.axes = [0,0,0,0,0,0]
         
         # Configuration 
         State.DRIVE_SPEED = rospy.get_param("DRIVE_SPEED", default=0.3)
@@ -92,7 +93,7 @@ class State:
         State.DRIVE_ANGLE_ABORT = rospy.get_param("DRIVE_ANGLE_ABORT", default=math.pi/4)
 
         # Subscribers
-        #rospy.Subscriber(rover + '/joystick', Joy, joystick, queue_size=10)
+        rospy.Subscriber(rover + '/joystick', Joy, self._joystick, queue_size=10)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
 
@@ -155,11 +156,11 @@ class State:
         State.DRIVE_ANGLE_ABORT = config["DRIVE_ANGLE_ABORT"]
         self.print_debug('Mobility parameter reconfiguration done.')
         return config 
-    
-    @sync(package_lock)
-    def _joystick(self, msg) :
-        pass 
 
+    @sync(package_lock)
+    def _joystick(self, joy_command):
+        self.JoystickCommand = joy_command 
+    
     @sync(package_lock)
     def set_mode(self, msg) :
         if msg.data == 1 :
@@ -187,7 +188,7 @@ class State:
     @sync(package_lock)
     def _odom(self, msg) : 
         self.OdomLocation.Odometry = msg
-            
+
     def drive(self, linear, angular, mode):
         t = Twist() 
         t.linear.x = linear
@@ -212,10 +213,14 @@ class State:
                     self.Doing.sema.release()
                 self.Doing = None
                 
-            if self.Work.empty() :
-                if self.stopCounter > 0:
-                    self.drive(0,0,State.DRIVE_MODE_STOP)
-                    self.stopCounter -= 1
+            if self.Work.empty() : 
+                # Let the joystick drive.
+                lin = self.JoystickCommand.axes[4] * State.DRIVE_SPEED
+                ang = self.JoystickCommand.axes[3] * State.TURN_SPEED
+                if abs(lin) < 0.1 and abs(ang) < 0.1 :
+                    self.drive(0, 0, State.DRIVE_MODE_STOP)
+                else:
+                    self.drive(lin, ang, State.DRIVE_MODE_PID)
             else:
                 self.Doing = self.Work.get(False)
                 self.stopCounter = State.DONT_SPAM_CONTROLLER
