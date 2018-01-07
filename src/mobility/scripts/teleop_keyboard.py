@@ -1,14 +1,8 @@
-
+#! /usr/bin/env python
 """
 Modified from ros-teleop/teleop_twist_keyboard.
 https://github.com/ros-teleop/teleop_twist_keyboard
 Uses Swarmie API to drive the rover with keyboard.
-
-Questions/comments:
-- Would be nice to be able to call stop_now() or something to stop
-the rover immediately.
-TODO: See if you can implement a stop_now(). Might have to send Swarmie calls into new threads.
-TODO: add a reset params function?
 """
 from __future__ import print_function
 import math
@@ -168,17 +162,7 @@ def main():
 
     drive_bindings = {
         'i': 1,  # positive
-        # 'o':(1,0,0,-1),
-        # 'u':(1,0,0,1),
         ',': -1,  # negative
-        # '.':(-1,0,0,1),
-        # 'm':(-1,0,0,-1),
-        # 'I':(1,0,0,0),
-        # 'J':(0,1,0,0),
-        # 'L':(0,-1,0,0),
-        # '<':(-1,0,0,0),
-        # '>':(-1,-1,0,0),
-        # 'M':(-1,1,0,0),
     }
     turn_bindings = {
         'j': 1,  # turn left, positive theta
