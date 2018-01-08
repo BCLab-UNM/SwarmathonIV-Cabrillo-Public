@@ -2,8 +2,8 @@
 """
 Modified from ros-teleop/teleop_twist_keyboard.
 https://github.com/ros-teleop/teleop_twist_keyboard
-Publishes Twists on the rover's /driveControl topic to drive the
-rover with keyboard. Twists are unit messages that the driver scales
+Publishes Joy messages on the driver's /joystick topic to drive the
+rover with keyboard. Joy messages are unit messages that the driver scales
 with the current drive speed and turn speed on the parameter server.
 """
 from __future__ import print_function
@@ -17,13 +17,13 @@ import rospy
 import rosnode
 
 import dynamic_reconfigure.client
-from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Joy
 from mobility.driver import State
 from mobility.swarmie import Swarmie
 
 
 msg = """
-Reading from the keyboard and Publishing Twists to driver!
+Reading from the keyboard and Publishing to driver!
 ----------------------------------------------------------
 Moving around:       Fingers (use the shift key):
    u    i    o       U         O
@@ -109,18 +109,18 @@ if __name__ == "__main__":
     )
     server_config = param_client.get_configuration()
 
+    # Co-opting joystick topic for keyboard commands
+    pub = rospy.Publisher(rovername + '/joystick', Joy, queue_size=1)
 
-    pub = rospy.Publisher(rovername + '/keyboard', Twist, queue_size=1)
-
-    moveBindings = {
-        'i': (1, 0, 0, 0),
-        'o': (1, 0, 0, -1),
-        'j': (0, 0, 0, 1),
-        'l': (0, 0, 0, -1),
-        'u': (1, 0, 0, 1),
-        ',': (-1, 0, 0, 0),
-        '.': (-1, 0, 0, 1),
-        'm': (-1, 0, 0, -1),
+    move_bindings = {
+        'i': (0, 0, 0, 0, 1, 0),
+        'o': (0, 0, 0, -1, 1, 0),
+        'j': (0, 0, 0, 1, 0, 0),
+        'l': (0, 0, 0, -1, 0, 0),
+        'u': (0, 0, 0, 1, 1, 0),
+        ',': (0, 0, 0, 0, -1, 0),
+        '.': (0, 0, 0, 1, -1, 0),
+        'm': (0, 0, 0, -1, -1, 0),
     }
     claw_bindings = {
         'O': swarmie.fingers_open,
@@ -136,10 +136,8 @@ if __name__ == "__main__":
         '5': ['turn_speed', 0.9],
     }
 
-    x = 0
-    y = 0
-    z = 0
-    th = 0
+    joy = Joy()
+    joy.axes = (0, 0, 0, 0, 0, 0)
     status = 0
 
     try:
@@ -150,9 +148,8 @@ if __name__ == "__main__":
         ))
         while True:
             key = getKey()
-            if key in moveBindings.keys():
-                x = moveBindings[key][0]
-                th = moveBindings[key][3]
+            if key in move_bindings.keys():
+                joy.axes = move_bindings[key]
             elif key in claw_bindings.keys():
                 claw_bindings[key]()  # call the function at that key
             elif key in param_bindings.keys():
@@ -178,15 +175,11 @@ if __name__ == "__main__":
                 ))
                 status = (status + 1) % 15
             else:
-                x = 0
-                th = 0
+                joy.axes = (0, 0, 0, 0, 0, 0)
                 if (key == '\x03'):
                     break
 
-            twist = Twist()
-            twist.linear.x = x
-            twist.angular.z = th
-            pub.publish(twist)
+            pub.publish(joy)
 
     except Exception as e:
         print('Something went wrong:')
@@ -195,13 +188,7 @@ if __name__ == "__main__":
         traceback.print_exc()
 
     finally:
-        twist = Twist()
-        twist.linear.x = 0
-        twist.linear.y = 0
-        twist.linear.z = 0
-        twist.angular.x = 0
-        twist.angular.y = 0
-        twist.angular.z = 0
-        pub.publish(twist)
+        joy.axes = (0, 0, 0, 0, 0, 0)
+        pub.publish(joy)
 
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
