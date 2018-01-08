@@ -443,31 +443,38 @@ class Swarmie:
         # Third test: The block never seems to affect the sonar in the simulator. 
         # Also, the grasped block rarely seems to be recognized in the simulator. 
         # Which is whack. 
-        topics = rospy.get_published_topics() 
-        for t in topics : 
-            if t[0] == '/gazebo/link_states' :
-                # This is the simulator
-                return True
+        return(simulatorRunning())
         
-        return False
-     
+    def simulatorRunning(self): #would it be possible to put this in rospy? This method has nothing to do with the partiular swarmie so if there is both a virual and a physical we would get virtual behavior
+      '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
+      for t in rospy.get_published_topics(): 
+        if t[0] == '/gazebo/link_states' :
+          # This is the simulator
+          return True
+      return False
+    
     def pickup(self):
       '''Picks up the block'''
+      finger_close_angle = .5
+      if self.simulatorRunning():
+        finger_close_angle = 0
+      
       self.set_finger_angle(2) #open
-      rospy.sleep(1) #not sure if sleeps are okay here
+      rospy.sleep(1)
       self.set_wrist_angle(1)
-      rospy.sleep(.3)
-      self.set_finger_angle(.5) #close
-      rospy.sleep(0.5)
+      rospy.sleep(.7)
+      self.set_finger_angle(finger_close_angle) #close
+      rospy.sleep(1)
       self.wrist_up()
+      return(self.has_block())
        
     def putdown(self):
       '''Puts the block down'''
       self.set_wrist_angle(1)
-      rospy.sleep(.5)
+      rospy.sleep(.7)
       self.set_finger_angle(2) #open
-      rospy.sleep(.5)
-      self.wrist_up()          
+      rospy.sleep(1)
+      self.wrist_up()
 
     def find_nearest_target(self) :
         '''Broken: Return a XXX that is the odom location of the nearest target on the map.''' 
