@@ -114,7 +114,18 @@ class Swarmie:
     with ROS topics and services to perform action and acquire sensor data. 
     ''' 
     
-    def __init__(self, rover):
+    def __init__(self, rover, **kwargs):
+        '''Constructor.
+
+        Args:
+
+        * `rover` (`string`) - Name of the rover.
+
+        Keyword arguments:
+
+        * `node_suffix` (`string`) - Optional argument to start up this node
+        without killing the main /rover_CONTROLLER node. Used by teleop_keyboard
+        '''
         self.rover_name = rover 
         self.Obstacles = 0
         self.MapLocation = Location(None)
@@ -122,7 +133,10 @@ class Swarmie:
         self.Targets = AprilTagDetectionArray()
         
         # Intialize this ROS node.
-        rospy.init_node(rover + '_CONTROLLER')
+        if 'node_suffix' in kwargs and kwargs['node_suffix']:
+            rospy.init_node(rover + '_CONTROLLER' + kwargs['node_suffix'])
+        else:
+            rospy.init_node(rover + '_CONTROLLER')
 
         # Create publishiers. 
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
