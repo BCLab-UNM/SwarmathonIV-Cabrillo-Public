@@ -449,8 +449,8 @@ class Swarmie:
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
         for t in rospy.get_published_topics(): 
             if t[0] == '/gazebo/link_states' :
-            # This is the simulator
-            return True
+                # This is the simulator
+                return True
         return False
 
     def pickup(self):
