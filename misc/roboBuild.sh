@@ -15,5 +15,5 @@ robotIP=`echo $robot | cut -d"|" -f2`
 ping -q -c 2 `echo $robotIP | cut -d"|" -f2` -s 1 &>/dev/null && (echo "Robot is responsive"|tee $logfile; notify-send "Robot is responsive") || (echo "unable to find robot on network at $robotIP"|tee $logfile; notify-send "unable to find robot on network at $robotIP"; exit) 
 
 echo "Transferring built files to $robotName"|tee $logfile; notify-send "Transferring built files to $robotName"
-scp -r ../devel robot@$robotIP:~/rover_workspace/devel 
-#future change to something like rsync -aux ../devel robot@$robotIP:~/rover_workspace/devel
+./deploy_host.sh $robotName
+
