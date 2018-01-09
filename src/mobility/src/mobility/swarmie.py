@@ -443,9 +443,9 @@ class Swarmie:
         # Third test: The block never seems to affect the sonar in the simulator. 
         # Also, the grasped block rarely seems to be recognized in the simulator. 
         # Which is whack. 
-        return(simulatorRunning())
+        return(self.simulator_running())
         
-    def simulatorRunning(self): 
+    def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
         for t in rospy.get_published_topics(): 
             if t[0] == '/gazebo/link_states' :
@@ -456,7 +456,7 @@ class Swarmie:
     def pickup(self):
         '''Picks up the block'''
         finger_close_angle = .5
-        if self.simulatorRunning():
+        if self.simulator_running():
             finger_close_angle = 0
 
         self.set_finger_angle(2) #open
