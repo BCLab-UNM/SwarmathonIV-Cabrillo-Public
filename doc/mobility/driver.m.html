@@ -1122,7 +1122,7 @@ table {
 <span class="n">package_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
 
 <span class="kn">from</span> <span class="nn">mobility</span> <span class="kn">import</span> <span class="n">sync</span>
-<span class="kn">from</span> <span class="nn">mobility.swarmie</span> <span class="kn">import</span> <span class="n">Location</span> 
+<span class="kn">from</span> <span class="nn">mobility.swarmie</span> <span class="kn">import</span> <span class="n">Location</span>
 
 <span class="k">class</span> <span class="nc">Task</span> <span class="p">:</span> 
     <span class="sd">&#39;&#39;&#39;A robot relative place to navigate to. Expressed as r and theta&#39;&#39;&#39;</span> 
@@ -1168,6 +1168,8 @@ table {
         <span class="bp">self</span><span class="o">.</span><span class="n">Work</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dbg_msg</span> <span class="o">=</span> <span class="bp">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span> <span class="o">=</span> <span class="n">Joy</span><span class="p">()</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
         
         <span class="c1"># Configuration </span>
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_SPEED</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_SPEED&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
@@ -1179,7 +1181,7 @@ table {
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_ANGLE_ABORT</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_ANGLE_ABORT&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
 
         <span class="c1"># Subscribers</span>
-        <span class="c1">#rospy.Subscriber(rover + &#39;/joystick&#39;, Joy, joystick, queue_size=10)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/joystick&#39;</span><span class="p">,</span> <span class="n">Joy</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_joystick</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
         <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/obstacle&#39;</span><span class="p">,</span> <span class="n">Obstacle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_obstacle</span><span class="p">)</span>
         <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/odom/filtered&#39;</span><span class="p">,</span> <span class="n">Odometry</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_odom</span><span class="p">)</span>
 
@@ -1242,11 +1244,11 @@ table {
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_ANGLE_ABORT</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;DRIVE_ANGLE_ABORT&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_debug</span><span class="p">(</span><span class="s1">&#39;Mobility parameter reconfiguration done.&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">config</span> 
-    
-    <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
-    <span class="k">def</span> <span class="nf">_joystick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span>
-        <span class="k">pass</span> 
 
+    <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_joystick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">joy_command</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span> <span class="o">=</span> <span class="n">joy_command</span> 
+    
     <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">set_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span>
         <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">data</span> <span class="o">==</span> <span class="mi">1</span> <span class="p">:</span>
@@ -1274,7 +1276,7 @@ table {
     <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">_odom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span> 
         <span class="bp">self</span><span class="o">.</span><span class="n">OdomLocation</span><span class="o">.</span><span class="n">Odometry</span> <span class="o">=</span> <span class="n">msg</span>
-            
+
     <span class="k">def</span> <span class="nf">drive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linear</span><span class="p">,</span> <span class="n">angular</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
         <span class="n">t</span> <span class="o">=</span> <span class="n">Twist</span><span class="p">()</span> 
         <span class="n">t</span><span class="o">.</span><span class="n">linear</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">linear</span>
@@ -1300,7 +1302,13 @@ table {
                 <span class="bp">self</span><span class="o">.</span><span class="n">Doing</span> <span class="o">=</span> <span class="bp">None</span>
                 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Work</span><span class="o">.</span><span class="n">empty</span><span class="p">()</span> <span class="p">:</span> 
-                <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_STOP</span><span class="p">)</span>
+                <span class="c1"># Let the joystick drive.</span>
+                <span class="n">lin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">*</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_SPEED</span>
+                <span class="n">ang</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">State</span><span class="o">.</span><span class="n">TURN_SPEED</span>
+                <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">lin</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.1</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.1</span> <span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_STOP</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="n">lin</span><span class="p">,</span> <span class="n">ang</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_PID</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">Doing</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Work</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
     
@@ -1478,6 +1486,8 @@ table {
         <span class="bp">self</span><span class="o">.</span><span class="n">Work</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dbg_msg</span> <span class="o">=</span> <span class="bp">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span> <span class="o">=</span> <span class="n">Joy</span><span class="p">()</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
         
         <span class="c1"># Configuration </span>
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_SPEED</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_SPEED&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
@@ -1489,7 +1499,7 @@ table {
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_ANGLE_ABORT</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_ANGLE_ABORT&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
 
         <span class="c1"># Subscribers</span>
-        <span class="c1">#rospy.Subscriber(rover + &#39;/joystick&#39;, Joy, joystick, queue_size=10)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/joystick&#39;</span><span class="p">,</span> <span class="n">Joy</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_joystick</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
         <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/obstacle&#39;</span><span class="p">,</span> <span class="n">Obstacle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_obstacle</span><span class="p">)</span>
         <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/odom/filtered&#39;</span><span class="p">,</span> <span class="n">Odometry</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_odom</span><span class="p">)</span>
 
@@ -1552,11 +1562,11 @@ table {
         <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_ANGLE_ABORT</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;DRIVE_ANGLE_ABORT&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_debug</span><span class="p">(</span><span class="s1">&#39;Mobility parameter reconfiguration done.&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">config</span> 
-    
-    <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
-    <span class="k">def</span> <span class="nf">_joystick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span>
-        <span class="k">pass</span> 
 
+    <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_joystick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">joy_command</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span> <span class="o">=</span> <span class="n">joy_command</span> 
+    
     <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">set_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span>
         <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">data</span> <span class="o">==</span> <span class="mi">1</span> <span class="p">:</span>
@@ -1584,7 +1594,7 @@ table {
     <span class="nd">@sync</span><span class="p">(</span><span class="n">package_lock</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">_odom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span> <span class="p">:</span> 
         <span class="bp">self</span><span class="o">.</span><span class="n">OdomLocation</span><span class="o">.</span><span class="n">Odometry</span> <span class="o">=</span> <span class="n">msg</span>
-            
+
     <span class="k">def</span> <span class="nf">drive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linear</span><span class="p">,</span> <span class="n">angular</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
         <span class="n">t</span> <span class="o">=</span> <span class="n">Twist</span><span class="p">()</span> 
         <span class="n">t</span><span class="o">.</span><span class="n">linear</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">linear</span>
@@ -1610,7 +1620,13 @@ table {
                 <span class="bp">self</span><span class="o">.</span><span class="n">Doing</span> <span class="o">=</span> <span class="bp">None</span>
                 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Work</span><span class="o">.</span><span class="n">empty</span><span class="p">()</span> <span class="p">:</span> 
-                <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_STOP</span><span class="p">)</span>
+                <span class="c1"># Let the joystick drive.</span>
+                <span class="n">lin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">*</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_SPEED</span>
+                <span class="n">ang</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">State</span><span class="o">.</span><span class="n">TURN_SPEED</span>
+                <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">lin</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.1</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.1</span> <span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_STOP</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">drive</span><span class="p">(</span><span class="n">lin</span><span class="p">,</span> <span class="n">ang</span><span class="p">,</span> <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_MODE_PID</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">Doing</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Work</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
     
@@ -1911,6 +1927,16 @@ table {
 
             </div>
             <div class="item">
+            <p id="mobility.driver.State.JoystickCommand" class="name">var <span class="ident">JoystickCommand</span></p>
+            
+
+            
+  
+  <div class="source_cont">
+</div>
+
+            </div>
+            <div class="item">
             <p id="mobility.driver.State.MapLocation" class="name">var <span class="ident">MapLocation</span></p>
             
 
@@ -2075,6 +2101,8 @@ table {
     <span class="bp">self</span><span class="o">.</span><span class="n">Work</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">dbg_msg</span> <span class="o">=</span> <span class="bp">None</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span> 
+    <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span> <span class="o">=</span> <span class="n">Joy</span><span class="p">()</span> 
+    <span class="bp">self</span><span class="o">.</span><span class="n">JoystickCommand</span><span class="o">.</span><span class="n">axes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
     
     <span class="c1"># Configuration </span>
     <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_SPEED</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_SPEED&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
@@ -2085,7 +2113,7 @@ table {
     <span class="n">State</span><span class="o">.</span><span class="n">ROTATE_THRESHOLD</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;ROTATE_THRESHOLD&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">16</span><span class="p">)</span>
     <span class="n">State</span><span class="o">.</span><span class="n">DRIVE_ANGLE_ABORT</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="s2">&quot;DRIVE_ANGLE_ABORT&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
     <span class="c1"># Subscribers</span>
-    <span class="c1">#rospy.Subscriber(rover + &#39;/joystick&#39;, Joy, joystick, queue_size=10)</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/joystick&#39;</span><span class="p">,</span> <span class="n">Joy</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_joystick</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
     <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/obstacle&#39;</span><span class="p">,</span> <span class="n">Obstacle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_obstacle</span><span class="p">)</span>
     <span class="n">rospy</span><span class="o">.</span><span class="n">Subscriber</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/odom/filtered&#39;</span><span class="p">,</span> <span class="n">Odometry</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_odom</span><span class="p">)</span>
     <span class="c1"># Services </span>
