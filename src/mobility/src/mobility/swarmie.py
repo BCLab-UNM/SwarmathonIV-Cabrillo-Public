@@ -437,7 +437,7 @@ class Swarmie:
         
         nearest = blocks[0]
         x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.1 :
+        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
             return True 
             
         # Third test: The block never seems to affect the sonar in the simulator. 
