@@ -56,8 +56,8 @@ def approach():
             print(e)
             return False
             
-        # over drives the block; maybe pass another argument to drive_to and decrese distance by .18?
-        swarmie.drive_to(block, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+        # claw_offset is close in simulator but need to test irl to fix swarmie overshooting the block.
+        swarmie.drive_to(block, claw_offset = 0.18, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
    
         # Grab
         swarmie.pickup()
