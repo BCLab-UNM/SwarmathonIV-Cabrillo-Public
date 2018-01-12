@@ -416,10 +416,13 @@ void parseData(string str) {
 
 			    //Decompose linear distance into its component values
 			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2;
-			    double x = meanWheelDistance * cos(dtheta);
-			    double y = meanWheelDistance * sin(dtheta);
+//			    double x = meanWheelDistance * cos(dtheta);
+//			    double y = meanWheelDistance * sin(dtheta);
+                double x = meanWheelDistance * cos(odomTheta); // darren testing
+                double y = meanWheelDistance * sin(odomTheta); // darren testing
 
-			    // Calculate velocities if possible.
+
+                // Calculate velocities if possible.
 			    double vtheta = 0;
 			    double vx = 0;
 			    double vy = 0;
