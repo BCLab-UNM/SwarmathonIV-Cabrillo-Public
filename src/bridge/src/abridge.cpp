@@ -42,6 +42,7 @@ geometry_msgs::QuaternionStamped fingerAngle;
 geometry_msgs::QuaternionStamped wristAngle;
 sensor_msgs::Imu imu;
 nav_msgs::Odometry odom;
+double odomTheta = 0;
 sensor_msgs::Range sonarLeft;
 sensor_msgs::Range sonarCenter;
 sensor_msgs::Range sonarRight;
@@ -64,6 +65,8 @@ float heartbeat_publish_interval = 2;
 
 const double wheelBase = 0.278; //distance between left and right wheels (in M)
 const double wheelDiameter = 0.122; //diameter of wheel (in M)
+const double leftWheelCircumference = 0.3651; // avg for 3 rovers (in M)
+const double rightWheelCircumference = 0.3662; // avg for 3 rovers (in M)
 const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
 double leftTicks = 0;
@@ -107,6 +110,7 @@ void reconfigure(bridge::pidConfig &cfg, uint32_t level);
 void modeHandler(const std_msgs::UInt8::ConstPtr& message);
 bool store_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
 bool start_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
+bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
 
 int main(int argc, char **argv) {
     
@@ -151,7 +155,10 @@ int main(int argc, char **argv) {
     // Service to tell the Arduino to store calibration
     ros::ServiceServer stc = aNH.advertiseService((publishedName + "/store_magnetometer_calibration"), store_calibration);
     ros::ServiceServer str = aNH.advertiseService((publishedName + "/start_magnetometer_calibration"), start_calibration);
-    
+
+    // Service to reset odometry during testing
+    ros::ServiceServer resetOdom = aNH.advertiseService(publishedName + "/reset_odometry", reset_odometry);
+
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
@@ -238,12 +245,22 @@ double ticksToMeters(double ticks) {
 	return (M_PI * wheelDiameter * ticks) / cpr;
 }
 
+double leftTicksToMeters(double leftTicks) {
+	return (leftWheelCircumference * leftTicks) / cpr;
+}
+
+double rightTicksToMeters(double rightTicks) {
+	return (rightWheelCircumference * rightTicks) / cpr;
+}
+
 double metersToTicks(double meters) {
-	return (meters * cpr) / (M_PI * wheelDiameter);
+//	return (meters * cpr) / (M_PI * wheelDiameter);
+    return (meters * cpr) / ((leftWheelCircumference + rightWheelCircumference) / 2);
 }
 
 double diffToTheta(double right, double left) {
-	return (right - left) / wheelBase;
+//	return (right - left) / wheelBase;
+	return (right - left) / (wheelBase * 1.45);
 }
 
 double thetaToDiff(double theta) {
@@ -264,6 +281,22 @@ bool start_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response 
 	usb.sendData(cmd);
 	memset(&cmd, '\0', sizeof (cmd));
 	return true;
+}
+
+bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
+    odomTheta = 0;
+    odom.header.stamp = ros::Time::now();
+    odom.pose.pose.position.x = 0;
+    odom.pose.pose.position.y = 0;
+    odom.pose.pose.position.z = 0;
+    odom.pose.pose.orientation.x = 0;
+    odom.pose.pose.orientation.y = 0;
+    odom.pose.pose.orientation.z = 0;
+    odom.pose.pose.orientation.w = 0;
+    odom.twist.twist.linear.x = 0;
+    odom.twist.twist.linear.y = 0;
+    odom.twist.twist.angular.z = 0;
+    return true;
 }
 
 void serialActivityTimer(const ros::TimerEvent& e) {
@@ -333,7 +366,7 @@ void parseData(string str) {
     istringstream oss(str);
     string sentence;
     static double lastOdomTS = 0;
-    static double odomTheta = 0;
+//    static double odomTheta = 0;
 
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
@@ -369,8 +402,11 @@ void parseData(string str) {
 				rightTicks = atoi(dataSet.at(3).c_str());
 				odomTS = atof(dataSet.at(4).c_str()) / 1000; // Seconds
 
-				double rightWheelDistance = ticksToMeters(rightTicks);
-				double leftWheelDistance = ticksToMeters(leftTicks);
+//				double rightWheelDistance = ticksToMeters(rightTicks);
+                double rightWheelDistance = rightTicksToMeters(rightTicks);
+
+//				double leftWheelDistance = ticksToMeters(leftTicks);
+                double leftWheelDistance = leftTicksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
 				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance);
