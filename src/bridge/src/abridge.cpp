@@ -416,10 +416,12 @@ void parseData(string str) {
 
 			    //Decompose linear distance into its component values
 			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2;
-//			    double x = meanWheelDistance * cos(dtheta);
-//			    double y = meanWheelDistance * sin(dtheta);
-                double x = meanWheelDistance * cos(odomTheta); // darren testing
-                double y = meanWheelDistance * sin(odomTheta); // darren testing
+                //Twist is in base_link frame, use relative heading
+			    double twistX = meanWheelDistance * cos(dtheta);
+			    double twistY = meanWheelDistance * sin(dtheta);
+                //Pose is in the odom frame, use absolute heading
+                double poseX = meanWheelDistance * cos(odomTheta);
+                double poseY = meanWheelDistance * sin(odomTheta);
 
 
                 // Calculate velocities if possible.
@@ -429,8 +431,8 @@ void parseData(string str) {
 			    if (lastOdomTS > 0) {
 			    	double deltaT = odomTS - lastOdomTS;
 			    	vtheta = dtheta / deltaT;
-			    	vx = x / deltaT;
-			    	vy = y / deltaT;
+			    	vx = twistX / deltaT;
+			    	vy = twistY / deltaT;
 
 			    	// Normalize ticks to ticks/s
 			    	leftTicks = leftTicks / deltaT;
@@ -439,8 +441,8 @@ void parseData(string str) {
 		    	lastOdomTS = odomTS;
 
 				odom.header.stamp = ros::Time::now();
-				odom.pose.pose.position.x += x;
-				odom.pose.pose.position.y += y;
+				odom.pose.pose.position.x += poseX;
+				odom.pose.pose.position.y += poseY;
 				odom.pose.pose.position.z = 0;
 				odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(odomTheta);
 
