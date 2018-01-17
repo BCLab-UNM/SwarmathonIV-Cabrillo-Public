@@ -437,7 +437,7 @@ class Swarmie:
         
         nearest = blocks[0]
         x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.1 :
+        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
             return True 
             
         # Third test: The block never seems to affect the sonar in the simulator. 
@@ -625,7 +625,7 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
-    def drive_to(self, place, **kwargs):
+    def drive_to(self, place, claw_offset = 0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
         
@@ -636,6 +636,8 @@ class Swarmie:
         Keyword Arguments/Returns/Raises:
         
         * See `mobility.swarmie.Swarmie.drive`
+        * claw_offset to the odometry reference frame.  Appropriate value
+        to be passed in, otherwise the reference frame remains unchanged.
             
         '''
         loc = self.get_odom_location().get_pose()
@@ -644,7 +646,7 @@ class Swarmie:
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
         self.turn(angle, **kwargs)
-        self.drive(dist, **kwargs)
+        self.drive(dist-claw_offset, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
