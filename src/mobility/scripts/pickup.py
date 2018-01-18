@@ -23,18 +23,14 @@ def get_block_location():
     global rovername, swarmie 
     
     # Find the nearest block
-    blocks = swarmie.get_latest_targets()        
-    blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x)) 
-
+    blocks = swarmie.get_latest_targets()
+    loc = swarmie.get_odom_location().get_pose()
+    blocks = sorted(blocks.detections, key=lambda x : 
+                    math.hypot(loc.y - x.pose.pose.position.y, 
+                              loc.x - x.pose.pose.position.x))
+    
     try:
         nearest = blocks[0]
-        loc = swarmie.get_odom_location().get_pose()
-        for place in blocks :
-            dist = math.hypot(loc.y - place.pose.pose.position.y, 
-                              loc.x - place.pose.pose.position.x)
-            if dist < math.hypot(loc.y - nearest.pose.pose.position.y, 
-                              loc.x - nearest.pose.pose.position.x) :
-                nearest = place
     except IndexError:
         print("No blocks detected.")
         exit(0)
