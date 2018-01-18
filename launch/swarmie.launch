@@ -199,6 +199,14 @@
 
       <param name="device" value="$(arg ublox_dev)"/>
       <param name="frame_id" value="$(arg name)/base_link"/>
+      <!-- sbas syntax for latest u-blox ros driver -->
+      <!--<param name="gnss/sbas" value="true" />-->
+      <!--<param name="sbas/max" value="3" />-->
+      <!--<param name="sbas/usage" value="6" />-->
+      <!-- sbas syntax for our submodule -->
+      <param name="enable_sbas" type="bool" value="false" />
+      <param name="dynamic_model" type="string" value="pedestrian" />
+      <param name="fix_mode" type="string" value="2d" />
     </node>
 
     <!--
