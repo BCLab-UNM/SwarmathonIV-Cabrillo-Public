@@ -260,11 +260,11 @@ double metersToTicks(double meters) {
 
 double diffToTheta(double right, double left) {
 //	return (right - left) / wheelBase;
-	return (right - left) / (wheelBase * 1.45);
+	return (right - left) / (wheelBase * 1.50);
 }
 
 double thetaToDiff(double theta) {
-	return theta * wheelBase;
+	return theta * wheelBase * 1.50;
 }
 
 bool store_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
