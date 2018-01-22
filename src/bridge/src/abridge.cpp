@@ -258,6 +258,14 @@ double metersToTicks(double meters) {
     return (meters * cpr) / ((leftWheelCircumference + rightWheelCircumference) / 2);
 }
 
+double leftMetersToTicks(double meters) {
+    return (meters * cpr) / leftWheelCircumference;
+}
+
+double rightMetersToTicks(double meters) {
+    return (meters * cpr) / rightWheelCircumference;
+}
+
 double diffToTheta(double right, double left) {
 //	return (right - left) / wheelBase;
 	return (right - left) / (wheelBase * 1.50);
@@ -316,8 +324,10 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-		double left_sp = linear_sp - angular_sp;
-		double right_sp = linear_sp + angular_sp;
+//		double left_sp = linear_sp - angular_sp;
+//		double right_sp = linear_sp + angular_sp;
+        double left_sp = leftMetersToTicks(speedCommand.linear.x) - angular_sp;
+        double right_sp = rightMetersToTicks(speedCommand.linear.x) + angular_sp;
 
 		int l = round(left_pid.step(left_sp, leftTicks, odomTS));
 		int r = round(right_pid.step(right_sp, rightTicks, odomTS));
