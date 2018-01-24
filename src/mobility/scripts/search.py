@@ -145,8 +145,9 @@ def main():
     print(swarmie.get_obstacle_condition(), Obstacle.TAG_HOME)   
     if swarmie.get_obstacle_condition() == Obstacle.TAG_HOME :
         print("this is important")
+        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
         swarmie.drive(.5, ignore=Obstacle.IS_VISION)
-        swarmie.turn(-math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        swarmie.turn(math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
         swarmie.drive(1, ignore=Obstacle.IS_VISION)
 
     try: 
