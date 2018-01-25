@@ -193,7 +193,10 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
-        self.Targets = msg
+        if self.is_moving():
+            self.Targets = msg
+        else:
+            self.Targets.detections = msg.detections + self.Targets.detections
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -663,3 +666,12 @@ class Swarmie:
         loc = self.get_odom_location().get_pose()
         angle = angles.shortest_angular_distance(loc.theta, heading)
         self.turn(angle, **kwargs)
+        
+    def is_moving(self):
+        ''' uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+                
