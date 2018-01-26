@@ -131,6 +131,7 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
+        self.targets_timeout = 3
         
         # Intialize this ROS node.
         if 'node_suffix' in kwargs and kwargs['node_suffix']:
@@ -196,8 +197,8 @@ class Swarmie:
         if self._is_moving():
             self.Targets = msg
         else:
-            #adds tags to the previous detections and removes tags older then 3 seconds
-            self.Targets.detections = [tag for tag in msg.detections + self.Targets.detections if ((tag.pose.header.stamp.secs + 3 ) > rospy.Time.now().secs) ]
+            #adds tags missing to the previous detections and removes tags older then 3 seconds
+            self.Targets.detections = [tag for tag in list(set(msg.detections + self.Targets.detections)) if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) ]
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
