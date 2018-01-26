@@ -193,7 +193,7 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
-        if self.is_moving():
+        if self._is_moving():
             self.Targets = msg
         else:
             self.Targets.detections = msg.detections + self.Targets.detections
@@ -666,8 +666,17 @@ class Swarmie:
         loc = self.get_odom_location().get_pose()
         angle = angles.shortest_angular_distance(loc.theta, heading)
         self.turn(angle, **kwargs)
-        
+    
+    @sync(swarmie_lock)
     def is_moving(self):
+        ''' calls _is_moving that uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return(self._is_moving())
+        
+    def _is_moving(self):
         ''' uses OdomLocation angular.z & linear.x  
         Returns: 
 
