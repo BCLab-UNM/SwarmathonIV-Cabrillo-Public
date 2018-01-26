@@ -126,15 +126,9 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
                 name = 'IMU Calibration Info',
                 values = [
                     KeyValue(key='Accel Offsets', value=str(acc_offsets)),
-                    KeyValue(key='Accel Transform',
-                             value=str(acc_transform[0]) + '\n' +
-                                       str(acc_transform[1]) + '\n' +
-                                       str(acc_transform[2])),
+                    KeyValue(key='Accel Transform', value=str(acc_transform)),
                     KeyValue(key='Mag Offsets', value=str(mag_offsets)),
-                    KeyValue(key='Mag Transform',
-                             value=str(mag_transform[0]) + '\n' +
-                                       str(mag_transform[1]) + '\n' +
-                                       str(mag_transform[2]))
+                    KeyValue(key='Mag Transform', value=str(mag_transform))
                 ]
             )
         ]
