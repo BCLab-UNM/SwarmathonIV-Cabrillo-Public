@@ -1,25 +1,36 @@
 #! /usr/bin/env python
 """
-cal_lib.py - Ellipsoid into Sphere calibration library based upon numpy and linalg
-Copyright (C) 2012 Fabio Varesano <fabio at varesano dot net>
-Development of this code has been supported by the Department of Computer Science,
-Universita' degli Studi di Torino, Italy within the Piemonte Project
-http://www.piemonte.di.unito.it/
-This program is free software: you can redistribute it and/or modify
-it under the terms of the version 3 GNU General Public License as
-published by the Free Software Foundation.
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+Ellipsoid fit, from:
+https://github.com/aleksandrbazhin/ellipsoid_fit_python
+
+Apdapted to work in ROS.
+
+The MIT License (MIT)
+
+Copyright (c) 2016 aleksandrbazhin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 from __future__ import print_function
 import json
 import math
 import numpy
-from numpy import linalg
 import sys
 import tf
 import message_filters
@@ -30,65 +41,52 @@ from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
 from std_srvs.srv import Empty, EmptyResponse
 
-def calibrate(x, y, z):
-    # H = numpy.array([x, y, z, -y**2, -z**2, numpy.ones([len(x), 1])])
-    H = numpy.array([x, y, z, -y**2, -z**2, numpy.ones([len(x)])])
-    H = numpy.transpose(H)
-    w = x**2
+def ellipsoid_fit(x, y, z):
+    """
+    Modified from:
+    http://www.mathworks.com/matlabcentral/fileexchange/24693-ellipsoid-fit
+    """
+    D = numpy.array([x*x,
+                     y*y,
+                     z*z,
+                     2 * x*y,
+                     2 * x*z,
+                     2 * y*z,
+                     2 * x,
+                     2 * y,
+                     2 * z])
+    DT = D.conj().T
+    v = numpy.linalg.solve(D.dot(DT), D.dot(numpy.ones(numpy.size(x))))
+    A = numpy.array([[v[0], v[3], v[4], v[6]],
+                     [v[3], v[1], v[5], v[7]],
+                     [v[4], v[5], v[2], v[8]],
+                     [v[6], v[7], v[8], -1]])
+    center = numpy.linalg.solve(-A[:3,:3], [[v[6]], [v[7]], [v[8]]])
+    T = numpy.eye(4)
+    T[3,:3] = center.T
+    R = T.dot(A).dot(T.conj().T)
+    evals, evecs = numpy.linalg.eig(R[:3,:3] / -R[3,3])
+    radii = numpy.sqrt(1. / evals)
+    offset = center
 
-    (X, residues, rank, shape) = linalg.lstsq(H, w)
+    a, b, c = radii
+    r = (a*b*c)**(1./3.)
+    D = numpy.array([[r/a, 0., 0.], [0., r/b, 0.], [0., 0., r/c]])
+    transform = evecs.dot(D).dot(evecs.T)
 
-    OSx = X[0] / 2
-    OSy = X[1] / (2 * X[3])
-    OSz = X[2] / (2 * X[4])
-
-    A = X[5] + OSx**2 + X[3] * OSy**2 + X[4] * OSz**2
-    B = A / X[3]
-    C = A / X[4]
-
-    SCx = numpy.sqrt(A)
-    SCy = numpy.sqrt(B)
-    SCz = numpy.sqrt(C)
-
-    # type conversion from numpy.float64 to standard python floats
-    offsets = [OSx, OSy, OSz]
-    scale = [SCx, SCy, SCz]
-
-    offsets = map(numpy.asscalar, offsets)
-    scale = map(numpy.asscalar, scale)
-
-    return (offsets, scale)
-
-
-def calibrate_from_file(file_name):
-    samples_f = open(file_name, 'r')
-    samples_x = []
-    samples_y = []
-    samples_z = []
-    for line in samples_f:
-        reading = line.split()
-        if len(reading) == 3:
-            samples_x.append(int(reading[0]))
-            samples_y.append(int(reading[1]))
-            samples_z.append(int(reading[2]))
-
-    return calibrate(
-        numpy.array(samples_x),
-        numpy.array(samples_y),
-        numpy.array(samples_z)
-    )
+    return offset.tolist(), transform.tolist()
 
 
-def compute_calibrated_data(x, y, z, offsets, scale):
-    output = []
-    output.append((x - offsets[0]) / scale[0])
-    output.append((y - offsets[1]) / scale[1])
-    output.append((z - offsets[2]) / scale[2])
-    return output
+def compute_calibrated_data(x, y, z, offset, transform):
+    v = numpy.array([[x], [y], [z]])
+    offset = numpy.array(offset)
+    transform = numpy.array(transform)
+    v = transform.dot(v - offset)
+    return v.item(0), v.item(1), v.item(2)
 
 
 def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
-    global calibrating, acc_offsets, acc_scales, mag_offsets, mag_scales
+    global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
     acc_cal = Vector3Stamped()
     acc_cal.header = acc_raw_msg.header
     mag_cal = Vector3Stamped()
@@ -106,16 +104,20 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         mag_data[1].append(mag_raw_msg.vector.y)
         mag_data[2].append(mag_raw_msg.vector.z)
 
-        (acc_offsets, acc_scales) = calibrate(
-            numpy.array(acc_data[0]),
-            numpy.array(acc_data[1]),
-            numpy.array(acc_data[2]),
-        )
-        (mag_offsets, mag_scales) = calibrate(
-            numpy.array(mag_data[0]),
-            numpy.array(mag_data[1]),
-            numpy.array(mag_data[2]),
-        )
+        # Don't fit until some data has been collected.
+        # May still get a runtime warning until enough data in all directions
+        # has been collected.
+        if len(acc_data[0]) > 10:
+            (acc_offsets, acc_transform) = ellipsoid_fit(
+                numpy.array(acc_data[0]),
+                numpy.array(acc_data[1]),
+                numpy.array(acc_data[2]),
+            )
+            (mag_offsets, mag_transform) = ellipsoid_fit(
+                numpy.array(mag_data[0]),
+                numpy.array(mag_data[1]),
+                numpy.array(mag_data[2]),
+            )
         diag_msg = DiagnosticArray()
         diag_msg.header.stamp = imu_msg.header.stamp
         diag_msg.status = [
@@ -124,9 +126,15 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
                 name = 'IMU Calibration Info',
                 values = [
                     KeyValue(key='Accel Offsets', value=str(acc_offsets)),
-                    KeyValue(key='Accel Scales', value=str(acc_scales)),
+                    KeyValue(key='Accel Transform',
+                             value=str(acc_transform[0]) + '\n' +
+                                       str(acc_transform[1]) + '\n' +
+                                       str(acc_transform[2])),
                     KeyValue(key='Mag Offsets', value=str(mag_offsets)),
-                    KeyValue(key='Mag Scales', value=str(mag_scales))
+                    KeyValue(key='Mag Transform',
+                             value=str(mag_transform[0]) + '\n' +
+                                       str(mag_transform[1]) + '\n' +
+                                       str(mag_transform[2]))
                 ]
             )
         ]
@@ -138,29 +146,30 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         acc_raw_msg.vector.y,
         acc_raw_msg.vector.z,
         acc_offsets,
-        acc_scales
+        acc_transform
     )
     acc_cal.vector.x = acc_x
     acc_cal.vector.y = acc_y
     acc_cal.vector.z = acc_z
 
-    # Convert accelerometer digits to milligravities, then to gravities, and finally to meters per second squared
+    # Convert accelerometer digits to milligravities, then to gravities, and
+    # finally to meters per second squared.
     # mismatched x, y as in arduino code
     # todo is this calc still accurate after fitting to a sphere?
-    # imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
-    # imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
-    # imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
+    imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
+    imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
+    imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
 
-    imu_cal.linear_acceleration.x = acc_y * 9.81
-    imu_cal.linear_acceleration.y = -acc_x * 9.81
-    imu_cal.linear_acceleration.z = acc_z * 9.81
+    # imu_cal.linear_acceleration.x = acc_y * 9.81
+    # imu_cal.linear_acceleration.y = -acc_x * 9.81
+    # imu_cal.linear_acceleration.z = acc_z * 9.81
 
     (mag_x, mag_y, mag_z) = compute_calibrated_data(
         mag_raw_msg.vector.x,
         mag_raw_msg.vector.y,
         mag_raw_msg.vector.z,
         mag_offsets,
-        mag_scales
+        mag_transform
     )
     mag_cal.vector.x = mag_x
     mag_cal.vector.y = mag_y
@@ -213,47 +222,37 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
 
 def start_callback(req):
     global calibrating, acc_data, mag_data
-    global acc_offsets, acc_scales, mag_offsets, mag_scales
+    global acc_offsets, acc_transform, mag_offsets, mag_transform
     calibrating = True
     acc_data = [[], [], []]
     mag_data = [[], [], []]
-    acc_offsets = []
-    acc_scales = []
-    mag_offsets = []
-    mag_scales = []
+    acc_offsets = [[0], [0], [0]]
+    acc_transform = [[1, 0, 0],
+                     [0, 1, 0],
+                     [0, 0, 1]]
+    mag_offsets = [[0], [0], [0]]
+    mag_transform = [[1, 0, 0],
+                     [0, 1, 0],
+                     [0, 0, 1]]
     return EmptyResponse()
 
 
 def store_callback(req):
     global calibrating, cal, rover
-    global acc_offsets, acc_scales, mag_offsets, mag_scales
+    global acc_offsets, acc_transform, mag_offsets, mag_transform
     calibrating = False
     cal['acc_offsets'] = acc_offsets
-    cal['acc_scales'] = acc_scales
+    cal['acc_transform'] = acc_transform
     cal['mag_offsets'] = mag_offsets
-    cal['mag_scales'] = mag_scales
-    with open('/home/robot/'+rover+'_calibration.json', 'w') as f:
+    cal['mag_transform'] = mag_transform
+    with open('/home/robot/'+rover+'_calibration_alt.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
 
 if __name__ == "__main__":
     global rover, calibrating, cal, acc_data, mag_data
-    global acc_offsets, acc_scales, mag_offsets, mag_scales
-
-    # print "Calibrating from acc.txt"
-    # (offsets, scale) = calibrate_from_file("acc.txt")
-    # print "Offsets:"
-    # print offsets
-    # print "Scales:"
-    # print scale
-    #
-    # print "Calibrating from magn.txt"
-    # (offsets, scale) = calibrate_from_file("magn.txt")
-    # print "Offsets:"
-    # print offsets
-    # print "Scales:"
-    # print scale
+    global acc_offsets, acc_transform, mag_offsets, mag_transform
 
     if len(sys.argv) < 2:
         print('usage:', sys.argv[0], '<rovername>')
@@ -267,7 +266,7 @@ if __name__ == "__main__":
     mag_data = [[], [], []]
 
     try:
-        with open('/home/robot/'+rover+'_calibration.json', 'r') as f:
+        with open('/home/robot/'+rover+'_calibration_alt.json', 'r') as f:
             cal = json.loads(f.read())
     except IOError as e:
         rospy.loginfo('No IMU calibration file found.')
@@ -275,15 +274,19 @@ if __name__ == "__main__":
         rospy.loginfo('Invalid IMU calibration file. Starting from scratch.')
 
     if not cal:
-        acc_offsets = [0, 0, 0]
-        acc_scales = [1, 1, 1]
-        mag_offsets = [0, 0, 0]
-        mag_scales = [1, 1, 1]
+        acc_offsets = [[0], [0], [0]]
+        acc_transform = [[1, 0, 0],
+                         [0, 1, 0],
+                         [0, 0, 1]]
+        mag_offsets = [[0], [0], [0]]
+        mag_transform = [[1, 0, 0],
+                         [0, 1, 0],
+                         [0, 0, 1]]
     else:
         acc_offsets = cal['acc_offsets']
-        acc_scales = cal['acc_scales']
+        acc_transform = cal['acc_transform']
         mag_offsets = cal['mag_offsets']
-        mag_scales = cal['mag_scales']
+        mag_transform = cal['mag_transform']
 
 
     # Subscribers
