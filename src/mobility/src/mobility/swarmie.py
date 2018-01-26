@@ -196,7 +196,8 @@ class Swarmie:
         if self._is_moving():
             self.Targets = msg
         else:
-            self.Targets.detections = msg.detections + self.Targets.detections
+            #adds tags to the previous detections and removes tags older then 3 seconds
+            self.Targets.detections = [tag for tag in msg.detections + self.Targets.detections if ((tag.pose.header.stamp.secs + 3 ) > rospy.Time.now().secs) ]
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
