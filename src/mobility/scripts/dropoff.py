@@ -52,11 +52,11 @@ def get_center_pose_list():
                 odom_pose.pose.orientation.w,
             ]
             (_r, _p, y) = tf.transformations.euler_from_quaternion(quat)
-        pose = Pose2D()
-        pose.x = odom_pose.pose.position.x
-        pose.y = odom_pose.pose.position.y
-        pose.theta = y
-        pose_list.append(pose)
+            pose = Pose2D()
+            pose.x = odom_pose.pose.position.x
+            pose.y = odom_pose.pose.position.y
+            pose.theta = y
+            pose_list.append(pose)
 
     return pose_list
 
