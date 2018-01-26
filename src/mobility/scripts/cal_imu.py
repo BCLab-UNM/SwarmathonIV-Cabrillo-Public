@@ -89,6 +89,14 @@ def compute_calibrated_data(x, y, z, offsets, scale):
 
 def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     global calibrating, acc_offsets, acc_scales, mag_offsets, mag_scales
+    acc_cal = Vector3Stamped()
+    acc_cal.header = acc_raw_msg.header
+    mag_cal = Vector3Stamped()
+    mag_cal.header = mag_raw_msg.header
+    imu_cal = Imu()
+    imu_cal.header = imu_msg.header
+    imu_cal.angular_velocity = imu_msg.angular_velocity
+
 
     if calibrating:
         acc_data[0].append(acc_raw_msg.vector.x)
@@ -125,9 +133,6 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         imu_diag_pub.publish(diag_msg)
 
     # TODO calc calibrated data
-    imu_cal = Imu()
-    imu_cal.header = imu_msg.header
-    imu_cal.angular_velocity = imu_msg.angular_velocity
     (acc_x, acc_y, acc_z) = compute_calibrated_data(
         acc_raw_msg.vector.x,
         acc_raw_msg.vector.y,
@@ -135,6 +140,10 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         acc_offsets,
         acc_scales
     )
+    acc_cal.vector.x = acc_x
+    acc_cal.vector.y = acc_y
+    acc_cal.vector.z = acc_z
+
     # Convert accelerometer digits to milligravities, then to gravities, and finally to meters per second squared
     # mismatched x, y as in arduino code
     # todo is this calc still accurate after fitting to a sphere?
@@ -153,6 +162,10 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         mag_offsets,
         mag_scales
     )
+    mag_cal.vector.x = mag_x
+    mag_cal.vector.y = mag_y
+    mag_cal.vector.z = mag_z
+
     # roll = math.atan2(acc_y, acc_z)
     # Gz2 = acc_y * math.sin(roll) + acc_z * math.cos(roll)
     # if abs(Gz2) < 0.01:
@@ -191,6 +204,8 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         )
     )
 
+    imu_acc_cal_pub.publish(acc_cal)
+    imu_mag_cal_pub.publish(mag_cal)
     imu_pub.publish(imu_cal)
 
     return
@@ -277,11 +292,11 @@ if __name__ == "__main__":
         Imu
     )
     imu_acc_raw_sub = message_filters.Subscriber(
-        rover + '/imu/accelRaw',
+        rover + '/imu/accel/raw',
         Vector3Stamped
     )
     imu_mag_raw_sub = message_filters.Subscriber(
-        rover + '/imu/magRaw',
+        rover + '/imu/mag/raw',
         Vector3Stamped
     )
 
@@ -294,6 +309,16 @@ if __name__ == "__main__":
     imu_diag_pub = rospy.Publisher(
         rover + '/imu/cal_diag',
         DiagnosticArray,
+        queue_size=10
+    )
+    imu_acc_cal_pub = rospy.Publisher(
+        rover + '/imu/accel/calibrated',
+        Vector3Stamped,
+        queue_size=10
+    )
+    imu_mag_cal_pub = rospy.Publisher(
+        rover + '/imu/mag/calibrated',
+        Vector3Stamped,
         queue_size=10
     )
 
