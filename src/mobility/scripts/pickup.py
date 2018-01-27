@@ -33,7 +33,7 @@ def get_block_location():
         nearest = blocks[0]
     except IndexError:
         print("No blocks detected.")
-        exit(0)
+        exit(1)
 
     swarmie.xform.waitForTransform(rovername + '/odom', 
                     nearest.pose.header.frame_id, nearest.pose.header.stamp, 
@@ -49,7 +49,7 @@ def approach():
     print ("Attempting a pickup.")
     try :
         swarmie.fingers_open()
-        swarmie.set_wrist_angle(.5) # set wrist angle not 100% down as to not catch the claw while moving
+        swarmie.set_wrist_angle(1.1)
         # Drive to the block
         try: 
             block = get_block_location()
@@ -58,8 +58,8 @@ def approach():
             print(e)
             return False
             
-        # claw_offset is close in simulator but need to test irl to fix swarmie overshooting the block.
-        swarmie.drive_to(block, claw_offset = 0.18, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+        # claw_offset for swarmie not overshooting the block.
+        swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
    
         # Grab
         swarmie.pickup()
@@ -80,7 +80,7 @@ def recover():
     print ("Missed, trying to recover.")
     
     try :
-        swarmie.drive(-0.5);
+        swarmie.drive(-1);
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
