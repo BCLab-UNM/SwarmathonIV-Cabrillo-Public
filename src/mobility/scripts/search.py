@@ -5,6 +5,7 @@ from __future__ import print_function
 import sys
 import rospy 
 import math
+import time
 import angles
 import random 
 
@@ -20,18 +21,19 @@ def turnaround():
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
 def avoid():
-    global Swarmie
+    global swarmie
     head = swarmie.get_odom_location().get_pose()
-    print(swarmie.get_obstacle_condition(), Obstacle.IS_SONAR)
-    while swarmie.get_obstacle_condition() == Obstacle.SONAR_LEFT | swarmie.get_obstacle_condition() == Obstacle.SONAR_RIGHT | swarmie.get_obstacle_condition() == Obstacle.SONAR_CENTER :
+    print(swarmie.get_obstacle_condition(), Obstacle.SONAR_LEFT, Obstacle.SONAR_RIGHT)
+    while swarmie.get_obstacle_condition() & 1 == Obstacle.SONAR_LEFT or swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT or swarmie.get_obstacle_condition() & 4 == Obstacle.SONAR_CENTER :
         print(swarmie.get_obstacle_condition(), Obstacle.IS_SONAR)
-        while swarmie.get_obstacle_condition() == Obstacle.SONAR_CENTER :
-            swarmie.turn(math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        while swarmie.get_obstacle_condition() & 4 == Obstacle.SONAR_CENTER :
+            swarmie.turn(math.pi/10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try :
             swarmie.drive(1, ingnore=Obstacle.SONAR_RIGHT)
         except ObstacleException :
-            swarmie.turn(math.pi/4, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.turn(math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            print("obstacle still present")
             
             
     swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
@@ -92,20 +94,20 @@ def triangle():
         swarmie.set_heading(math.floor(swarmie.get_odom_location().get_pose.theta / (math.pi / 2)))
 
         
-def orbit():
+def orbit(home):
     global swarmie
     try :
         rospy.loginfo("fibring...")
-        home = swarmie.get_home_odom_location()
         odom = swarmie.get_odom_location().get_pose()
         xval = math.fabs(odom.x - home.x)
         yval = math.fabs(odom.y - home.y)
-        if math.fabs(xval- yval) > 1 : 
+        if math.fabs(xval - yval) > 1 : 
             grid = swarmie.get_home_odom_location()
             grid.x = xval 
             grid.y = yval + .5
-            drive_to(grid) 
+            swarmie.drive_to(grid) 
         dist = xval * 2 + .5
+        print("1l x:",xval,"y:",yval, "dist:", dist)
         head = math.floor((odom.theta + math.pi / 2) / (math.pi/2) + .5) * math.pi / 2
         print("facing:", odom.theta / math.pi * 180, "heading:", head / math.pi * 180)
         
@@ -120,7 +122,7 @@ def orbit():
 def main():
     global swarmie 
     global rovername 
-    global first
+    global lhome
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
@@ -129,14 +131,20 @@ def main():
     print("search start...")
     
     try :
-        first
+        lhome
     except NameError :
-        first = False
         try:
             swarmie.drive(1)
+            lhome = swarmie.get_odom_location().get_pose()
         except HomeException:
-            print("home")
-        
+            print("home waiting:", (swarmie.get_odom_location().get_pose().theta + 3.4) * 10)
+            time.sleep((math.floor(swarmie.get_odom_location().get_pose().theta / 0.8) + 2) / 6 * 40)
+            #swarmie.wait((swarmie.get_odom_location().get_pose().theta + 2 * math.pi) * 10, ignore=Obstacle.IS_VISION)
+            print("done waiting")
+            swarmie.drive(.5 , ignore = Obstacle.IS_VISION)
+            lhome = swarmie.get_odom_location().get_pose()
+            swarmie.drive(-.5 , ignore = Obstacle.IS_VISION)
+            
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
@@ -155,7 +163,8 @@ def main():
             if rospy.is_shutdown() : 
                 exit(-1)
             try:
-                orbit()
+                orbit(lhome)
+                #wander()
             
             except HomeException : 
                 print ("I saw home!")
