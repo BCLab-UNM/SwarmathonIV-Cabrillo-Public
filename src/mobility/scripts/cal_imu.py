@@ -26,6 +26,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+todo: is storing the globals as lists and building numpy arrays every time ok?
+It looks like numpy.append doens't occur in-place, so it might not be
+practical to store the data in a numpy array either
 """
 from __future__ import print_function
 import json
@@ -77,15 +81,33 @@ def ellipsoid_fit(x, y, z):
 
 
 def compute_calibrated_data(x, y, z, offset, transform):
-    v = numpy.array([[x], [y], [z]])
+    """
+    Map the raw x, y, z accelerometer or magnetometer vector onto the
+    calibrated unit sphere. Skips misalignment transformation if we are in
+    the misalignment calibration state.
+    """
+    global calibrating, misalignment
+    v = numpy.array([[x],
+                     [y],
+                     [z]])
     offset = numpy.array(offset)
+
+    # Misalignment calibration needs to get only hard-iron and soft-iron
+    # calibrated data.
+    if calibrating == 'misalignment':
+        M_m = numpy.eye(3)
+    else:
+        M_m = numpy.array(misalignment)
     transform = numpy.array(transform)
-    v = transform.dot(v - offset)
+    T = M_m.dot(transform)
+    v = T.dot(v - offset)
+
     return v.item(0), v.item(1), v.item(2)
 
 
 def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
+    global misalignment
     acc_cal = Vector3Stamped()
     acc_cal.header = acc_raw_msg.header
     mag_cal = Vector3Stamped()
@@ -95,7 +117,7 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     imu_cal.angular_velocity = imu_msg.angular_velocity
 
 
-    if calibrating:
+    if calibrating == 'imu':
         acc_data[0].append(acc_raw_msg.vector.x)
         acc_data[1].append(acc_raw_msg.vector.y)
         acc_data[2].append(acc_raw_msg.vector.z)
@@ -167,6 +189,40 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     mag_cal.vector.y = mag_y
     mag_cal.vector.z = mag_z
 
+    if calibrating == 'misalignment':
+        mag_data[0].append(mag_x)
+        mag_data[1].append(mag_y)
+        mag_data[2].append(mag_z)
+
+        # Wait until some data has been collected.
+        if len(mag_data[0]) > 50:
+            data = numpy.array(mag_data)
+            H = data.T
+            # print('H:')
+            # print(H)
+            w = numpy.sqrt(numpy.sum(numpy.square(H), axis=1)).reshape(-1, 1)
+            (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
+            R = X / numpy.sqrt((numpy.sum(X**2)))
+            misalignment = numpy.array(misalignment)
+            # print(misalignment)
+            # print(R)
+            misalignment[:,2] = R.T
+            misalignment = misalignment.tolist()
+
+            diag_msg = DiagnosticArray()
+            diag_msg.header.stamp = imu_msg.header.stamp
+            diag_msg.status = [
+                DiagnosticStatus(
+                    level = DiagnosticStatus.OK,
+                    name = 'IMU Calibration Info',
+                    values = [
+                        KeyValue(key='Misalignment', value=str(misalignment))
+                    ]
+                )
+            ]
+            imu_diag_pub.publish(diag_msg)
+
+
     # roll = math.atan2(acc_y, acc_z)
     # Gz2 = acc_y * math.sin(roll) + acc_z * math.cos(roll)
     # if abs(Gz2) < 0.01:
@@ -212,10 +268,26 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     return
 
 
-def start_callback(req):
+def start_imu_calibration(req):
+    """
+    Reset accelerometer and magnetometer offset and transform matrices, and
+    enter accelerometer and magnetometer calibration state.
+
+    This calibration should be performed before the rover starts operating
+    in a new environment.
+
+    Raw accelerometer and magnetometer data is collected and fit to an
+    ellipsoid. During this time, the rover should perform three full round
+    rotations with its body axis x up or down, y up or down, and z up or
+    down. These are slow 2D rotations. Then the rover should also perform
+    3D random rotations to put it in as many orientations as possible.
+
+    Calculated calibration matrices can be viewed on the
+    /rover/imu/cal_diag topic while calibration is in progress.
+    """
     global calibrating, acc_data, mag_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    calibrating = True
+    calibrating = 'imu'
     acc_data = [[], [], []]
     mag_data = [[], [], []]
     acc_offsets = [[0], [0], [0]]
@@ -229,14 +301,44 @@ def start_callback(req):
     return EmptyResponse()
 
 
-def store_callback(req):
+def start_misalignment_calibration(req):
+    """
+    Reset misalignment matrix, and enter misalignment calibration state. This
+    should be performed after the ellipsoid fit IMU calibration.
+
+    I think this calibration should only need to be performed once for a
+    given rover.
+
+    Raw magnetometer data is collected while the rover performs at least one
+    slow 2D rotation with its z axis up. This can be performed by having the
+    rover spin slowly in place on level ground. This is only one third of
+    a typical misalignment calibration procedure, but since the rover only
+    operates in two dimensions on relatively level ground, it should be ok
+    to skip the x-down and y-down rotations.
+    """
+    global calibrating, mag_data, misalignment
+    calibrating = 'misalignment'
+    mag_data = [[], [], []]
+    misalignment = [[1., 0, 0],
+                    [0, 1., 0],
+                    [0, 0, 1.]]
+    return EmptyResponse()
+
+
+def store_calibration(req):
+    """
+    Stores all current calibration matrices.
+    """
     global calibrating, cal, rover
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    calibrating = False
+    global misalignment
+    calibrating = None
+    misalignment[2][2] = -misalignment[2][2]
     cal['acc_offsets'] = acc_offsets
     cal['acc_transform'] = acc_transform
     cal['mag_offsets'] = mag_offsets
     cal['mag_transform'] = mag_transform
+    cal['misalignment'] = misalignment
     with open('/home/robot/'+rover+'_calibration_alt.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
@@ -245,6 +347,7 @@ def store_callback(req):
 if __name__ == "__main__":
     global rover, calibrating, cal, acc_data, mag_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global misalignment
 
     if len(sys.argv) < 2:
         print('usage:', sys.argv[0], '<rovername>')
@@ -252,8 +355,10 @@ if __name__ == "__main__":
 
     rover = sys.argv[1]
     rospy.init_node(rover + '_IMUCAL')
-    calibrating = False
+    calibrating = None
     cal = {}
+    # Data is stored in a list of lists, which is converted to a numpy array
+    # when needed.
     acc_data = [[], [], []]
     mag_data = [[], [], []]
 
@@ -265,6 +370,8 @@ if __name__ == "__main__":
     except ValueError as e:
         rospy.loginfo('Invalid IMU calibration file. Starting from scratch.')
 
+    # Calibration matrices are stored as lists and converted to numpy arrays
+    # when needed.
     if not cal:
         acc_offsets = [[0], [0], [0]]
         acc_transform = [[1, 0, 0],
@@ -274,11 +381,15 @@ if __name__ == "__main__":
         mag_transform = [[1, 0, 0],
                          [0, 1, 0],
                          [0, 0, 1]]
+        misalignment = [[1., 0, 0],
+                        [0, 1., 0],
+                        [0, 0, 1.]]
     else:
         acc_offsets = cal['acc_offsets']
         acc_transform = cal['acc_transform']
         mag_offsets = cal['mag_offsets']
         mag_transform = cal['mag_transform']
+        misalignment = cal['misalignment']
 
 
     # Subscribers
@@ -325,15 +436,20 @@ if __name__ == "__main__":
     ts.registerCallback(imu_callback)
 
     # Services
-    start_server = rospy.Service(
+    start_imu_cal = rospy.Service(
         rover + '/start_imu_calibration',
         Empty,
-        start_callback
+        start_imu_calibration
     )
-    store_server = rospy.Service(
+    store_cal = rospy.Service(
         rover + '/store_imu_calibration',
         Empty,
-        store_callback
+        store_calibration
+    )
+    start_misalign_cal = rospy.Service(
+        rover + '/start_misalignment_calibration',
+        Empty,
+        start_misalignment_calibration
     )
 
     rospy.spin()
