@@ -70,8 +70,7 @@ def ellipsoid_fit(x, y, z):
     offset = center
 
     a, b, c = radii
-    r = (a*b*c)**(1./3.)
-    D = numpy.array([[r/a, 0., 0.], [0., r/b, 0.], [0., 0., r/c]])
+    D = numpy.array([[1/a, 0., 0.], [0., 1/b, 0.], [0., 0., 1/c]])
     transform = evecs.dot(D).dot(evecs.T)
 
     return offset.tolist(), transform.tolist()
@@ -134,7 +133,6 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         ]
         imu_diag_pub.publish(diag_msg)
 
-    # TODO calc calibrated data
     (acc_x, acc_y, acc_z) = compute_calibrated_data(
         acc_raw_msg.vector.x,
         acc_raw_msg.vector.y,
@@ -150,13 +148,13 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     # finally to meters per second squared.
     # mismatched x, y as in arduino code
     # todo is this calc still accurate after fitting to a sphere?
-    imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
-    imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
-    imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
+    # imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
+    # imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
+    # imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
 
-    # imu_cal.linear_acceleration.x = acc_y * 9.81
-    # imu_cal.linear_acceleration.y = -acc_x * 9.81
-    # imu_cal.linear_acceleration.z = acc_z * 9.81
+    imu_cal.linear_acceleration.x = acc_y * 9.81
+    imu_cal.linear_acceleration.y = -acc_x * 9.81
+    imu_cal.linear_acceleration.z = acc_z * 9.81
 
     (mag_x, mag_y, mag_z) = compute_calibrated_data(
         mag_raw_msg.vector.x,
