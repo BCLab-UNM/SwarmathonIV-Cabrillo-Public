@@ -198,16 +198,19 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         if len(mag_data[0]) > 50:
             data = numpy.array(mag_data)
             H = data.T
-            # print('H:')
-            # print(H)
             w = numpy.sqrt(numpy.sum(numpy.square(H), axis=1)).reshape(-1, 1)
             (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
             R = X / numpy.sqrt((numpy.sum(X**2)))
             misalignment = numpy.array(misalignment)
-            # print(misalignment)
-            # print(R)
             misalignment[:,2] = R.T
             misalignment = misalignment.tolist()
+
+            # Z-position of column-z in misalignment matrix should be positive.
+            # It's calculated as a negative value because spinning the rover in
+            # place on level ground actually is a z-up rotation, and the
+            # calibration calculation assumes a z-down rotation, so the sign
+            # gets reversed.
+            misalignment[2][2] = abs(misalignment[2][2])
 
             diag_msg = DiagnosticArray()
             diag_msg.header.stamp = imu_msg.header.stamp
@@ -333,7 +336,7 @@ def store_calibration(req):
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
     calibrating = None
-    misalignment[2][2] = -misalignment[2][2]
+
     cal['acc_offsets'] = acc_offsets
     cal['acc_transform'] = acc_transform
     cal['mag_offsets'] = mag_offsets
