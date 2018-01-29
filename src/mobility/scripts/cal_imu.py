@@ -166,16 +166,21 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     acc_cal.vector.y = acc_y
     acc_cal.vector.z = acc_z
 
+    # swap x and y to orient measurements in the rover's frame
+    tmp = acc_x
+    acc_x = -acc_y
+    acc_y = tmp
+
     # Convert accelerometer digits to milligravities, then to gravities, and
     # finally to meters per second squared.
     # mismatched x, y as in arduino code
-    # todo is this calc still accurate after fitting to a sphere?
     # imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
     # imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
     # imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
 
-    imu_cal.linear_acceleration.x = acc_y * 9.81
-    imu_cal.linear_acceleration.y = -acc_x * 9.81
+    # Scale accelerations back to m/s**2 after being fit to the unit sphere.
+    imu_cal.linear_acceleration.x = acc_x * 9.81
+    imu_cal.linear_acceleration.y = acc_y * 9.81
     imu_cal.linear_acceleration.z = acc_z * 9.81
 
     (mag_x, mag_y, mag_z) = compute_calibrated_data(
@@ -225,37 +230,63 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
             ]
             imu_diag_pub.publish(diag_msg)
 
+    # swap x and y to orient measurements in the rover's frame
+    # Done here so the misalignment calibration can use data in the original
+    # IMU frame
+    tmp = mag_x
+    mag_x = mag_y
+    mag_y = -tmp
 
-    # roll = math.atan2(acc_y, acc_z)
-    # Gz2 = acc_y * math.sin(roll) + acc_z * math.cos(roll)
-    # if abs(Gz2) < 0.01:
-    #     if acc_x > 0:
-    #         pitch = -math.pi / 2
-    #     else:
-    #         pitch = math.pi / 2
-    # else:
-    #     pitch = math.atan(-acc_x / Gz2)
-    # yaw = math.atan2(
-    #     mag_z*math.sin(roll) - mag_y*math.cos(roll),
-    #     mag_x*math.cos(pitch)
-    #     + (mag_y*math.sin(roll) + mag_z*math.cos(roll)) * math.sin(pitch)
+    # From: Computing tilt measurement and tilt-compensated e-compass
+    # www.st.com/resource/en/design_tip/dm00269987.pdf
+    # some signs switched to fit our IMU and rover's coord frames
+    roll = -math.atan2(acc_y, acc_z)
+    Gz2 = (acc_y * math.sin(roll) + acc_z * math.cos(roll))
+
+    # Gimbal-lock. Special case when pitched + or - 90 deg.
+    # Heading is unreliable here, but plenty of other bad things will be
+    # happening if the rover is ever in this position.
+    if abs(Gz2) < 0.01:
+        if acc_x > 0:
+            rospy.loginfo('Special compass case: pitch is +90 deg')
+            pitch = math.pi / 2
+        else:
+            rospy.loginfo('Special compass case: pitch is -90 deg')
+            pitch = -math.pi / 2
+        alpha = .01  # Can be set from [0.01 - 0.05]
+        roll = -math.atan2(acc_y, acc_z + acc_x * alpha)
+    else:
+        pitch = math.atan(acc_x / Gz2)
+
+    By2 = mag_z * math.sin(roll) - mag_y * math.cos(roll)
+    Bz2 = mag_y * math.sin(roll) + mag_z * math.cos(roll)
+    Bx3 = mag_x * math.cos(pitch) + Bz2 * math.sin(pitch)
+    yaw = math.pi / 2 + math.atan2(By2, Bx3)
+
+    # Original roll, pitch, yaws as calculated on Arduino:
+    # This yaw is very unstable during even small rolls or pitches
+    # Xh = mag_y * math.cos(pitch) + mag_z * math.sin(pitch)
+    # Yh = (mag_y * math.sin(roll) * math.sin(pitch)
+    #       + mag_x * math.cos(roll)
+    #       - mag_z * math.sin(roll) * math.cos(pitch))
+    # yaw = math.atan(Yh / Xh)
+
+    # roll = math.atan2(
+    #     imu_cal.linear_acceleration.y,
+    #     math.sqrt(imu_cal.linear_acceleration.x**2
+    #               + imu_cal.linear_acceleration.z**2)
     # )
-    roll = math.atan2(
-        imu_cal.linear_acceleration.y,
-        math.sqrt(imu_cal.linear_acceleration.x**2
-                  + imu_cal.linear_acceleration.z**2)
-    )
-    pitch = -math.atan2(
-        imu_cal.linear_acceleration.x,
-        math.sqrt(imu_cal.linear_acceleration.y**2
-                  + imu_cal.linear_acceleration.z**2)
-    )
-    yaw = math.pi + math.atan2(
-        -mag_y*math.cos(roll) + mag_z*math.sin(roll),
-        mag_x*math.cos(pitch)
-        + mag_y*math.sin(pitch)*math.sin(roll)
-        + mag_z*math.sin(pitch)*math.cos(roll)
-    )
+    # pitch = -math.atan2(
+    #     imu_cal.linear_acceleration.x,
+    #     math.sqrt(imu_cal.linear_acceleration.y**2
+    #               + imu_cal.linear_acceleration.z**2)
+    # )
+    # yaw = math.pi + math.atan2(
+    #     -mag_y*math.cos(roll) + mag_z*math.sin(roll),
+    #     mag_x*math.cos(pitch)
+    #     + mag_y*math.sin(pitch)*math.sin(roll)
+    #     + mag_z*math.sin(pitch)*math.cos(roll)
+    # )
     imu_cal.orientation = Quaternion(
         *tf.transformations.quaternion_from_euler(
             roll,
