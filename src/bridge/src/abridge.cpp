@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
     
     fingerAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/fingerAngle/prev_cmd"), 10);
     wristAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/wristAngle/prev_cmd"), 10);
-    imuPublish = aNH.advertise<sensor_msgs::Imu>((publishedName + "/imu"), 10);
+    imuPublish = aNH.advertise<sensor_msgs::Imu>((publishedName + "/imu/arduino"), 10);
 	imuAccRawPublish = aNH.advertise<geometry_msgs::Vector3Stamped>((publishedName + "/imu/accel/raw"), 10);
 	imuMagRawPublish = aNH.advertise<geometry_msgs::Vector3Stamped>((publishedName + "/imu/mag/raw"), 10);
     odomPublish = aNH.advertise<nav_msgs::Odometry>((publishedName + "/odom"), 10);

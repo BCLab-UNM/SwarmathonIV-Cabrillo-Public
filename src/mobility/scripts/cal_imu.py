@@ -30,6 +30,7 @@ SOFTWARE.
 todo: is storing the globals as lists and building numpy arrays every time ok?
 It looks like numpy.append doens't occur in-place, so it might not be
 practical to store the data in a numpy array either
+todo: where should calibration files be stored?
 """
 from __future__ import print_function
 import json
@@ -449,7 +450,7 @@ if __name__ == "__main__":
 
     # Subscribers
     imu_sub = message_filters.Subscriber(
-        rover + '/imu',
+        rover + '/imu/arduino',
         Imu
     )
     imu_acc_raw_sub = message_filters.Subscriber(
@@ -463,7 +464,7 @@ if __name__ == "__main__":
 
     # Publishers
     imu_pub = rospy.Publisher(
-        rover + '/imu/calibrated',
+        rover + '/imu',
         Imu,
         queue_size=10
     )
