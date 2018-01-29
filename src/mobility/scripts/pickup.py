@@ -43,7 +43,6 @@ def get_block_location():
     print ('Transform says that the block is at: ', point)
     return point
 
-
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
@@ -52,7 +51,7 @@ def approach():
         swarmie.set_wrist_angle(1.1)
         # Drive to the block
         try: 
-            block = get_block_location()
+            block = swarmie.get_nearest_block_location()
         except tf.Exception as e : 
             # Something went wrong and we can't locate the block.
             print(e)

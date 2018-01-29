@@ -26,6 +26,7 @@ from grid_map_msgs.msg import GridMap
 from mapping import RoverMap 
 
 import threading 
+
 swarmie_lock = threading.Lock()
 
 from mobility import sync
@@ -131,6 +132,7 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
+        self.targets_timeout = 3
         
         # Intialize this ROS node.
         if 'node_suffix' in kwargs and kwargs['node_suffix']:
@@ -164,18 +166,24 @@ class Swarmie:
         self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
         self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
 
+        # Transform listener. Use this to transform between coordinate spaces.
+        # Transform messages must predate any sensor messages so initialize this first.
+        self.xform = tf.TransformListener()
+        rospy.sleep(1)
+
         # Subscribe to useful topics 
+        # These topics only update data. The data is used in other places to initialize
+        # these and wait for valid data so that users of this data don't get errors.
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
+        rospy.sleep(0.5)
+
+        # The targets subscriber needs odom data since Carter's patch. Make sure odom data
+        # exists before we get a target callback.
         rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
-
-        # Transform listener. Use this to transform between coordinate spaces.
-        self.xform = tf.TransformListener() 
-
-        # Wait for sensors and tf to have data (this sucks)
         rospy.sleep(1)
-        
+
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
     @sync(swarmie_lock)
@@ -193,7 +201,11 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
-        self.Targets = msg
+        if self._is_moving():
+            self.Targets = msg
+        else:
+            #adds tags missing to the previous detections and removes tags older then 3 seconds
+            self.Targets.detections = [tag for tag in list(set(msg.detections + self.Targets.detections)) if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) ]
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -663,3 +675,46 @@ class Swarmie:
         loc = self.get_odom_location().get_pose()
         angle = angles.shortest_angular_distance(loc.theta, heading)
         self.turn(angle, **kwargs)
+    
+    @sync(swarmie_lock)
+    def is_moving(self):
+        ''' calls _is_moving that uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return(self._is_moving())
+        
+    def _is_moving(self):
+        ''' uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+                
+
+    def get_nearest_block_location(self):
+        '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
+        Returns:
+
+        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
+        '''
+        global rovername, swarmie
+
+        # Find the nearest block
+        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        if len(blocks) == 0 :
+            return None
+
+        loc = self.get_odom_location().get_pose()
+        blocks = sorted(blocks, key=lambda x :
+                        math.hypot(loc.y - x.pose.pose.position.y,
+                                  loc.x - x.pose.pose.position.x))
+
+        nearest = blocks[0]
+        self.xform.waitForTransform(self.rover_name + '/odom',
+                        nearest.pose.header.frame_id, nearest.pose.header.stamp,
+                        rospy.Duration(3.0))
+
+        return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
