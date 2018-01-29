@@ -47,6 +47,13 @@ from std_srvs.srv import Empty, EmptyResponse
 
 def ellipsoid_fit(x, y, z):
     """
+    Fit the data points contained in numpy arrays x, y and z to a unit sphere
+    centered at the origin.
+
+    Returns a list containing the offset matrix to center the data, and
+    a list containing the transformation matrix, to map each data point to
+    its position on the sphere.
+
     Modified from:
     http://www.mathworks.com/matlabcentral/fileexchange/24693-ellipsoid-fit
     """
@@ -106,8 +113,23 @@ def compute_calibrated_data(x, y, z, offset, transform):
 
 
 def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
+    """
+    Synchronized callback for the original imu message and the raw
+    accelerometer and magnetometer messages.
+
+    Calibrates IMU by fitting an ellipsoid, or calculating the misalignment
+    matrix if we are in either of those states.
+
+    todo: confirm your calculations adhere to the ROS's ENU convention
+    both the accelerometer and magnetometer data/calculations
+
+    Computes calibrated accelerometer and magnetometer data, transformed from
+    the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
+    publishes a calibrated IMU message.
+    """
     global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
+
     acc_cal = Vector3Stamped()
     acc_cal.header = acc_raw_msg.header
     mag_cal = Vector3Stamped()
@@ -115,7 +137,6 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     imu_cal = Imu()
     imu_cal.header = imu_msg.header
     imu_cal.angular_velocity = imu_msg.angular_velocity
-
 
     if calibrating == 'imu':
         acc_data[0].append(acc_raw_msg.vector.x)
