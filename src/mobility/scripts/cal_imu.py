@@ -30,7 +30,7 @@ SOFTWARE.
 todo: is storing the globals as lists and building numpy arrays every time ok?
 It looks like numpy.append doens't occur in-place, so it might not be
 practical to store the data in a numpy array either
-todo: where should calibration files be stored?
+todo: where should calibration files be stored? add rosparam for path
 """
 from __future__ import print_function
 import json
@@ -38,15 +38,15 @@ import math
 import numpy
 import sys
 import tf
-import message_filters
 import rospy
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
-from std_srvs.srv import Empty, EmptyResponse
+from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 
 from swarmie_msgs.msg import SwarmieIMU
+
 
 def ellipsoid_fit(x, y, z):
     """
@@ -133,6 +133,10 @@ def imu_callback(imu_raw_msg):
     global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
 
+    # In case someone forgets to exit either calibration state.
+    DATA_SIZE_LIMIT = 3000  # 5 min worth of data at 10 Hz
+    MIN_DATA_SIZE = 50
+
     # Message for raw, calibrated data
     imu_cal_data = SwarmieIMU()
     imu_cal_data.header = imu_raw_msg.header
@@ -150,10 +154,14 @@ def imu_callback(imu_raw_msg):
         mag_data[1].append(imu_raw_msg.magnetometer.y)
         mag_data[2].append(imu_raw_msg.magnetometer.z)
 
+        if len(acc_data[0]) > DATA_SIZE_LIMIT:
+            rospy.logwarn('IMU calibration timeout exceeded. Saving current calculated matrix.')
+            store_calibration(EmptyRequest())
+
         # Don't fit until some data has been collected.
         # May still get a runtime warning until enough data in all directions
         # has been collected.
-        if len(acc_data[0]) > 10:
+        elif len(acc_data[0]) > MIN_DATA_SIZE:
             (acc_offsets, acc_transform) = ellipsoid_fit(
                 numpy.array(acc_data[0]),
                 numpy.array(acc_data[1]),
@@ -224,16 +232,23 @@ def imu_callback(imu_raw_msg):
         mag_data[1].append(mag_y)
         mag_data[2].append(mag_z)
 
+        if len(mag_data[0]) > DATA_SIZE_LIMIT:
+            rospy.logwarn('Misalignment calibration timeout exceeded. Saving current calculated matrix.')
+            store_calibration(EmptyRequest())
+
         # Wait until some data has been collected.
-        if len(mag_data[0]) > 50:
+        elif len(mag_data[0]) > MIN_DATA_SIZE:
             data = numpy.array(mag_data)
             H = data.T
             w = numpy.sqrt(numpy.sum(numpy.square(H), axis=1)).reshape(-1, 1)
-            (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
-            R = X / numpy.sqrt((numpy.sum(X**2)))
-            misalignment = numpy.array(misalignment)
-            misalignment[:,2] = R.T
-            misalignment = misalignment.tolist()
+            try:
+                (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
+                R = X / numpy.sqrt((numpy.sum(X**2)))
+                misalignment = numpy.array(misalignment)
+                misalignment[:,2] = R.T
+                misalignment = misalignment.tolist()
+            except ValueError as e:
+                rospy.logwarn("Misalignment data can't be fit yet.")
 
             # Z-position of column-z in misalignment matrix should be positive.
             # It's calculated as a negative value because spinning the rover in
@@ -385,12 +400,15 @@ def start_misalignment_calibration(req):
 
 def store_calibration(req):
     """
-    Stores all current calibration matrices.
+    Stores all current calibration matrices and resets dataset lists.
     """
-    global calibrating, cal, rover
+    global calibrating, cal, rover, acc_data, mag_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
+
     calibrating = None
+    acc_data = [[], [], []]
+    mag_data = [[], [], []]
 
     cal['acc_offsets'] = acc_offsets
     cal['acc_transform'] = acc_transform
