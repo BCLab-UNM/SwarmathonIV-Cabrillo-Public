@@ -442,6 +442,7 @@ if __name__ == "__main__":
     try:
         with open('/home/robot/'+rover+'_calibration.json', 'r') as f:
             cal = json.loads(f.read())
+        rospy.loginfo('IMU calibration file found. Loading calibration.')
     except IOError as e:
         rospy.loginfo('No IMU calibration file found.')
     except ValueError as e:
