@@ -22,6 +22,9 @@
 #include <std_msgs/UInt8.h>
 #include <std_srvs/Empty.h>
 
+// Project messages
+#include <swarmie_msgs/SwarmieIMU.h>
+
 //Package include
 #include <usbSerial.h>
 
@@ -150,6 +153,12 @@ int main(int argc, char **argv) {
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
     debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/bridge/debugPID"), 1, false);
     heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/bridge/heartbeat"), 1, true);
+
+    //
+    // FIXME: This is just to make sure the code compiles.
+    //
+    ros::Publisher fixme = aNH.advertise<swarmie_msgs::SwarmieIMU>((publishedName + "/fix/me"), 10);
+    //
 
     driveControlSubscriber = aNH.subscribe((publishedName + "/driveControl"), 10, driveCommandHandler);
     fingerAngleSubscriber = aNH.subscribe((publishedName + "/fingerAngle/cmd"), 1, fingerAngleHandler);
