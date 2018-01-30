@@ -430,7 +430,7 @@ if __name__ == "__main__":
         exit(-1)
 
     rover = sys.argv[1]
-    rospy.init_node(rover + '_IMUCAL')
+    rospy.init_node(rover + '_IMU')
     calibrating = None
     cal = {}
     # Data is stored in a list of lists, which is converted to a numpy array
