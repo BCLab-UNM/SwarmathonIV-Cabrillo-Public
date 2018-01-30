@@ -46,6 +46,8 @@ from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
 from std_srvs.srv import Empty, EmptyResponse
 
+from swarmie_msgs.msg import SwarmieIMU
+
 def ellipsoid_fit(x, y, z):
     """
     Fit the data points contained in numpy arrays x, y and z to a unit sphere
@@ -113,7 +115,7 @@ def compute_calibrated_data(x, y, z, offset, transform):
     return v.item(0), v.item(1), v.item(2)
 
 
-def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
+def imu_callback(imu_raw_msg):
     """
     Synchronized callback for the original imu message and the raw
     accelerometer and magnetometer messages.
@@ -131,21 +133,22 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
 
-    acc_cal = Vector3Stamped()
-    acc_cal.header = acc_raw_msg.header
-    mag_cal = Vector3Stamped()
-    mag_cal.header = mag_raw_msg.header
+    # Message for raw, calibrated data
+    imu_cal_data = SwarmieIMU()
+    imu_cal_data.header = imu_raw_msg.header
+    imu_cal_data.angular_velocity = imu_raw_msg.angular_velocity
+
     imu_cal = Imu()
-    imu_cal.header = imu_msg.header
-    imu_cal.angular_velocity = imu_msg.angular_velocity
+    imu_cal.header = imu_raw_msg.header
+    imu_cal.angular_velocity = imu_raw_msg.angular_velocity
 
     if calibrating == 'imu':
-        acc_data[0].append(acc_raw_msg.vector.x)
-        acc_data[1].append(acc_raw_msg.vector.y)
-        acc_data[2].append(acc_raw_msg.vector.z)
-        mag_data[0].append(mag_raw_msg.vector.x)
-        mag_data[1].append(mag_raw_msg.vector.y)
-        mag_data[2].append(mag_raw_msg.vector.z)
+        acc_data[0].append(imu_raw_msg.accelerometer.x)
+        acc_data[1].append(imu_raw_msg.accelerometer.y)
+        acc_data[2].append(imu_raw_msg.accelerometer.z)
+        mag_data[0].append(imu_raw_msg.magnetometer.x)
+        mag_data[1].append(imu_raw_msg.magnetometer.y)
+        mag_data[2].append(imu_raw_msg.magnetometer.z)
 
         # Don't fit until some data has been collected.
         # May still get a runtime warning until enough data in all directions
@@ -162,7 +165,7 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
                 numpy.array(mag_data[2]),
             )
         diag_msg = DiagnosticArray()
-        diag_msg.header.stamp = imu_msg.header.stamp
+        diag_msg.header.stamp = imu_raw_msg.header.stamp
         diag_msg.status = [
             DiagnosticStatus(
                 level = DiagnosticStatus.OK,
@@ -178,15 +181,15 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         imu_diag_pub.publish(diag_msg)
 
     (acc_x, acc_y, acc_z) = compute_calibrated_data(
-        acc_raw_msg.vector.x,
-        acc_raw_msg.vector.y,
-        acc_raw_msg.vector.z,
+        imu_raw_msg.accelerometer.x,
+        imu_raw_msg.accelerometer.y,
+        imu_raw_msg.accelerometer.z,
         acc_offsets,
         acc_transform
     )
-    acc_cal.vector.x = acc_x
-    acc_cal.vector.y = acc_y
-    acc_cal.vector.z = acc_z
+    imu_cal_data.accelerometer.x = acc_x
+    imu_cal_data.accelerometer.y = acc_y
+    imu_cal_data.accelerometer.z = acc_z
 
     # swap x and y to orient measurements in the rover's frame
     tmp = acc_x
@@ -206,15 +209,15 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
     imu_cal.linear_acceleration.z = acc_z * 9.81
 
     (mag_x, mag_y, mag_z) = compute_calibrated_data(
-        mag_raw_msg.vector.x,
-        mag_raw_msg.vector.y,
-        mag_raw_msg.vector.z,
+        imu_raw_msg.magnetometer.x,
+        imu_raw_msg.magnetometer.y,
+        imu_raw_msg.magnetometer.z,
         mag_offsets,
         mag_transform
     )
-    mag_cal.vector.x = mag_x
-    mag_cal.vector.y = mag_y
-    mag_cal.vector.z = mag_z
+    imu_cal_data.magnetometer.x = mag_x
+    imu_cal_data.magnetometer.y = mag_y
+    imu_cal_data.magnetometer.z = mag_z
 
     if calibrating == 'misalignment':
         mag_data[0].append(mag_x)
@@ -240,7 +243,7 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
             misalignment[2][2] = abs(misalignment[2][2])
 
             diag_msg = DiagnosticArray()
-            diag_msg.header.stamp = imu_msg.header.stamp
+            diag_msg.header.stamp = imu_raw_msg.header.stamp
             diag_msg.status = [
                 DiagnosticStatus(
                     level = DiagnosticStatus.OK,
@@ -317,8 +320,7 @@ def imu_callback(imu_msg, acc_raw_msg, mag_raw_msg):
         )
     )
 
-    imu_acc_cal_pub.publish(acc_cal)
-    imu_mag_cal_pub.publish(mag_cal)
+    imu_cal_data_pub.publish(imu_cal_data)
     imu_pub.publish(imu_cal)
 
     return
@@ -449,17 +451,15 @@ if __name__ == "__main__":
 
 
     # Subscribers
-    imu_sub = message_filters.Subscriber(
-        rover + '/imu/arduino',
-        Imu
-    )
-    imu_acc_raw_sub = message_filters.Subscriber(
-        rover + '/imu/accel/raw',
-        Vector3Stamped
-    )
-    imu_mag_raw_sub = message_filters.Subscriber(
-        rover + '/imu/mag/raw',
-        Vector3Stamped
+    # imu_sub = message_filters.Subscriber(
+    #     rover + '/imu/arduino',
+    #     Imu
+    # )
+    imu_raw_sub = rospy.Subscriber(
+        rover + '/imu/raw',
+        SwarmieIMU,
+        imu_callback,
+        queue_size=10
     )
 
     # Publishers
@@ -473,23 +473,11 @@ if __name__ == "__main__":
         DiagnosticArray,
         queue_size=10
     )
-    imu_acc_cal_pub = rospy.Publisher(
-        rover + '/imu/accel/calibrated',
-        Vector3Stamped,
+    imu_cal_data_pub = rospy.Publisher(
+        rover + '/imu/raw/calibrated',
+        SwarmieIMU,
         queue_size=10
     )
-    imu_mag_cal_pub = rospy.Publisher(
-        rover + '/imu/mag/calibrated',
-        Vector3Stamped,
-        queue_size=10
-    )
-
-    # Synchronizer
-    ts = message_filters.TimeSynchronizer(
-        [imu_sub, imu_acc_raw_sub, imu_mag_raw_sub],
-        10
-    )
-    ts.registerCallback(imu_callback)
 
     # Services
     start_imu_cal = rospy.Service(
