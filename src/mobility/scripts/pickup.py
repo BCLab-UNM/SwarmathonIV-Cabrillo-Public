@@ -19,30 +19,6 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 
 '''Pickup node.''' 
 
-def get_block_location():
-    global rovername, swarmie 
-    
-    # Find the nearest block
-    blocks = swarmie.get_latest_targets()
-    loc = swarmie.get_odom_location().get_pose()
-    blocks = sorted(blocks.detections, key=lambda x : 
-                    math.hypot(loc.y - x.pose.pose.position.y, 
-                              loc.x - x.pose.pose.position.x))
-    
-    try:
-        nearest = blocks[0]
-    except IndexError:
-        print("No blocks detected.")
-        exit(1)
-
-    swarmie.xform.waitForTransform(rovername + '/odom', 
-                    nearest.pose.header.frame_id, nearest.pose.header.stamp, 
-                    rospy.Duration(3.0))
-        
-    point = swarmie.xform.transformPose(rovername + '/odom', nearest.pose).pose.position
-    print ('Transform says that the block is at: ', point)
-    return point
-
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
