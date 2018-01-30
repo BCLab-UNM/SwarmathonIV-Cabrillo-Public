@@ -416,7 +416,7 @@ def store_calibration(req):
     cal['mag_offsets'] = mag_offsets
     cal['mag_transform'] = mag_transform
     cal['misalignment'] = misalignment
-    with open('/home/robot/'+rover+'_calibration_alt.json', 'w') as f:
+    with open('/home/robot/'+rover+'_calibration.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
@@ -440,7 +440,7 @@ if __name__ == "__main__":
     mag_data = [[], [], []]
 
     try:
-        with open('/home/robot/'+rover+'_calibration_alt.json', 'r') as f:
+        with open('/home/robot/'+rover+'_calibration.json', 'r') as f:
             cal = json.loads(f.read())
     except IOError as e:
         rospy.loginfo('No IMU calibration file found.')
