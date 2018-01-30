@@ -130,7 +130,8 @@ def imu_callback(imu_raw_msg):
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
     publishes a calibrated IMU message.
     """
-    global calibrating, acc_offsets, acc_transform, mag_offsets, mag_transform
+    global calibrating, acc_data, mag_data
+    global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
 
     # In case someone forgets to exit either calibration state.
