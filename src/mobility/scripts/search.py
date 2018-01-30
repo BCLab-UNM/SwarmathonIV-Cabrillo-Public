@@ -124,23 +124,34 @@ def orbit(home):
 def main():
     global swarmie 
     global rovername 
+    global lhome
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
     swarmie.fingers_open()
     swarmie.wrist_middle()
     print("search start...")
-    
    
+    imu_sub = message_filters.Subscriber(
+        rovername + '/imu',
+        Imu
+    )
+    
+    print(imu_sub)
+           
+            
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
-    drive(1)
+
     print(swarmie.get_obstacle_condition(), Obstacle.TAG_HOME)   
     if swarmie.get_obstacle_condition() == Obstacle.TAG_HOME :
         print("this is important")
         swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
+        swarmie.drive(.5, ignore=Obstacle.IS_VISION)
+        swarmie.turn(math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        swarmie.drive(1, ignore=Obstacle.IS_VISION)
 
     try: 
         for move in range(5) :
