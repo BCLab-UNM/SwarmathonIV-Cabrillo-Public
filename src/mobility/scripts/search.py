@@ -8,8 +8,10 @@ import math
 import time
 import angles
 import random 
+import message_filters
 
 from swarmie_msgs.msg import Obstacle
+from sensor_msgs.msg import Imu
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 from Tkconstants import FIRST
@@ -122,7 +124,6 @@ def orbit(home):
 def main():
     global swarmie 
     global rovername 
-    global lhome
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
@@ -130,33 +131,16 @@ def main():
     swarmie.wrist_middle()
     print("search start...")
     
-    try :
-        lhome
-    except NameError :
-        try:
-            swarmie.drive(1)
-            lhome = swarmie.get_odom_location().get_pose()
-        except HomeException:
-            print("home waiting:", (swarmie.get_odom_location().get_pose().theta + 3.4) * 10)
-            time.sleep((math.floor(swarmie.get_odom_location().get_pose().theta / 0.8) + 2) / 6 * 40)
-            #swarmie.wait((swarmie.get_odom_location().get_pose().theta + 2 * math.pi) * 10, ignore=Obstacle.IS_VISION)
-            print("done waiting")
-            swarmie.drive(.5 , ignore = Obstacle.IS_VISION)
-            lhome = swarmie.get_odom_location().get_pose()
-            swarmie.drive(-.5 , ignore = Obstacle.IS_VISION)
-            
+   
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
-
+    drive(1)
     print(swarmie.get_obstacle_condition(), Obstacle.TAG_HOME)   
     if swarmie.get_obstacle_condition() == Obstacle.TAG_HOME :
         print("this is important")
         swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
-        swarmie.drive(.5, ignore=Obstacle.IS_VISION)
-        swarmie.turn(math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        swarmie.drive(1, ignore=Obstacle.IS_VISION)
 
     try: 
         for move in range(5) :
