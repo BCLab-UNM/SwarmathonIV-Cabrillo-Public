@@ -10,6 +10,7 @@ import math
 import random 
 import angles 
 import tf 
+import copy # for deep copy for removing duplicate tags
 
 from mobility.srv import Core
 from mapping.srv import FindTarget, GetMap
@@ -132,6 +133,7 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
+        self.TargetsRounded = []
         self.targets_timeout = 3
         
         # Intialize this ROS node.
@@ -203,9 +205,13 @@ class Swarmie:
     def _targets(self, msg) : 
         if self._is_moving():
             self.Targets = msg
+            self.TargetsRounded = [(round(tag.pose.pose.position.x, 5),round(tag.pose.pose.position.y, 4),round(tag.pose.pose.position.z, 4)) for copiedTag in [ copy.deepcopy(tag) for tag in msg.detections ] ]
+            
         else:
+            self.TargetsRounded = [(round(tag.pose.pose.position.x, 5),round(tag.pose.pose.position.y, 4),round(tag.pose.pose.position.z, 4)) for copiedTag in [ copy.deepcopy(tag) for tag in msg.detections ] ]
             #adds tags missing to the previous detections and removes tags older then 3 seconds
             self.Targets.detections = [tag for tag in list(set(msg.detections + self.Targets.detections)) if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) ]
+            
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
