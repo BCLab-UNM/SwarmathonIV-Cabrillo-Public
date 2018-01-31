@@ -41,7 +41,7 @@ import tf
 import rospy
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
+from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Imu
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 
@@ -406,7 +406,10 @@ def store_calibration(req):
     global calibrating, cal, rover, acc_data, mag_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
-
+    FILE_PATH = rospy.get_param(
+        'calibration_file_path',
+        default='/home/robot/'
+    )
     calibrating = None
     acc_data = [[], [], []]
     mag_data = [[], [], []]
@@ -416,7 +419,7 @@ def store_calibration(req):
     cal['mag_offsets'] = mag_offsets
     cal['mag_transform'] = mag_transform
     cal['misalignment'] = misalignment
-    with open('/home/robot/'+rover+'_calibration.json', 'w') as f:
+    with open(FILE_PATH+rover+'_calibration.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
@@ -434,13 +437,17 @@ if __name__ == "__main__":
     rospy.init_node(rover + '_IMU')
     calibrating = None
     cal = {}
+    FILE_PATH = rospy.get_param(
+        'calibration_file_path',
+        default='/home/robot/'
+    )
     # Data is stored in a list of lists, which is converted to a numpy array
     # when needed.
     acc_data = [[], [], []]
     mag_data = [[], [], []]
 
     try:
-        with open('/home/robot/'+rover+'_calibration.json', 'r') as f:
+        with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
             cal = json.loads(f.read())
         rospy.loginfo('IMU calibration file found. Loading calibration.')
     except IOError as e:
