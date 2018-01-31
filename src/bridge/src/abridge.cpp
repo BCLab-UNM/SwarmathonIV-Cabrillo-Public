@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
     imu.header.frame_id = publishedName+"/base_link";
-	imuRaw.header.frame_id = publishedName+"base_link";
+	imuRaw.header.frame_id = publishedName+"/base_link";
 
     odom.header.frame_id = publishedName+"/odom";
     odom.child_frame_id = publishedName+"/base_link";
