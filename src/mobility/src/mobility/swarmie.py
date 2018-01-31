@@ -205,6 +205,8 @@ class Swarmie:
     def _targets(self, msg) : 
         if self._is_moving():
             self.Targets = msg
+            #the 5 and 4s were from looking at the min and max difference between a tag 
+            #I took 1,000 samples in the simulator of that tag, will test with the real rover in the future
             self.TargetsRounded = [(round(tag.pose.pose.position.x, 5),round(tag.pose.pose.position.y, 4),round(tag.pose.pose.position.z, 4)) for copiedTag in [ copy.deepcopy(tag) for tag in msg.detections ] ]
             
         else:
