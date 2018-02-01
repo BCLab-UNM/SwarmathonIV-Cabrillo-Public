@@ -23,6 +23,7 @@
         args="$(arg name)"
         respawn="true" >
     <param name="calibration_file_path" value="/home/robot/"/>
+    <param name="debug_mode" type="bool" value="false"/>
   </node>
   <node name="$(arg name)_MAPPING" pkg="mapping" type="mapping" args="$(arg name)" respawn="true"/>
   <node pkg="robot_localization" type="navsat_transform_node" name="$(arg name)_NAVSAT" respawn="true">

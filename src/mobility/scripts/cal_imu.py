@@ -134,6 +134,11 @@ def imu_callback(imu_raw_msg):
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
 
+    DEBUG = rospy.get_param(
+        '~debug_mode',
+        default=False
+    )
+
     # In case someone forgets to exit either calibration state.
     DATA_SIZE_LIMIT = 3000  # 5 min worth of data at 10 Hz
     MIN_DATA_SIZE = 50
@@ -336,6 +341,9 @@ def imu_callback(imu_raw_msg):
         )
     )
 
+    if DEBUG:
+        publish_diagnostic_msg()
+
     imu_cal_data_pub.publish(imu_cal_data)
     imu_pub.publish(imu_cal)
 
@@ -407,7 +415,7 @@ def store_calibration(req):
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment
     FILE_PATH = rospy.get_param(
-        'calibration_file_path',
+        '~calibration_file_path',
         default='/home/robot/'
     )
     calibrating = None
@@ -438,7 +446,7 @@ if __name__ == "__main__":
     calibrating = None
     cal = {}
     FILE_PATH = rospy.get_param(
-        'calibration_file_path',
+        '~calibration_file_path',
         default='/home/robot/'
     )
     # Data is stored in a list of lists, which is converted to a numpy array
