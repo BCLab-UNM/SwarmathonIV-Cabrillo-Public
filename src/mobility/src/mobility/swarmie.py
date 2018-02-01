@@ -161,8 +161,9 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
-        self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
-        self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
+        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Subscribe to useful topics 
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
@@ -495,13 +496,17 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
-    def start_magnetometer_calibration(self):
-        '''Start calibrating the magnetometer on a rover.'''
-        self._start_magnetometer_calibration()
+    def start_imu_calibration(self):
+        '''Start calibrating the IMU on a rover.'''
+        self._start_imu_calibration()
+
+    def start_misalignment_calibration(self):
+        '''Start calibrating the IMU's misalignment.'''
+        self._start_misalignment_calibration()
     
-    def store_magnetometer_calibration(self):
-        '''Finish calibrating the magnetometer on a rover.'''
-        self._store_magnetometer_calibration()
+    def store_imu_calibration(self):
+        '''Finish calibrating the IMU on a rover.'''
+        self._store_imu_calibration()
         
     def get_odom_location(self):
         '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
