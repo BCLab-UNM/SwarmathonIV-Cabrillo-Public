@@ -174,14 +174,11 @@ def publish_diagnostic_msg():
 
 def imu_callback(imu_raw_msg):
     """
-    Synchronized callback for the original imu message and the raw
-    accelerometer and magnetometer messages.
+    Callback for the SwarmieIMU message containing raw accelerometer and
+    magnetometer data.
 
     Calibrates IMU by fitting an ellipsoid, or calculating the misalignment
     matrix if we are in either of those states.
-
-    todo: confirm your calculations adhere to the ROS's ENU convention
-    both the accelerometer and magnetometer data/calculations
 
     Computes calibrated accelerometer and magnetometer data, transformed from
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
@@ -250,8 +247,8 @@ def imu_callback(imu_raw_msg):
     imu_cal_data.accelerometer.z = acc_z
 
     # swap x and y to orient measurements in the rover's frame
-    tmp = acc_x
-    acc_x = -acc_y
+    tmp = -acc_x
+    acc_x = acc_y
     acc_y = tmp
 
     # Scale accelerations back to m/s**2 after being fit to the unit sphere.
@@ -294,8 +291,7 @@ def imu_callback(imu_raw_msg):
 
     # From: Computing tilt measurement and tilt-compensated e-compass
     # www.st.com/resource/en/design_tip/dm00269987.pdf
-    # some signs switched to fit our IMU and rover's coord frames
-    roll = -math.atan2(acc_y, acc_z)
+    roll = math.atan2(acc_y, acc_z)
     Gz2 = (acc_y * math.sin(roll) + acc_z * math.cos(roll))
 
     # Gimbal-lock. Special case when pitched + or - 90 deg.
@@ -303,15 +299,15 @@ def imu_callback(imu_raw_msg):
     # happening if the rover is ever in this position.
     if abs(Gz2) < 0.01:
         if acc_x > 0:
-            rospy.loginfo('Special compass case: pitch is +90 deg')
-            pitch = math.pi / 2
-        else:
             rospy.loginfo('Special compass case: pitch is -90 deg')
             pitch = -math.pi / 2
+        else:
+            rospy.loginfo('Special compass case: pitch is +90 deg')
+            pitch = math.pi / 2
         alpha = .01  # Can be set from [0.01 - 0.05]
-        roll = -math.atan2(acc_y, acc_z + acc_x * alpha)
+        roll = math.atan2(acc_y, acc_z + acc_x * alpha)
     else:
-        pitch = math.atan(acc_x / Gz2)
+        pitch = math.atan(-acc_x / Gz2)
 
     By2 = mag_z * math.sin(roll) - mag_y * math.cos(roll)
     Bz2 = mag_y * math.sin(roll) + mag_z * math.cos(roll)
