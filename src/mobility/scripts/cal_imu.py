@@ -90,6 +90,36 @@ def ellipsoid_fit(x, y, z):
     return offset.tolist(), transform.tolist()
 
 
+def calc_misalignment(H, current_misalign):
+    """
+    Misalignment calibration.
+    From: https://www.pololu.com/file/0J434/LSM303DLH-compass-app-note.pdf
+
+    We will only perform calibration for the rotation around the z-axis.
+
+    Calculates compensation to align the IMU sensor axis to the rover's body
+    axis using numpy array, H, the data from a 2D rotation around one axis.
+    """
+    w = numpy.sqrt(numpy.sum(numpy.square(H), axis=1)).reshape(-1, 1)
+    try:
+        (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
+        R = X / numpy.sqrt((numpy.sum(X**2)))
+        misalignment = numpy.array(current_misalign)
+        misalignment[:,2] = R.T
+        misalignment = misalignment.tolist()
+    except ValueError as e:
+        rospy.logwarn("Misalignment data can't be fit yet.")
+
+    # Z-position of column-z in misalignment matrix should be positive.
+    # It's calculated as a negative value because spinning the rover in
+    # place on level ground actually is a z-up rotation, and the
+    # calibration calculation assumes a z-down rotation, so the sign
+    # gets reversed.
+    misalignment[2][2] = abs(misalignment[2][2])
+
+    return misalignment
+
+
 def compute_calibrated_data(x, y, z, offset, transform):
     """
     Map the raw x, y, z accelerometer or magnetometer vector onto the
@@ -113,6 +143,33 @@ def compute_calibrated_data(x, y, z, offset, transform):
     v = T.dot(v - offset)
 
     return v.item(0), v.item(1), v.item(2)
+
+
+def publish_diagnostic_msg():
+    """
+    Helper to imu_callback. Publishes a DiagnosticArray containing calibration
+    information.
+    """
+    global acc_offsets, acc_transform, mag_offsets, mag_transform, misalignment
+    global imu_diag_pub
+
+    diag_msg = DiagnosticArray()
+    diag_msg.header.stamp = rospy.Time.now()
+    diag_msg.status = [
+        DiagnosticStatus(
+            level = DiagnosticStatus.OK,
+            name = 'IMU Calibration Info',
+            values = [
+                KeyValue(key='Accel Offsets', value=str(acc_offsets)),
+                KeyValue(key='Accel Transform', value=str(acc_transform)),
+                KeyValue(key='Mag Offsets', value=str(mag_offsets)),
+                KeyValue(key='Mag Transform', value=str(mag_transform)),
+                KeyValue(key='Misalignment', value=str(misalignment))
+            ]
+        )
+    ]
+    imu_diag_pub.publish(diag_msg)
+    return
 
 
 def imu_callback(imu_raw_msg):
@@ -148,6 +205,7 @@ def imu_callback(imu_raw_msg):
     imu_cal_data.header = imu_raw_msg.header
     imu_cal_data.angular_velocity = imu_raw_msg.angular_velocity
 
+    # IMU Message
     imu_cal = Imu()
     imu_cal.header = imu_raw_msg.header
     imu_cal.angular_velocity = imu_raw_msg.angular_velocity
@@ -178,21 +236,7 @@ def imu_callback(imu_raw_msg):
                 numpy.array(mag_data[1]),
                 numpy.array(mag_data[2]),
             )
-        diag_msg = DiagnosticArray()
-        diag_msg.header.stamp = imu_raw_msg.header.stamp
-        diag_msg.status = [
-            DiagnosticStatus(
-                level = DiagnosticStatus.OK,
-                name = 'IMU Calibration Info',
-                values = [
-                    KeyValue(key='Accel Offsets', value=str(acc_offsets)),
-                    KeyValue(key='Accel Transform', value=str(acc_transform)),
-                    KeyValue(key='Mag Offsets', value=str(mag_offsets)),
-                    KeyValue(key='Mag Transform', value=str(mag_transform))
-                ]
-            )
-        ]
-        imu_diag_pub.publish(diag_msg)
+            publish_diagnostic_msg()
 
     (acc_x, acc_y, acc_z) = compute_calibrated_data(
         imu_raw_msg.accelerometer.x,
@@ -245,36 +289,8 @@ def imu_callback(imu_raw_msg):
         # Wait until some data has been collected.
         elif len(mag_data[0]) > MIN_DATA_SIZE:
             data = numpy.array(mag_data)
-            H = data.T
-            w = numpy.sqrt(numpy.sum(numpy.square(H), axis=1)).reshape(-1, 1)
-            try:
-                (X, residuals, rank, shape) = numpy.linalg.lstsq(H, w)
-                R = X / numpy.sqrt((numpy.sum(X**2)))
-                misalignment = numpy.array(misalignment)
-                misalignment[:,2] = R.T
-                misalignment = misalignment.tolist()
-            except ValueError as e:
-                rospy.logwarn("Misalignment data can't be fit yet.")
-
-            # Z-position of column-z in misalignment matrix should be positive.
-            # It's calculated as a negative value because spinning the rover in
-            # place on level ground actually is a z-up rotation, and the
-            # calibration calculation assumes a z-down rotation, so the sign
-            # gets reversed.
-            misalignment[2][2] = abs(misalignment[2][2])
-
-            diag_msg = DiagnosticArray()
-            diag_msg.header.stamp = imu_raw_msg.header.stamp
-            diag_msg.status = [
-                DiagnosticStatus(
-                    level = DiagnosticStatus.OK,
-                    name = 'IMU Calibration Info',
-                    values = [
-                        KeyValue(key='Misalignment', value=str(misalignment))
-                    ]
-                )
-            ]
-            imu_diag_pub.publish(diag_msg)
+            misalignment = calc_misalignment(data.T, misalignment)
+            publish_diagnostic_msg()
 
     # swap x and y to orient measurements in the rover's frame
     # Done here so the misalignment calibration can use data in the original
