@@ -497,15 +497,36 @@ class Swarmie:
         return RoverMap(self._get_target_map())
     
     def start_imu_calibration(self):
-        '''Start calibrating the IMU on a rover.'''
+        '''Start calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed before the rover starts operating
+        in a new environment.
+
+        Raw accelerometer and magnetometer is collected during the
+        calibration process. During this time, the rover should perform six
+        full in-place rotations, one rotation with each of its body axes
+        up and down. These should be slow 2D rotations.
+
+        When the 2D rotations are complete, the rover should also perform
+        3D random rotations to put its IMU in as many additional orientations
+        as possible.'''
         self._start_imu_calibration()
 
     def start_misalignment_calibration(self):
-        '''Start calibrating the IMU's misalignment.'''
+        '''Start calibration Step Two for the IMU's misalignment.
+
+        Raw magnetometer data is collected while the rover performs at least
+        one slow 2D rotation with its z axis up. This can be performed by
+        having the rover spin slowly in place on level ground using the teleop.
+
+        This is only one third of a typical misalignment calibration procedure,
+        but since the rover only operates in two dimensions on relatively level
+        ground, it should be ok to skip the x-down and y-down rotations that
+        are part of a complete misalignment calibration.'''
         self._start_misalignment_calibration()
     
     def store_imu_calibration(self):
-        '''Finish calibrating the IMU on a rover.'''
+        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
         self._store_imu_calibration()
         
     def get_odom_location(self):
