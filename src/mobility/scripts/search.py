@@ -9,12 +9,16 @@ import time
 import angles
 import random 
 import message_filters
+import tf
 
 from swarmie_msgs.msg import Obstacle
+from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 from Tkconstants import FIRST
+from numpy import angle
+from asyncore import poll
 
 '''Searcher node.''' 
 
@@ -56,7 +60,7 @@ def wander():
 def triangle():
     global swarmie
     dist = 0
-    swarmie.turn(math.pi - math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION )
+    swarmie.set_heading(swarmie.get_odom_location().get_pose().theta - math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION )
     while dist < 4 :
         odom = swarmie.get_odom_location().get_pose()
         home = swarmie.get_home_odom_location()
@@ -120,11 +124,38 @@ def orbit(home):
     except ObstacleException :
         print ("I saw an obstacle!")
         avoid()
+        
+def get_angle(msg):
+    global angle 
+    quat = [    msg.orientation.x, 
+                msg.orientation.y, 
+                msg.orientation.z, 
+                msg.orientation.w, 
+                ] 
+    angle = tf.transformations.euler_from_quaternion(quat)[2]
+   
+    #print(info/math.pi * 180, "\n", swarmie.get_odom_location().get_pose().theta / math.pi * 180, "\n", max(math.fabs(info/math.pi * 180 - swarmie.get_odom_location().get_pose().theta / math.pi * 180)), "\n")
+
+#def max(largest):
+#    global maximum
+#    if largest > maximum and largest < 350:
+#        maximum = largest
+#    return maximum
+
+def aprox_angle(poll):
+    global angle
+    avg = 0
+    for i in range(0,poll):
+        avg = avg + angle
+        time.sleep(.1)
+    avg = avg / poll
+    return (math.floor(avg / (math.pi/4) + 4.5) - 4) * math.pi 
 
 def main():
     global swarmie 
     global rovername 
     global lhome
+    global angle
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
@@ -132,33 +163,31 @@ def main():
     swarmie.wrist_middle()
     print("search start...")
    
-    imu_sub = message_filters.Subscriber(
-        rovername + '/imu',
-        Imu
-    )
-    
-    print(imu_sub)
-           
+    rospy.Subscriber(rovername + '/imu', Imu, get_angle)
+     
             
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
+        
+    try :
+        swarmie.drive(1)
+    except HomeException :
+        swarmie.drive(-.5 , ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
+        #swarmie.set_heading(angles.shortest_angular_distance(0 , angle + math.pi), ignore=Obstacle.IS_VISION)
+        swarmie.set_heading(angle + math.pi/2, ignore=Obstacle.IS_VISION)
+        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
+        swarmie.set_heading(angle + math.pi/2, ignore=Obstacle.IS_VISION)
+        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
 
-
-    print(swarmie.get_obstacle_condition(), Obstacle.TAG_HOME)   
-    if swarmie.get_obstacle_condition() == Obstacle.TAG_HOME :
-        print("this is important")
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
-        swarmie.drive(.5, ignore=Obstacle.IS_VISION)
-        swarmie.turn(math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        swarmie.drive(1, ignore=Obstacle.IS_VISION)
 
     try: 
         for move in range(5) :
             if rospy.is_shutdown() : 
                 exit(-1)
             try:
-                orbit(lhome)
+                triangle()
                 #wander()
             
             except HomeException : 
