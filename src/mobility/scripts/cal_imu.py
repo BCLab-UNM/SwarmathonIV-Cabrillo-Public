@@ -480,7 +480,7 @@ def store_calibration(req):
     cal['misalignment'] = misalignment
     cal['gyro_bias'] = gyro_bias
     cal['gyro_scale'] = gyro_scale
-    with open(FILE_PATH+rover+'_calibration_alt_gyro.json', 'w') as f:
+    with open(FILE_PATH+rover+'_calibration.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
@@ -510,7 +510,7 @@ if __name__ == "__main__":
     gyro_data = [[], [], []]
 
     try:
-        with open(FILE_PATH+rover+'_calibration_alt_gyro.json', 'r') as f:
+        with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
             cal = json.loads(f.read())
         rospy.loginfo('IMU calibration file found at '+FILE_PATH+rover+'_calibration.json')
     except IOError as e:
