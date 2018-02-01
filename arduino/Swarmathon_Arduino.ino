@@ -202,7 +202,7 @@ void parse() {
       Serial.println(updateIMU());
     }
     else {
-      Serial.println(",,,,,,,,,,,,,,");
+      Serial.println(",,,,,,,,,,,,,,,,,");
     }
 
     Serial.println("ODOM," + String(1) + "," + updateOdom());
@@ -414,7 +414,10 @@ String updateIMU() {
                String(acc.z) + "," +
                String(mag.x) + "," +
                String(mag.y) + "," +
-               String(mag.z);
+               String(mag.z) + "," +
+               String(gyro.x) + "," +
+               String(gyro.y) + "," +
+               String(gyro.z);
 
     return txBuffer;
   }

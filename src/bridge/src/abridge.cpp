@@ -380,9 +380,9 @@ void parseData(string str) {
 				imuRaw.magnetometer.x = atof(dataSet.at(14).c_str());
 				imuRaw.magnetometer.y = atof(dataSet.at(15).c_str());
 				imuRaw.magnetometer.z = atof(dataSet.at(16).c_str());
-				imuRaw.angular_velocity.x = imu.angular_velocity.x;
-				imuRaw.angular_velocity.y = imu.angular_velocity.y;
-				imuRaw.angular_velocity.z = imu.angular_velocity.z;
+                imuRaw.angular_velocity.x = atof(dataSet.at(17).c_str());
+                imuRaw.angular_velocity.y = atof(dataSet.at(18).c_str());
+                imuRaw.angular_velocity.z = atof(dataSet.at(19).c_str());
 			}
 			else if (dataSet.at(0) == "ODOM") {
 				leftTicks = atoi(dataSet.at(2).c_str());

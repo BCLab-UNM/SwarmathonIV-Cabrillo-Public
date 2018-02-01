@@ -120,7 +120,8 @@ def calc_misalignment(H, current_misalign):
     return misalignment
 
 
-def compute_calibrated_data(x, y, z, offset, transform):
+def compute_calibrated_data(x, y, z, offset, transform=None,
+                            use_misalignment=True):
     """
     Map the raw x, y, z accelerometer or magnetometer vector onto the
     calibrated unit sphere. Skips misalignment transformation if we are in
@@ -134,13 +135,18 @@ def compute_calibrated_data(x, y, z, offset, transform):
 
     # Misalignment calibration needs to get only hard-iron and soft-iron
     # calibrated data.
-    if calibrating == 'misalignment':
+    if calibrating == 'misalignment' or use_misalignment is False:
         M_m = numpy.eye(3)
     else:
         M_m = numpy.array(misalignment)
-    transform = numpy.array(transform)
-    T = M_m.dot(transform)
-    v = T.dot(v - offset)
+
+    # Dot product of transformation matrix, if given
+    if transform is not None:
+        transform = numpy.array(transform)
+        T = M_m.dot(transform)
+        v = T.dot(v - offset)
+    else:
+        v = v - offset
 
     return v.item(0), v.item(1), v.item(2)
 
@@ -184,8 +190,9 @@ def imu_callback(imu_raw_msg):
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
     publishes a calibrated IMU message.
     """
-    global calibrating, acc_data, mag_data
+    global calibrating, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global gyro_bias, gyro_scale
     global misalignment
 
     DEBUG = rospy.get_param(
@@ -205,7 +212,30 @@ def imu_callback(imu_raw_msg):
     # IMU Message
     imu_cal = Imu()
     imu_cal.header = imu_raw_msg.header
-    imu_cal.angular_velocity = imu_raw_msg.angular_velocity
+    # imu_cal.angular_velocity = imu_raw_msg.angular_velocity
+
+    if calibrating == 'gyro':
+        gyro_data[0].append(imu_raw_msg.angular_velocity.x)
+        gyro_data[1].append(imu_raw_msg.angular_velocity.y)
+        gyro_data[2].append(imu_raw_msg.angular_velocity.z)
+        gyro_bias[0][0] = numpy.mean(gyro_data[0])
+        gyro_bias[1][0] = numpy.mean(gyro_data[1])
+        gyro_bias[2][0] = numpy.mean(gyro_data[2])
+
+    (gyro_x, gyro_y, gyro_z) = compute_calibrated_data(
+        imu_raw_msg.angular_velocity.x,
+        imu_raw_msg.angular_velocity.y,
+        imu_raw_msg.angular_velocity.z,
+        gyro_bias,
+        gyro_scale,
+        use_misalignment=False
+    )
+    # Convert gyroscope digits to millidegrees per second, then to degrees per
+    # second, and finally to radians per second.
+    # axes mismatched as in arduino code
+    imu_cal.angular_velocity.x = gyro_y*8.75/1000*(math.pi/180)
+    imu_cal.angular_velocity.y = -gyro_x*8.75/1000*(math.pi/180)
+    imu_cal.angular_velocity.z = gyro_z*8.75/1000*(math.pi/180)
 
     if calibrating == 'imu':
         acc_data[0].append(imu_raw_msg.accelerometer.x)
@@ -412,13 +442,28 @@ def start_misalignment_calibration(req):
     return EmptyResponse()
 
 
+def start_gyro_calibration(req):
+    """
+    Start gyro bias calibration. Rover should remain static for this.
+    Only calculating bias right now. It's probably good enough.
+    """
+    global calibrating, gyro_data, gyro_bias, gyro_scale
+    calibrating = 'gyro'
+    gyro_data = [[], [], []]
+    gyro_bias = [[0], [0], [0]]
+    gyro_scale = [[1., 0, 0],
+                  [0, 1., 0],
+                  [0, 0, 1.]]
+    return EmptyResponse()
+
+
 def store_calibration(req):
     """
     Stores all current calibration matrices and resets dataset lists.
     """
-    global calibrating, cal, rover, acc_data, mag_data
+    global calibrating, cal, rover, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    global misalignment
+    global misalignment, gyro_bias, gyro_scale
     FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
@@ -426,20 +471,24 @@ def store_calibration(req):
     calibrating = None
     acc_data = [[], [], []]
     mag_data = [[], [], []]
+    gyro_data = [[], [], []]
 
     cal['acc_offsets'] = acc_offsets
     cal['acc_transform'] = acc_transform
     cal['mag_offsets'] = mag_offsets
     cal['mag_transform'] = mag_transform
     cal['misalignment'] = misalignment
-    with open(FILE_PATH+rover+'_calibration.json', 'w') as f:
+    cal['gyro_bias'] = gyro_bias
+    cal['gyro_scale'] = gyro_scale
+    with open(FILE_PATH+rover+'_calibration_alt_gyro.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
 
 if __name__ == "__main__":
-    global rover, calibrating, cal, acc_data, mag_data
+    global rover, calibrating, cal, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global gyro_bias, gyro_scale
     global misalignment
 
     if len(sys.argv) < 2:
@@ -458,9 +507,10 @@ if __name__ == "__main__":
     # when needed.
     acc_data = [[], [], []]
     mag_data = [[], [], []]
+    gyro_data = [[], [], []]
 
     try:
-        with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
+        with open(FILE_PATH+rover+'_calibration_alt_gyro.json', 'r') as f:
             cal = json.loads(f.read())
         rospy.loginfo('IMU calibration file found at '+FILE_PATH+rover+'_calibration.json')
     except IOError as e:
@@ -482,12 +532,18 @@ if __name__ == "__main__":
         misalignment = [[1., 0, 0],
                         [0, 1., 0],
                         [0, 0, 1.]]
+        gyro_bias = [[0], [0], [0]]
+        gyro_scale = [[1., 0, 0],
+                      [0, 1., 0],
+                      [0, 0, 1.]]
     else:
         acc_offsets = cal['acc_offsets']
         acc_transform = cal['acc_transform']
         mag_offsets = cal['mag_offsets']
         mag_transform = cal['mag_transform']
         misalignment = cal['misalignment']
+        gyro_bias = cal['gyro_bias']
+        gyro_scale = cal['gyro_scale']
 
 
     # Subscribers
@@ -534,6 +590,11 @@ if __name__ == "__main__":
         rover + '/start_misalignment_calibration',
         Empty,
         start_misalignment_calibration
+    )
+    start_gyro_cal = rospy.Service(
+        rover + '/start_gyro_calibration',
+        Empty,
+        start_gyro_calibration
     )
 
     rospy.spin()
