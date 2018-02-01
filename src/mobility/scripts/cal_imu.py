@@ -254,13 +254,6 @@ def imu_callback(imu_raw_msg):
     acc_x = -acc_y
     acc_y = tmp
 
-    # Convert accelerometer digits to milligravities, then to gravities, and
-    # finally to meters per second squared.
-    # mismatched x, y as in arduino code
-    # imu_cal.linear_acceleration.x = acc_y * 0.061 / 1000 * 9.81
-    # imu_cal.linear_acceleration.y = -acc_x * 0.061 / 1000 * 9.81
-    # imu_cal.linear_acceleration.z = acc_z * 0.061 / 1000 * 9.81
-
     # Scale accelerations back to m/s**2 after being fit to the unit sphere.
     imu_cal.linear_acceleration.x = acc_x * 9.81
     imu_cal.linear_acceleration.y = acc_y * 9.81
