@@ -457,11 +457,11 @@ if __name__ == "__main__":
     try:
         with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
             cal = json.loads(f.read())
-        rospy.loginfo('IMU calibration file found. Loading calibration.')
+        rospy.loginfo('IMU calibration file found at '+FILE_PATH+rover+'_calibration.json')
     except IOError as e:
-        rospy.loginfo('No IMU calibration file found.')
+        rospy.logwarn('No IMU calibration file found.')
     except ValueError as e:
-        rospy.loginfo('Invalid IMU calibration file. Starting from scratch.')
+        rospy.logwarn('Invalid IMU calibration file. Starting from scratch.')
 
     # Calibration matrices are stored as lists and converted to numpy arrays
     # when needed.
