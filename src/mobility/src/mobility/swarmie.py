@@ -163,6 +163,7 @@ class Swarmie:
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._start_gyro_calibration = rospy.ServiceProxy(rover + '/start_gyro_calibration', Empty)
         self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Subscribe to useful topics 
@@ -524,6 +525,12 @@ class Swarmie:
         ground, it should be ok to skip the x-down and y-down rotations that
         are part of a complete misalignment calibration.'''
         self._start_misalignment_calibration()
+
+    def start_gyro_calibration(self):
+        '''Start calibration Step Three for the rover's IMU.
+
+        Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
+        self._start_gyro_calibration()
     
     def store_imu_calibration(self):
         '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
