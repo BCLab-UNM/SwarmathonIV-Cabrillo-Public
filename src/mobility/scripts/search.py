@@ -166,7 +166,7 @@ def main():
     swarmie.wrist_middle()
     print("search start...")
    
-    #rospy.Subscriber(rovername + '/imu', Imu, get_angle)
+    rospy.Subscriber(rovername + '/imu', Imu, get_angle)
      
             
     if len(sys.argv) < 2 :
