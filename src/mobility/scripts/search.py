@@ -145,10 +145,13 @@ def get_angle(msg):
 def aprox_angle(poll):
     global angle
     avg = 0
-    for i in range(0,poll):
-        avg = avg + angle
-        time.sleep(.1)
-    avg = avg / poll
+    if not swarmie.is_moving() :
+        for i in range(0,poll):
+            avg = avg + angle
+            rospy.sleep(.1)
+        avg = avg / poll
+    else :
+        avg = angle
     return (math.floor(avg / (math.pi/4) + 4.5) - 4) * math.pi 
 
 def main():
@@ -163,7 +166,7 @@ def main():
     swarmie.wrist_middle()
     print("search start...")
    
-    rospy.Subscriber(rovername + '/imu', Imu, get_angle)
+    #rospy.Subscriber(rovername + '/imu', Imu, get_angle)
      
             
     if len(sys.argv) < 2 :
@@ -200,6 +203,8 @@ def main():
     except TagException : 
         print("I found a tag!")
         # Let's drive there to be helpful.
+        number = swarmie.get_latest_targets()
+        print(number, "map", swarmie.get_target_map())
         swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.3, ignore=Obstacle.IS_VISION)
         exit(0)
         
