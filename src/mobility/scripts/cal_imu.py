@@ -43,6 +43,7 @@ import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Imu
+from std_msgs.msg import String
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 
 from swarmie_msgs.msg import SwarmieIMU
@@ -157,6 +158,7 @@ def publish_diagnostic_msg():
     information.
     """
     global acc_offsets, acc_transform, mag_offsets, mag_transform, misalignment
+    global gyro_bias, gyro_scale
     global imu_diag_pub
 
     diag_msg = DiagnosticArray()
@@ -166,6 +168,8 @@ def publish_diagnostic_msg():
             level = DiagnosticStatus.OK,
             name = 'IMU Calibration Info',
             values = [
+                KeyValue(key='Gyro Bias', value=str(gyro_bias)),
+                KeyValue(key='Gyro Scale', value=str(gyro_scale)),
                 KeyValue(key='Accel Offsets', value=str(acc_offsets)),
                 KeyValue(key='Accel Transform', value=str(acc_transform)),
                 KeyValue(key='Mag Offsets', value=str(mag_offsets)),
@@ -192,7 +196,7 @@ def imu_callback(imu_raw_msg):
     """
     global calibrating, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    global gyro_bias, gyro_scale
+    global gyro_bias, gyro_scale, gyro_start_time, gyro_status_msg
     global misalignment
 
     DEBUG = rospy.get_param(
@@ -212,9 +216,8 @@ def imu_callback(imu_raw_msg):
     # IMU Message
     imu_cal = Imu()
     imu_cal.header = imu_raw_msg.header
-    # imu_cal.angular_velocity = imu_raw_msg.angular_velocity
 
-    if calibrating == 'gyro':
+    if calibrating == 'gyro_bias':
         gyro_data[0].append(imu_raw_msg.angular_velocity.x)
         gyro_data[1].append(imu_raw_msg.angular_velocity.y)
         gyro_data[2].append(imu_raw_msg.angular_velocity.z)
@@ -237,6 +240,27 @@ def imu_callback(imu_raw_msg):
     imu_cal.angular_velocity.y = -gyro_x*8.75/1000*(math.pi/180)
     imu_cal.angular_velocity.z = gyro_z*8.75/1000*(math.pi/180)
 
+    if calibrating == 'gyro_scale':
+        current_time = rospy.Time.now().to_sec()
+        if current_time - gyro_start_time < 10:
+            gyro_status_msg = rover+': Collecting data from first gyro rotation.'
+            gyro_data[0].append(imu_raw_msg.header.stamp.to_sec())
+            gyro_data[1].append(imu_cal.angular_velocity.z)
+        elif current_time - gyro_start_time < 20:
+            gyro_status_msg = rover+': Collecting data from second gyro rotation.'
+            gyro_data[2].append(imu_raw_msg.header.stamp.to_sec())
+            gyro_data[3].append(imu_cal.angular_velocity.z)
+        else:
+            angle_1 = numpy.trapz(gyro_data[1], x=gyro_data[0])
+            angle_2 = numpy.trapz(gyro_data[3], x=gyro_data[2])
+            z_scale = (abs(math.pi/angle_1) + abs(math.pi/angle_2)) / 2
+            gyro_scale[2][2] = z_scale
+            msg = String(rover
+                         +': Finished collecting gyro rotation data. Z-Scale: '
+                         +str(z_scale))
+            info_log.publish(msg)
+            store_calibration(EmptyRequest())
+
     if calibrating == 'imu':
         acc_data[0].append(imu_raw_msg.accelerometer.x)
         acc_data[1].append(imu_raw_msg.accelerometer.y)
@@ -256,12 +280,12 @@ def imu_callback(imu_raw_msg):
             (acc_offsets, acc_transform) = ellipsoid_fit(
                 numpy.array(acc_data[0]),
                 numpy.array(acc_data[1]),
-                numpy.array(acc_data[2]),
+                numpy.array(acc_data[2])
             )
             (mag_offsets, mag_transform) = ellipsoid_fit(
                 numpy.array(mag_data[0]),
                 numpy.array(mag_data[1]),
-                numpy.array(mag_data[2]),
+                numpy.array(mag_data[2])
             )
             publish_diagnostic_msg()
 
@@ -442,19 +466,41 @@ def start_misalignment_calibration(req):
     return EmptyResponse()
 
 
-def start_gyro_calibration(req):
-    """
-    Start gyro bias calibration. Rover should remain static for this.
-    Only calculating bias right now. It's probably good enough.
-    """
-    global calibrating, gyro_data, gyro_bias, gyro_scale
-    calibrating = 'gyro'
+def start_gyro_bias_calibration(req):
+    """Start gyro bias calibration. Rover should remain static for this."""
+    global calibrating, gyro_data, gyro_bias
+    calibrating = 'gyro_bias'
     gyro_data = [[], [], []]
     gyro_bias = [[0], [0], [0]]
+    return EmptyResponse()
+
+
+def start_gyro_scale_calibration(req):
+    """
+    Start gyro scale calibration. Rover should rotate 180 degrees in one
+    direction during first 10 seconds, and 180 degress in opposite direction
+    during second 10 seconds.
+    """
+    global calibrating, gyro_data, gyro_scale, gyro_start_time, gyro_timer
+    calibrating = 'gyro_scale'
+    gyro_data = [[], [], [], []]
     gyro_scale = [[1., 0, 0],
                   [0, 1., 0],
                   [0, 0, 1.]]
+    # Timer to throttle gyro status messages to 1 Hz
+    gyro_timer = rospy.Timer(rospy.Duration(1), log_gyro_status)
+    gyro_start_time = rospy.Time.now().to_sec()
     return EmptyResponse()
+
+
+def log_gyro_status(event):
+    """
+    Helper to log gyro scale calibration status messages to /infoLog. Used
+    as the callback to a Timer initialized in start_gyro_scale_calibration()
+    """
+    global gyro_status_msg
+    msg = String(gyro_status_msg)
+    info_log.publish(msg)
 
 
 def store_calibration(req):
@@ -463,7 +509,7 @@ def store_calibration(req):
     """
     global calibrating, cal, rover, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    global misalignment, gyro_bias, gyro_scale
+    global misalignment, gyro_bias, gyro_scale, gyro_timer
     FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
@@ -472,6 +518,10 @@ def store_calibration(req):
     acc_data = [[], [], []]
     mag_data = [[], [], []]
     gyro_data = [[], [], []]
+
+    if gyro_timer is not None:
+        gyro_timer.shutdown()
+        gyro_timer = None
 
     cal['acc_offsets'] = acc_offsets
     cal['acc_transform'] = acc_transform
@@ -488,7 +538,7 @@ def store_calibration(req):
 if __name__ == "__main__":
     global rover, calibrating, cal, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
-    global gyro_bias, gyro_scale
+    global gyro_bias, gyro_scale, gyro_start_time, gyro_timer, gyro_status_msg
     global misalignment
 
     if len(sys.argv) < 2:
@@ -574,6 +624,11 @@ if __name__ == "__main__":
         SwarmieIMU,
         queue_size=10
     )
+    info_log = rospy.Publisher(
+        '/infoLog',
+        String,
+        queue_size=10
+    )
 
     # Services
     start_imu_cal = rospy.Service(
@@ -592,9 +647,14 @@ if __name__ == "__main__":
         start_misalignment_calibration
     )
     start_gyro_cal = rospy.Service(
-        rover + '/start_gyro_calibration',
+        rover + '/start_gyro_bias_calibration',
         Empty,
-        start_gyro_calibration
+        start_gyro_bias_calibration
+    )
+    start_gyro_cal = rospy.Service(
+        rover + '/start_gyro_scale_calibration',
+        Empty,
+        start_gyro_scale_calibration
     )
 
     rospy.spin()

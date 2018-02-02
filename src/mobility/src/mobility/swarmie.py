@@ -163,7 +163,8 @@ class Swarmie:
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
-        self._start_gyro_calibration = rospy.ServiceProxy(rover + '/start_gyro_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
         self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Subscribe to useful topics 
@@ -526,12 +527,22 @@ class Swarmie:
         are part of a complete misalignment calibration.'''
         self._start_misalignment_calibration()
 
-    def start_gyro_calibration(self):
+    def start_gyro_bias_calibration(self):
         '''Start calibration Step Three for the rover's IMU.
 
         Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
-        self._start_gyro_calibration()
-    
+        self._start_gyro_bias_calibration()
+
+    def start_gyro_scale_calibration(self):
+        '''Start calibration Step Four for the rover's IMU.
+
+        Calibrate gyroscope scale factor. Rover must rotate exactly 180 degrees
+        in one direction during first 10 seconds afer calling this function,
+        and rotate exactly 180 degrees in the opposite direction during the
+        second 10 seconds after calling this function. Progress can be
+        monitored in rdb.py or by echoing the /infoLog topic.'''
+        self._start_gyro_scale_calibration()
+
     def store_imu_calibration(self):
         '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
         self._store_imu_calibration()
