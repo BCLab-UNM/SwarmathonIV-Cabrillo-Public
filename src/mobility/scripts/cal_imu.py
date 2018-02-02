@@ -193,16 +193,12 @@ def imu_callback(imu_raw_msg):
     Computes calibrated accelerometer and magnetometer data, transformed from
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
     publishes a calibrated IMU message.
+    todo might check whether there is a debug-mode param first
     """
     global calibrating, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global gyro_bias, gyro_scale, gyro_start_time, gyro_status_msg
     global misalignment
-
-    DEBUG = rospy.get_param(
-        '~debug_mode',
-        default=False
-    )
 
     # In case someone forgets to exit either calibration state.
     DATA_SIZE_LIMIT = 3000  # 5 min worth of data at 10 Hz
@@ -399,9 +395,6 @@ def imu_callback(imu_raw_msg):
             yaw
         )
     )
-
-    if DEBUG:
-        publish_diagnostic_msg()
 
     imu_cal_data_pub.publish(imu_cal_data)
     imu_pub.publish(imu_cal)
@@ -617,7 +610,8 @@ if __name__ == "__main__":
     imu_diag_pub = rospy.Publisher(
         rover + '/imu/cal_diag',
         DiagnosticArray,
-        queue_size=10
+        queue_size=10,
+        latch=True
     )
     imu_cal_data_pub = rospy.Publisher(
         rover + '/imu/raw/calibrated',
@@ -656,6 +650,9 @@ if __name__ == "__main__":
         Empty,
         start_gyro_scale_calibration
     )
+
+    # Publish current calibration once:
+    publish_diagnostic_msg()
 
     rospy.spin()
 

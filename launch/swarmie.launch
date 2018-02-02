@@ -165,7 +165,6 @@
     <node name="$(arg name)_IMU" pkg="mobility" type="cal_imu.py"
           args="$(arg name)" respawn="true" >
       <param name="calibration_file_path" value="/home/robot/"/>
-      <param name="debug_mode" type="bool" value="false"/>
     </node>
     
     <node name="$(arg name)_UBLOX" pkg="ublox_gps" type="ublox_gps" respawn="true">
