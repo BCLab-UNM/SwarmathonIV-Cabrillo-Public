@@ -51,3 +51,8 @@ catkin_install_python (
 	scripts/dropoff.py 
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+
+install(
+	DIRECTORY camera_info
+	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)

@@ -166,6 +166,8 @@ def main():
                 
     except TagException : 
         print("I found a tag!")
+        # Let's drive there to be helpful.
+        swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.3, ignore=Obstacle.IS_VISION)
         exit(0)
         
     print ("I'm homesick!")

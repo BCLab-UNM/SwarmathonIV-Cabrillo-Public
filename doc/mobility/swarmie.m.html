@@ -1138,6 +1138,7 @@ table {
     <li class="mono"><a href="#mobility.swarmie.Swarmie.set_home_gps_location">set_home_gps_location</a></li>
     <li class="mono"><a href="#mobility.swarmie.Swarmie.set_home_odom_location">set_home_odom_location</a></li>
     <li class="mono"><a href="#mobility.swarmie.Swarmie.set_wrist_angle">set_wrist_angle</a></li>
+    <li class="mono"><a href="#mobility.swarmie.Swarmie.simulator_running">simulator_running</a></li>
     <li class="mono"><a href="#mobility.swarmie.Swarmie.start_magnetometer_calibration">start_magnetometer_calibration</a></li>
     <li class="mono"><a href="#mobility.swarmie.Swarmie.stop">stop</a></li>
     <li class="mono"><a href="#mobility.swarmie.Swarmie.store_magnetometer_calibration">store_magnetometer_calibration</a></li>
@@ -1218,7 +1219,7 @@ table {
 <span class="kn">from</span> <span class="nn">std_srvs.srv</span> <span class="kn">import</span> <span class="n">Empty</span> 
 <span class="kn">from</span> <span class="nn">std_msgs.msg</span> <span class="kn">import</span> <span class="n">UInt8</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">Float32</span>
 <span class="kn">from</span> <span class="nn">nav_msgs.msg</span> <span class="kn">import</span> <span class="n">Odometry</span>
-<span class="kn">from</span> <span class="nn">geometry_msgs.msg</span> <span class="kn">import</span> <span class="n">Point</span> 
+<span class="kn">from</span> <span class="nn">geometry_msgs.msg</span> <span class="kn">import</span> <span class="n">Point</span><span class="p">,</span> <span class="n">Twist</span><span class="p">,</span> <span class="n">Pose2D</span>
 <span class="kn">from</span> <span class="nn">apriltags_ros.msg</span> <span class="kn">import</span> <span class="n">AprilTagDetectionArray</span> 
 <span class="kn">from</span> <span class="nn">rospy.numpy_msg</span> <span class="kn">import</span> <span class="n">numpy_msg</span>
 <span class="kn">from</span> <span class="nn">grid_map_msgs.msg</span> <span class="kn">import</span> <span class="n">GridMap</span>
@@ -1313,7 +1314,18 @@ table {
 <span class="sd">    with ROS topics and services to perform action and acquire sensor data. </span>
 <span class="sd">    &#39;&#39;&#39;</span> 
     
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Constructor.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        * `rover` (`string`) - Name of the rover.</span>
+
+<span class="sd">        Keyword arguments:</span>
+
+<span class="sd">        * `node_suffix` (`string`) - Optional argument to start up this node</span>
+<span class="sd">        without killing the main /rover_CONTROLLER node. Used by teleop_keyboard</span>
+<span class="sd">        &#39;&#39;&#39;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rover_name</span> <span class="o">=</span> <span class="n">rover</span> 
         <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">MapLocation</span> <span class="o">=</span> <span class="n">Location</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
@@ -1321,7 +1333,10 @@ table {
         <span class="bp">self</span><span class="o">.</span><span class="n">Targets</span> <span class="o">=</span> <span class="n">AprilTagDetectionArray</span><span class="p">()</span>
         
         <span class="c1"># Intialize this ROS node.</span>
-        <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;node_suffix&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">]:</span>
+            <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span> <span class="o">+</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
 
         <span class="c1"># Create publishiers. </span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sm_publisher</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">Publisher</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/state_machine&#39;</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">latch</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
@@ -1628,31 +1643,39 @@ table {
         <span class="c1"># Third test: The block never seems to affect the sonar in the simulator. </span>
         <span class="c1"># Also, the grasped block rarely seems to be recognized in the simulator. </span>
         <span class="c1"># Which is whack. </span>
-        <span class="n">topics</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">()</span> 
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">topics</span> <span class="p">:</span> 
+        <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">())</span>
+        
+    <span class="k">def</span> <span class="nf">simulator_running</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+        <span class="sd">&#39;&#39;&#39;Helper Returns True if there is a /gazebo/link_states topic otherwise False&#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">():</span> 
             <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;/gazebo/link_states&#39;</span> <span class="p">:</span>
                 <span class="c1"># This is the simulator</span>
                 <span class="k">return</span> <span class="bp">True</span>
-        
         <span class="k">return</span> <span class="bp">False</span>
-     
+
     <span class="k">def</span> <span class="nf">pickup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-      <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="c1">#not sure if sleeps are okay here</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="c1">#close</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+        <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
+        <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">():</span>
+            <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="n">finger_close_angle</span><span class="p">)</span> <span class="c1">#close</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+        <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">has_block</span><span class="p">())</span>
        
     <span class="k">def</span> <span class="nf">putdown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-      <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>          
+        <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+
 
     <span class="k">def</span> <span class="nf">find_nearest_target</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="p">:</span>
         <span class="sd">&#39;&#39;&#39;Broken: Return a XXX that is the odom location of the nearest target on the map.&#39;&#39;&#39;</span> 
@@ -2568,7 +2591,18 @@ with ROS topics and services to perform action and acquire sensor data.</p></div
 <span class="sd">    with ROS topics and services to perform action and acquire sensor data. </span>
 <span class="sd">    &#39;&#39;&#39;</span> 
     
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Constructor.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        * `rover` (`string`) - Name of the rover.</span>
+
+<span class="sd">        Keyword arguments:</span>
+
+<span class="sd">        * `node_suffix` (`string`) - Optional argument to start up this node</span>
+<span class="sd">        without killing the main /rover_CONTROLLER node. Used by teleop_keyboard</span>
+<span class="sd">        &#39;&#39;&#39;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rover_name</span> <span class="o">=</span> <span class="n">rover</span> 
         <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">MapLocation</span> <span class="o">=</span> <span class="n">Location</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
@@ -2576,7 +2610,10 @@ with ROS topics and services to perform action and acquire sensor data.</p></div
         <span class="bp">self</span><span class="o">.</span><span class="n">Targets</span> <span class="o">=</span> <span class="n">AprilTagDetectionArray</span><span class="p">()</span>
         
         <span class="c1"># Intialize this ROS node.</span>
-        <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;node_suffix&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">]:</span>
+            <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span> <span class="o">+</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
 
         <span class="c1"># Create publishiers. </span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sm_publisher</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">Publisher</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/state_machine&#39;</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">latch</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
@@ -2883,31 +2920,39 @@ with ROS topics and services to perform action and acquire sensor data.</p></div
         <span class="c1"># Third test: The block never seems to affect the sonar in the simulator. </span>
         <span class="c1"># Also, the grasped block rarely seems to be recognized in the simulator. </span>
         <span class="c1"># Which is whack. </span>
-        <span class="n">topics</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">()</span> 
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">topics</span> <span class="p">:</span> 
+        <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">())</span>
+        
+    <span class="k">def</span> <span class="nf">simulator_running</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+        <span class="sd">&#39;&#39;&#39;Helper Returns True if there is a /gazebo/link_states topic otherwise False&#39;&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">():</span> 
             <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;/gazebo/link_states&#39;</span> <span class="p">:</span>
                 <span class="c1"># This is the simulator</span>
                 <span class="k">return</span> <span class="bp">True</span>
-        
         <span class="k">return</span> <span class="bp">False</span>
-     
+
     <span class="k">def</span> <span class="nf">pickup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-      <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="c1">#not sure if sleeps are okay here</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="c1">#close</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+        <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
+        <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">():</span>
+            <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="n">finger_close_angle</span><span class="p">)</span> <span class="c1">#close</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+        <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">has_block</span><span class="p">())</span>
        
     <span class="k">def</span> <span class="nf">putdown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-      <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-      <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-      <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>          
+        <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+
 
     <span class="k">def</span> <span class="nf">find_nearest_target</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="p">:</span>
         <span class="sd">&#39;&#39;&#39;Broken: Return a XXX that is the odom location of the nearest target on the map.&#39;&#39;&#39;</span> 
@@ -3239,16 +3284,33 @@ with ROS topics and services to perform action and acquire sensor data.</p></div
             
   <div class="item">
     <div class="name def" id="mobility.swarmie.Swarmie.__init__">
-    <p>def <span class="ident">__init__</span>(</p><p>self, rover)</p>
+    <p>def <span class="ident">__init__</span>(</p><p>self, rover, **kwargs)</p>
     </div>
     
 
     
   
+    <div class="desc"><p>Constructor.</p>
+<p>Args:</p>
+<ul>
+<li><code>rover</code> (<code>string</code>) - Name of the rover.</li>
+</ul>
+<p>Keyword arguments:</p>
+<ul>
+<li><code>node_suffix</code> (<code>string</code>) - Optional argument to start up this node
+without killing the main /rover_CONTROLLER node. Used by teleop_keyboard</li>
+</ul></div>
   <div class="source_cont">
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-mobility.swarmie.Swarmie.__init__', this);">Show source &equiv;</a></p>
   <div id="source-mobility.swarmie.Swarmie.__init__" class="source">
-    <div class="codehilite"><pre><span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">):</span>
+    <div class="codehilite"><pre><span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rover</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Constructor.</span>
+<span class="sd">    Args:</span>
+<span class="sd">    * `rover` (`string`) - Name of the rover.</span>
+<span class="sd">    Keyword arguments:</span>
+<span class="sd">    * `node_suffix` (`string`) - Optional argument to start up this node</span>
+<span class="sd">    without killing the main /rover_CONTROLLER node. Used by teleop_keyboard</span>
+<span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">rover_name</span> <span class="o">=</span> <span class="n">rover</span> 
     <span class="bp">self</span><span class="o">.</span><span class="n">Obstacles</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">MapLocation</span> <span class="o">=</span> <span class="n">Location</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
@@ -3256,7 +3318,10 @@ with ROS topics and services to perform action and acquire sensor data.</p></div
     <span class="bp">self</span><span class="o">.</span><span class="n">Targets</span> <span class="o">=</span> <span class="n">AprilTagDetectionArray</span><span class="p">()</span>
     
     <span class="c1"># Intialize this ROS node.</span>
-    <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s1">&#39;node_suffix&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">]:</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span> <span class="o">+</span> <span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;node_suffix&#39;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">rospy</span><span class="o">.</span><span class="n">init_node</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;_CONTROLLER&#39;</span><span class="p">)</span>
     <span class="c1"># Create publishiers. </span>
     <span class="bp">self</span><span class="o">.</span><span class="n">sm_publisher</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">Publisher</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/state_machine&#39;</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">latch</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">status_publisher</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">Publisher</span><span class="p">(</span><span class="n">rover</span> <span class="o">+</span> <span class="s1">&#39;/status&#39;</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">queue_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">latch</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
@@ -3888,13 +3953,7 @@ See <code>./src/mapping/src/mapping/__init__.py</code> for documentation of Rove
     <span class="c1"># Third test: The block never seems to affect the sonar in the simulator. </span>
     <span class="c1"># Also, the grasped block rarely seems to be recognized in the simulator. </span>
     <span class="c1"># Which is whack. </span>
-    <span class="n">topics</span> <span class="o">=</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">()</span> 
-    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">topics</span> <span class="p">:</span> 
-        <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;/gazebo/link_states&#39;</span> <span class="p">:</span>
-            <span class="c1"># This is the simulator</span>
-            <span class="k">return</span> <span class="bp">True</span>
-    
-    <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">())</span>
 </pre></div>
 
   </div>
@@ -3980,14 +4039,18 @@ See <code>./src/mapping/src/mapping/__init__.py</code> for documentation of Rove
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-mobility.swarmie.Swarmie.pickup', this);">Show source &equiv;</a></p>
   <div id="source-mobility.swarmie.Swarmie.pickup" class="source">
     <div class="codehilite"><pre><span class="k">def</span> <span class="nf">pickup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-  <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-  <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="c1">#not sure if sleeps are okay here</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-  <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span> <span class="c1">#close</span>
-  <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+    <span class="sd">&#39;&#39;&#39;Picks up the block&#39;&#39;&#39;</span>
+    <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="o">.</span><span class="mi">5</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">simulator_running</span><span class="p">():</span>
+        <span class="n">finger_close_angle</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="n">finger_close_angle</span><span class="p">)</span> <span class="c1">#close</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
+    <span class="k">return</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">has_block</span><span class="p">())</span>
 </pre></div>
 
   </div>
@@ -4084,12 +4147,12 @@ See <code>./src/mapping/src/mapping/__init__.py</code> for documentation of Rove
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-mobility.swarmie.Swarmie.putdown', this);">Show source &equiv;</a></p>
   <div id="source-mobility.swarmie.Swarmie.putdown" class="source">
     <div class="codehilite"><pre><span class="k">def</span> <span class="nf">putdown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-  <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-  <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
-  <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
-  <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>          
+    <span class="sd">&#39;&#39;&#39;Puts the block down&#39;&#39;&#39;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_wrist_angle</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_finger_angle</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1">#open</span>
+    <span class="n">rospy</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">wrist_up</span><span class="p">()</span>
 </pre></div>
 
   </div>
@@ -4270,6 +4333,33 @@ of drift. </p>
 <span class="sd">    * `angle` (`float`) Wrist angle in radians. </span>
 <span class="sd">    &#39;&#39;&#39;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">wrist_publisher</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">Float32</span><span class="p">(</span><span class="n">angle</span><span class="p">))</span>
+</pre></div>
+
+  </div>
+</div>
+
+  </div>
+  
+            
+  <div class="item">
+    <div class="name def" id="mobility.swarmie.Swarmie.simulator_running">
+    <p>def <span class="ident">simulator_running</span>(</p><p>self)</p>
+    </div>
+    
+
+    
+  
+    <div class="desc"><p>Helper Returns True if there is a /gazebo/link_states topic otherwise False</p></div>
+  <div class="source_cont">
+  <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-mobility.swarmie.Swarmie.simulator_running', this);">Show source &equiv;</a></p>
+  <div id="source-mobility.swarmie.Swarmie.simulator_running" class="source">
+    <div class="codehilite"><pre><span class="k">def</span> <span class="nf">simulator_running</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+    <span class="sd">&#39;&#39;&#39;Helper Returns True if there is a /gazebo/link_states topic otherwise False&#39;&#39;&#39;</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rospy</span><span class="o">.</span><span class="n">get_published_topics</span><span class="p">():</span> 
+        <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;/gazebo/link_states&#39;</span> <span class="p">:</span>
+            <span class="c1"># This is the simulator</span>
+            <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">return</span> <span class="bp">False</span>
 </pre></div>
 
   </div>

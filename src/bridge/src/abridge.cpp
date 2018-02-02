@@ -311,8 +311,12 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 	}
 
 	usb.sendData(dataCmd);
-	parseData(usb.readData());
-	publishRosTopics();
+	try {
+		parseData(usb.readData());
+		publishRosTopics();
+	} catch (std::exception &e) {
+		ROS_WARN("Exception while parsing Arduino data. Probably IMU.");
+	}
 }
 
 void publishRosTopics() {
