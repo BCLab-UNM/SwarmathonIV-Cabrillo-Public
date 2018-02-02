@@ -133,7 +133,7 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
-        self.TargetsRounded = []
+        self.TargetsDict = {}
         self.targets_timeout = 3
         
         # Intialize this ROS node.
@@ -205,15 +205,16 @@ class Swarmie:
     def _targets(self, msg) : 
         if self._is_moving():
             self.Targets = msg
-            #the 5 and 4s were from looking at the min and max difference between a tag 
-            #I took 1,000 samples in the simulator of that tag, will test with the real rover in the future
-            self.TargetsRounded = [(round(tag.pose.pose.position.x, 5),round(tag.pose.pose.position.y, 4),round(tag.pose.pose.position.z, 4)) for copiedTag in [ copy.deepcopy(tag) for tag in msg.detections ] ]
+            #create a dict of tags as values and rounded coordinates as the key
+            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
             
         else:
-            self.TargetsRounded = [(round(tag.pose.pose.position.x, 5),round(tag.pose.pose.position.y, 4),round(tag.pose.pose.position.z, 4)) for copiedTag in [ copy.deepcopy(tag) for tag in msg.detections ] ]
-            #adds tags missing to the previous detections and removes tags older then 3 seconds
-            self.Targets.detections = [tag for tag in list(set(msg.detections + self.Targets.detections)) if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) ]
-            
+            #remove old tags from the dict
+            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+            #adding currently seen tags to the dict
+            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+            #get the tags from the dict and saves them to Targets
+            self.Targets.detections = self.TargetsDict.values() 
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
