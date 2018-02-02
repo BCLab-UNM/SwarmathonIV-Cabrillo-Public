@@ -17,14 +17,7 @@
     <param name="ROTATE_THRESHOLD" value="0.19625"/>
     <param name="DRIVE_ANGLE_ABORT" value="0.35"/>
   </node>
-  <node name="$(arg name)_IMU"
-        pkg="mobility"
-        type="cal_imu.py"
-        args="$(arg name)"
-        respawn="true" >
-    <param name="calibration_file_path" value="/home/robot/"/>
-    <param name="debug_mode" type="bool" value="false"/>
-  </node>
+
   <node name="$(arg name)_MAPPING" pkg="mapping" type="mapping" args="$(arg name)" respawn="true"/>
   <node pkg="robot_localization" type="navsat_transform_node" name="$(arg name)_NAVSAT" respawn="true">
 
@@ -167,6 +160,12 @@
       <param name="st" value="0.0" />
       <param name="wu" value="65535" />
       <param name="ff" value="0.009" />
+    </node>
+
+    <node name="$(arg name)_IMU" pkg="mobility" type="cal_imu.py"
+          args="$(arg name)" respawn="true" >
+      <param name="calibration_file_path" value="/home/robot/"/>
+      <param name="debug_mode" type="bool" value="false"/>
     </node>
     
     <node name="$(arg name)_UBLOX" pkg="ublox_gps" type="ublox_gps" respawn="true">
