@@ -541,6 +541,7 @@ if __name__ == "__main__":
     rover = sys.argv[1]
     rospy.init_node(rover + '_IMU')
     calibrating = None
+    gyro_timer = None
     cal = {}
     FILE_PATH = rospy.get_param(
         '~calibration_file_path',
