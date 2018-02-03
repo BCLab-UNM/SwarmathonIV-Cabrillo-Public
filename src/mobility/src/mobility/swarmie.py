@@ -10,7 +10,6 @@ import math
 import random 
 import angles 
 import tf 
-import copy # for deep copy for removing duplicate tags
 
 from mobility.srv import Core
 from mapping.srv import FindTarget, GetMap
