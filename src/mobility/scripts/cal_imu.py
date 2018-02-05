@@ -91,6 +91,52 @@ def ellipsoid_fit(x, y, z):
     return offset.tolist(), transform.tolist()
 
 
+def ellipse_fit(x, y):
+    x = x[:,numpy.newaxis]
+    y = y[:,numpy.newaxis]
+
+    D =  numpy.hstack((x*x, x*y, y*y, x, y, numpy.ones_like(x)))
+    S = numpy.dot(D.T,D)
+    C = numpy.zeros([6,6])
+    C[0,2] = C[2,0] = 2; C[1,1] = -1
+    E, V = numpy.linalg.eig(numpy.dot(numpy.linalg.inv(S), C))
+    n = numpy.argmax(numpy.abs(E))
+    a = V[:,n]
+    return a
+
+
+def ellipse_center(a):
+    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+    num = b*b-a*c
+    x0=(c*d-b*f)/num
+    y0=(a*f-b*d)/num
+    return numpy.array([x0,y0])
+
+
+def ellipse_angle_of_rotation(a):
+    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+    if b == 0:
+        if a > c:
+            return 0
+        else:
+            return numpy.pi/2
+    else:
+        if a > c:
+            return numpy.arctan(2*b/(a-c))/2
+        else:
+            return numpy.pi/2 + numpy.arctan(2*b/(a-c))/2
+
+
+def ellipse_axis_length( a ):
+    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+    up = 2*(a*f*f+c*d*d+g*b*b-2*b*d*f-a*c*g)
+    down1=(b*b-a*c)*( (c-a)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    down2=(b*b-a*c)*( (a-c)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    res1=numpy.sqrt(up/down1)
+    res2=numpy.sqrt(up/down2)
+    return numpy.array([res1, res2])
+
+
 def calc_misalignment(H, current_misalign):
     """
     Misalignment calibration.
@@ -150,6 +196,23 @@ def compute_calibrated_data(x, y, z, offset, transform=None,
         v = v - offset
 
     return v.item(0), v.item(1), v.item(2)
+
+
+def mag_test(x, y, z):
+    v = numpy.array([[x - 3179.18589167],
+                     [y - (-169.89360763)]])
+    phi = 0.488498567316
+    R = numpy.array([[math.cos(phi), -math.sin(phi)],
+                  [math.sin(phi), math.cos(phi)]])
+    R1 = numpy.array([[math.cos(-phi), -math.sin(-phi)],
+                   [math.sin(-phi), math.cos(-phi)]])
+    major = 1786.03581204
+    minor = 1230.71325622
+    scale = minor / major
+    v = R.dot(v)
+    v[0] = v[0] / scale
+    v = R1.dot(v)
+    return v.item(0), v.item(1), z
 
 
 def publish_diagnostic_msg():
@@ -290,7 +353,8 @@ def imu_callback(imu_raw_msg):
         imu_raw_msg.accelerometer.y,
         imu_raw_msg.accelerometer.z,
         acc_offsets,
-        acc_transform
+        acc_transform,
+        use_misalignment=False
     )
     imu_cal_data.accelerometer.x = acc_x
     imu_cal_data.accelerometer.y = acc_y
@@ -300,6 +364,11 @@ def imu_callback(imu_raw_msg):
     tmp = -acc_x
     acc_x = acc_y
     acc_y = tmp
+
+    # Convert accelerometer digits to milligravities, then to gravities, and finally to meters per second squared
+    acc_x *= 0.061 / 1000
+    acc_y *= 0.061 / 1000
+    acc_z *= 0.061 / 1000
 
     # Scale accelerations back to m/s**2 after being fit to the unit sphere.
     imu_cal.linear_acceleration.x = acc_x * 9.81
@@ -313,6 +382,11 @@ def imu_callback(imu_raw_msg):
         mag_offsets,
         mag_transform
     )
+    # (mag_x, mag_y, mag_z) = mag_test(
+    #     imu_raw_msg.magnetometer.x,
+    #     imu_raw_msg.magnetometer.y,
+    #     imu_raw_msg.magnetometer.z
+    # )
     imu_cal_data.magnetometer.x = mag_x
     imu_cal_data.magnetometer.y = mag_y
     imu_cal_data.magnetometer.z = mag_z
@@ -523,7 +597,7 @@ def store_calibration(req):
     cal['misalignment'] = misalignment
     cal['gyro_bias'] = gyro_bias
     cal['gyro_scale'] = gyro_scale
-    with open(FILE_PATH+rover+'_calibration.json', 'w') as f:
+    with open(FILE_PATH+rover+'_calibration_2d.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
@@ -554,7 +628,7 @@ if __name__ == "__main__":
     gyro_data = [[], [], []]
 
     try:
-        with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
+        with open(FILE_PATH+rover+'_calibration_2d.json', 'r') as f:
             cal = json.loads(f.read())
         rospy.loginfo('IMU calibration file found at '+FILE_PATH+rover+'_calibration.json')
     except IOError as e:
