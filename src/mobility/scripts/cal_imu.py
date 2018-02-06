@@ -1,31 +1,9 @@
 #! /usr/bin/env python
 """
-Ellipsoid fit, from:
-https://github.com/aleksandrbazhin/ellipsoid_fit_python
+IMU Node. Gets raw IMU data from ABridge, and publishes calibrated IMU
+messages.
 
-Apdapted to work in ROS.
-
-The MIT License (MIT)
-
-Copyright (c) 2016 aleksandrbazhin
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Performs a 2-D IMU Calibration. Can be performed at the start of a round.
 
 todo: is storing the globals as lists and building numpy arrays every time ok?
 It looks like numpy.append doens't occur in-place, so it might not be
@@ -49,49 +27,15 @@ from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 from swarmie_msgs.msg import SwarmieIMU
 
 
-def ellipsoid_fit(x, y, z):
-    """
-    Fit the data points contained in numpy arrays x, y and z to a unit sphere
-    centered at the origin.
-
-    Returns a list containing the offset matrix to center the data, and
-    a list containing the transformation matrix, to map each data point to
-    its position on the sphere.
-
-    Modified from:
-    http://www.mathworks.com/matlabcentral/fileexchange/24693-ellipsoid-fit
-    """
-    D = numpy.array([x*x,
-                     y*y,
-                     z*z,
-                     2 * x*y,
-                     2 * x*z,
-                     2 * y*z,
-                     2 * x,
-                     2 * y,
-                     2 * z])
-    DT = D.conj().T
-    v = numpy.linalg.solve(D.dot(DT), D.dot(numpy.ones(numpy.size(x))))
-    A = numpy.array([[v[0], v[3], v[4], v[6]],
-                     [v[3], v[1], v[5], v[7]],
-                     [v[4], v[5], v[2], v[8]],
-                     [v[6], v[7], v[8], -1]])
-    center = numpy.linalg.solve(-A[:3,:3], [[v[6]], [v[7]], [v[8]]])
-    T = numpy.eye(4)
-    T[3,:3] = center.T
-    R = T.dot(A).dot(T.conj().T)
-    evals, evecs = numpy.linalg.eig(R[:3,:3] / -R[3,3])
-    radii = numpy.sqrt(1. / evals)
-    offset = center
-
-    a, b, c = radii
-    D = numpy.array([[1/a, 0., 0.], [0., 1/b, 0.], [0., 0., 1/c]])
-    transform = evecs.dot(D).dot(evecs.T)
-
-    return offset.tolist(), transform.tolist()
-
-
 def ellipse_fit(x, y):
+    """
+    Fits the data points in x and y to a circle centered at the origin.
+    http://nicky.vanforeest.com/misc/fitEllipse/fitEllipse.html
+
+    Returns 3R x 1C offset matrix, and a 3 x 3 transformation matrix. Only
+    first 2 rows and columns are calculated in transform matrix, since this
+    is only a 2-D calibration.
+    """
     x = x[:,numpy.newaxis]
     y = y[:,numpy.newaxis]
 
@@ -101,20 +45,48 @@ def ellipse_fit(x, y):
     C[0,2] = C[2,0] = 2; C[1,1] = -1
     E, V = numpy.linalg.eig(numpy.dot(numpy.linalg.inv(S), C))
     n = numpy.argmax(numpy.abs(E))
-    a = V[:,n]
-    return a
+    A = V[:,n]
+
+    center = ellipse_center(A)
+    beta = ellipse_angle_of_rotation(A)
+    major, minor = ellipse_axis_length(A)
+
+    # Singular Value Decomposition:
+    # commons.wikimedia.org/wiki/File:Singular-Value-Decomposition.svg
+    # CCW rot through beta
+    U = numpy.array([[math.cos(beta), -math.sin(beta)],
+                  [math.sin(beta), math.cos(beta)]])
+    phi = math.tan(beta) + 1
+    alpha = math.atan(phi)
+    # CW rot through alpha
+    V_star = numpy.array([[math.cos(alpha), math.sin(alpha)],
+                       [-math.sin(alpha), math.cos(alpha)]])
+    r = math.sqrt(major * minor)  # preserve approximate area
+    sigma = numpy.diag([r / minor, r / major])
+    transform = numpy.linalg.inv(U.dot(sigma).dot(V_star))
+
+    TR = numpy.eye(3)
+    TR[0:2, 0:2] = transform
+
+    # Append 0 for z-axis
+    center.append(0.0)
+    offset = numpy.vstack(center)
+
+    return offset.tolist(), TR.tolist()
 
 
-def ellipse_center(a):
-    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+def ellipse_center(A):
+    """Returns ellipse's center, given ellipse parameters in A."""
+    b,c,d,f,g,a = A[1]/2, A[2], A[3]/2, A[4]/2, A[5], A[0]
     num = b*b-a*c
     x0=(c*d-b*f)/num
     y0=(a*f-b*d)/num
-    return numpy.array([x0,y0])
+    return [x0,y0]
 
 
-def ellipse_angle_of_rotation(a):
-    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+def ellipse_angle_of_rotation(A):
+    """Returns ellipse's angle of rotation, given ellipse parameters in A."""
+    b,c,d,f,g,a = A[1]/2, A[2], A[3]/2, A[4]/2, A[5], A[0]
     if b == 0:
         if a > c:
             return 0
@@ -127,14 +99,15 @@ def ellipse_angle_of_rotation(a):
             return numpy.pi/2 + numpy.arctan(2*b/(a-c))/2
 
 
-def ellipse_axis_length( a ):
-    b,c,d,f,g,a = a[1]/2, a[2], a[3]/2, a[4]/2, a[5], a[0]
+def ellipse_axis_length(A):
+    """Returns ellipse axes lengths, given ellipse parameters in A."""
+    b,c,d,f,g,a = A[1]/2, A[2], A[3]/2, A[4]/2, A[5], A[0]
     up = 2*(a*f*f+c*d*d+g*b*b-2*b*d*f-a*c*g)
-    down1=(b*b-a*c)*( (c-a)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
-    down2=(b*b-a*c)*( (a-c)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    down1=(b*b-a*c)*((c-a)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
+    down2=(b*b-a*c)*((a-c)*numpy.sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a))
     res1=numpy.sqrt(up/down1)
     res2=numpy.sqrt(up/down2)
-    return numpy.array([res1, res2])
+    return [res1, res2]
 
 
 def calc_misalignment(H, current_misalign):
@@ -198,29 +171,12 @@ def compute_calibrated_data(x, y, z, offset, transform=None,
     return v.item(0), v.item(1), v.item(2)
 
 
-def mag_test(x, y, z):
-    v = numpy.array([[x - 3179.18589167],
-                     [y - (-169.89360763)]])
-    phi = 0.488498567316
-    R = numpy.array([[math.cos(phi), -math.sin(phi)],
-                  [math.sin(phi), math.cos(phi)]])
-    R1 = numpy.array([[math.cos(-phi), -math.sin(-phi)],
-                   [math.sin(-phi), math.cos(-phi)]])
-    major = 1786.03581204
-    minor = 1230.71325622
-    scale = minor / major
-    v = R.dot(v)
-    v[0] = v[0] / scale
-    v = R1.dot(v)
-    return v.item(0), v.item(1), z
-
-
 def publish_diagnostic_msg():
     """
     Helper to imu_callback. Publishes a DiagnosticArray containing calibration
     information.
     """
-    global acc_offsets, acc_transform, mag_offsets, mag_transform, misalignment
+    global mag_offsets, mag_transform, misalignment
     global gyro_bias, gyro_scale
     global imu_diag_pub
 
@@ -233,8 +189,6 @@ def publish_diagnostic_msg():
             values = [
                 KeyValue(key='Gyro Bias', value=str(gyro_bias)),
                 KeyValue(key='Gyro Scale', value=str(gyro_scale)),
-                KeyValue(key='Accel Offsets', value=str(acc_offsets)),
-                KeyValue(key='Accel Transform', value=str(acc_transform)),
                 KeyValue(key='Mag Offsets', value=str(mag_offsets)),
                 KeyValue(key='Mag Transform', value=str(mag_transform)),
                 KeyValue(key='Misalignment', value=str(misalignment))
@@ -256,10 +210,9 @@ def imu_callback(imu_raw_msg):
     Computes calibrated accelerometer and magnetometer data, transformed from
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
     publishes a calibrated IMU message.
-    todo might check whether there is a debug-mode param first
     """
-    global calibrating, acc_data, mag_data, gyro_data
-    global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global calibrating, mag_data, gyro_data
+    global mag_offsets, mag_transform
     global gyro_bias, gyro_scale, gyro_start_time, gyro_status_msg
     global misalignment
 
@@ -321,41 +274,28 @@ def imu_callback(imu_raw_msg):
             store_calibration(EmptyRequest())
 
     if calibrating == 'imu':
-        acc_data[0].append(imu_raw_msg.accelerometer.x)
-        acc_data[1].append(imu_raw_msg.accelerometer.y)
-        acc_data[2].append(imu_raw_msg.accelerometer.z)
         mag_data[0].append(imu_raw_msg.magnetometer.x)
         mag_data[1].append(imu_raw_msg.magnetometer.y)
         mag_data[2].append(imu_raw_msg.magnetometer.z)
 
-        if len(acc_data[0]) > DATA_SIZE_LIMIT:
+        if len(mag_data[0]) > DATA_SIZE_LIMIT:
             rospy.logwarn('IMU calibration timeout exceeded. Saving current calculated matrix.')
             store_calibration(EmptyRequest())
 
         # Don't fit until some data has been collected.
         # May still get a runtime warning until enough data in all directions
         # has been collected.
-        elif len(acc_data[0]) > MIN_DATA_SIZE:
-            (acc_offsets, acc_transform) = ellipsoid_fit(
-                numpy.array(acc_data[0]),
-                numpy.array(acc_data[1]),
-                numpy.array(acc_data[2])
-            )
-            (mag_offsets, mag_transform) = ellipsoid_fit(
+        elif len(mag_data[0]) > MIN_DATA_SIZE:
+            (mag_offsets, mag_transform) = ellipse_fit(
                 numpy.array(mag_data[0]),
-                numpy.array(mag_data[1]),
-                numpy.array(mag_data[2])
+                numpy.array(mag_data[1])
             )
             publish_diagnostic_msg()
 
-    (acc_x, acc_y, acc_z) = compute_calibrated_data(
-        imu_raw_msg.accelerometer.x,
-        imu_raw_msg.accelerometer.y,
-        imu_raw_msg.accelerometer.z,
-        acc_offsets,
-        acc_transform,
-        use_misalignment=False
-    )
+    acc_x = imu_raw_msg.accelerometer.x
+    acc_y = imu_raw_msg.accelerometer.y
+    acc_z = imu_raw_msg.accelerometer.z
+
     imu_cal_data.accelerometer.x = acc_x
     imu_cal_data.accelerometer.y = acc_y
     imu_cal_data.accelerometer.z = acc_z
@@ -370,7 +310,7 @@ def imu_callback(imu_raw_msg):
     acc_y *= 0.061 / 1000
     acc_z *= 0.061 / 1000
 
-    # Scale accelerations back to m/s**2 after being fit to the unit sphere.
+    # Scale accelerations back to m/s**2.
     imu_cal.linear_acceleration.x = acc_x * 9.81
     imu_cal.linear_acceleration.y = acc_y * 9.81
     imu_cal.linear_acceleration.z = acc_z * 9.81
@@ -382,11 +322,6 @@ def imu_callback(imu_raw_msg):
         mag_offsets,
         mag_transform
     )
-    # (mag_x, mag_y, mag_z) = mag_test(
-    #     imu_raw_msg.magnetometer.x,
-    #     imu_raw_msg.magnetometer.y,
-    #     imu_raw_msg.magnetometer.z
-    # )
     imu_cal_data.magnetometer.x = mag_x
     imu_cal_data.magnetometer.y = mag_y
     imu_cal_data.magnetometer.z = mag_z
@@ -478,30 +413,23 @@ def imu_callback(imu_raw_msg):
 
 def start_imu_calibration(req):
     """
-    Reset accelerometer and magnetometer offset and transform matrices, and
-    enter accelerometer and magnetometer calibration state.
+    Reset magnetometer offset and transform matrices, and enter magnetometer
+    calibration state.
 
-    This calibration should be performed before the rover starts operating
-    in a new environment.
+    This calibration should be performed before the rover starts operating in a
+    new environment.
 
-    Raw accelerometer and magnetometer data is collected and fit to an
-    ellipsoid. During this time, the rover should perform three full round
-    rotations with its body axis x up or down, y up or down, and z up or
-    down. These are slow 2D rotations. Then the rover should also perform
-    3D random rotations to put it in as many orientations as possible.
+    Raw magnetometer data is collected and fit to an ellipse. During this time,
+    the rover should perform 2-3 full round rotations with its body axis z up.
+    This can be done using the teleop.
 
     Calculated calibration matrices can be viewed on the
     /rover/imu/cal_diag topic while calibration is in progress.
     """
-    global calibrating, acc_data, mag_data
-    global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global calibrating, mag_data
+    global mag_offsets, mag_transform
     calibrating = 'imu'
-    acc_data = [[], [], []]
     mag_data = [[], [], []]
-    acc_offsets = [[0], [0], [0]]
-    acc_transform = [[1, 0, 0],
-                     [0, 1, 0],
-                     [0, 0, 1]]
     mag_offsets = [[0], [0], [0]]
     mag_transform = [[1, 0, 0],
                      [0, 1, 0],
@@ -512,7 +440,7 @@ def start_imu_calibration(req):
 def start_misalignment_calibration(req):
     """
     Reset misalignment matrix, and enter misalignment calibration state. This
-    should be performed after the ellipsoid fit IMU calibration.
+    should be performed after the ellipse fit magnetometer calibration.
 
     I think this calibration should only need to be performed once for a
     given rover.
@@ -574,15 +502,14 @@ def store_calibration(req):
     """
     Stores all current calibration matrices and resets dataset lists.
     """
-    global calibrating, cal, rover, acc_data, mag_data, gyro_data
-    global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global calibrating, rover, mag_data, gyro_data
+    global mag_offsets, mag_transform
     global misalignment, gyro_bias, gyro_scale, gyro_timer
     FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
     )
     calibrating = None
-    acc_data = [[], [], []]
     mag_data = [[], [], []]
     gyro_data = [[], [], []]
 
@@ -590,21 +517,21 @@ def store_calibration(req):
         gyro_timer.shutdown()
         gyro_timer = None
 
-    cal['acc_offsets'] = acc_offsets
-    cal['acc_transform'] = acc_transform
-    cal['mag_offsets'] = mag_offsets
-    cal['mag_transform'] = mag_transform
-    cal['misalignment'] = misalignment
-    cal['gyro_bias'] = gyro_bias
-    cal['gyro_scale'] = gyro_scale
+    cal = {
+        'mag_offsets': mag_offsets,
+        'mag_transform': mag_transform,
+        'misalignment': misalignment,
+        'gyro_bias': gyro_bias,
+        'gyro_scale': gyro_scale
+    }
     with open(FILE_PATH+rover+'_calibration_2d.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
 
 if __name__ == "__main__":
-    global rover, calibrating, cal, acc_data, mag_data, gyro_data
-    global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global rover, calibrating, mag_data, gyro_data
+    global mag_offsets, mag_transform
     global gyro_bias, gyro_scale, gyro_start_time, gyro_timer, gyro_status_msg
     global misalignment
 
@@ -623,7 +550,6 @@ if __name__ == "__main__":
     )
     # Data is stored in a list of lists, which is converted to a numpy array
     # when needed.
-    acc_data = [[], [], []]
     mag_data = [[], [], []]
     gyro_data = [[], [], []]
 
@@ -639,10 +565,6 @@ if __name__ == "__main__":
     # Calibration matrices are stored as lists and converted to numpy arrays
     # when needed.
     if not cal:
-        acc_offsets = [[0], [0], [0]]
-        acc_transform = [[1, 0, 0],
-                         [0, 1, 0],
-                         [0, 0, 1]]
         mag_offsets = [[0], [0], [0]]
         mag_transform = [[1, 0, 0],
                          [0, 1, 0],
@@ -655,8 +577,6 @@ if __name__ == "__main__":
                       [0, 1., 0],
                       [0, 0, 1.]]
     else:
-        acc_offsets = cal['acc_offsets']
-        acc_transform = cal['acc_transform']
         mag_offsets = cal['mag_offsets']
         mag_transform = cal['mag_transform']
         misalignment = cal['misalignment']
