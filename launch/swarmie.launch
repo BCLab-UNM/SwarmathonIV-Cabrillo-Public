@@ -9,7 +9,7 @@
   <node name="$(arg name)_BASE2CAM"
         pkg="tf"
         type="static_transform_publisher"
-        args="0.12 -0.02 0.195 -1.570796 0 -2.04 $(arg name)/base_link $(arg name)/camera_link 100"
+        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 100"
         respawn="true"/>
   <node name="$(arg name)_BASE2SONARLEFT"
         pkg="tf"
