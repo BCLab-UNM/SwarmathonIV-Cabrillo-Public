@@ -5,13 +5,12 @@ from __future__ import print_function
 import sys
 import rospy 
 import math
-import angles
 import random 
 
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
-from Tkconstants import FIRST
+from OpenGL.raw.GL.ATI.pn_triangles import glInitPnTrianglesATI
 
 '''Searcher node.''' 
 
@@ -19,150 +18,98 @@ def turnaround():
     global swarmie
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
-def avoid():
-    global Swarmie
-    head = swarmie.get_odom_location().get_pose()
-    print(swarmie.get_obstacle_condition(), Obstacle.IS_SONAR)
-    while swarmie.get_obstacle_condition() == Obstacle.SONAR_LEFT | swarmie.get_obstacle_condition() == Obstacle.SONAR_RIGHT | swarmie.get_obstacle_condition() == Obstacle.SONAR_CENTER :
-        print(swarmie.get_obstacle_condition(), Obstacle.IS_SONAR)
-        while swarmie.get_obstacle_condition() == Obstacle.SONAR_CENTER :
-            swarmie.turn(math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            
-        try :
-            swarmie.drive(1, ingnore=Obstacle.SONAR_RIGHT)
-        except ObstacleException :
-            swarmie.turn(math.pi/4, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            
-            
-    swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
-           
 def wander():
     global swarmie
     try :
         rospy.loginfo("Wandering...")
         swarmie.turn(random.gauss(0, math.pi/8))
         swarmie.drive(2)
+
         rospy.loginfo("Circling...")
         swarmie.circle()
         
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround()
-        
-def triangle():
-    global swarmie
-    dist = 0
-    swarmie.turn(math.pi - math.pi/8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION )
-    while dist < 4 :
-        odom = swarmie.get_odom_location().get_pose()
-        home = swarmie.get_home_odom_location()
-        dist = math.hypot(home.y - odom.y,
-                    home.x - odom.x)
-        try :
-            rospy.loginfo("triangle...")
-            swarmie.drive(1)
-        
-        except ObstacleException :
-            print ("I saw an obstacle!")
-            avoid()
 
-    print("made it")
-    
+def get_sonar_directional():
+    """Returns 3 boolean values that indicate which sonar are going off."""
+    global swarmie
+    unmasked = swarmie.get_obstacle_condition()
+    left = unmasked & 1 == Obstacle.SONAR_LEFT
+    right = unmasked & 2 == Obstacle.SONAR_RIGHT
+    center = unmasked & 4 == Obstacle.SONAR_CENTER
+    return left, center, right
+
+# def random_and_return():
+#     "Goes in a random direction between 160 and 200 degrees (away from home) and comes back."
+#     try:
+#         swarmie.turn(random.gauss((math.pi * 8 / 9)/(math.pi * 10 / 9)))
+#         swarmie.drive(9999); # go till you hit an obstacle
+#     except ObstacleException:
+#         swarmie.turn(math.pi, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+#         swarmie.
+
+def zigzag(distance_per_triangle, triangles):
+    """Makes the rover zig-zag back and forth for the entered distance * triangles."""
+    global swarmie
+    triangle_leg_distance = distance_per_triangle/math.sqrt(2)
+    on_left_triangle = True
+    if (triangles % 2 == 1):
+        on_left_triangle = False
     try:
-        swarmie.drive(50)
-        
-    except ObstacleException :
-        try:
-            odom = swarmie.get_odom_location().get_pose()
-            #print("odom:",odom/math.pi * 180 )#,"new:",(math.floor((math.pi/2 + odom.theta)/(math.pi/2)) * math.pi/2)/math.pi * 180)
-            swarmie.drive(-.2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            #swarmie.set_heading(math.floor((math.pi/2 + odom.theta)/(math.pi/2)) * math.pi/2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            swarmie.turn(-math.pi * 3/4, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
-        except ObstacleException :
-            avoid()
-           
-    try:        
-        try:        
-            home = swarmie.get_home_odom_location() 
-            swarmie.drive_to(home)
-        except ObstacleException:
-                avoid()
-    except HomeException:
-        swarmie.set_heading(math.floor(swarmie.get_odom_location().get_pose.theta / (math.pi / 2)))
+        if (triangles <= 0):
+            print("triangles <= 0, the rover shall not move.")
+        else:
+         #make the first turn
+            if on_left_triangle:
+                swarmie.turn(math.pi / 4)
+            else:
+                swarmie.turn((-1 * math.pi) / 4)
+        #while we still have triangles to move
+        while (triangles > 0):
+            #or else, drive a (45, 45, 90) triangle
+            print(triangles)
+            triangles = triangles - 1
+            swarmie.drive(triangle_leg_distance)
+            if (on_left_triangle):
+                swarmie.turn((-1 * math.pi) / 2)
+            else:
+                swarmie.turn(math.pi / 2)
+            swarmie.drive(triangle_leg_distance)
+            on_left_triangle = not on_left_triangle
+    except ObstacleException:
+        print("I found an obstacle.")
+        #avoid()
+        get_sonar_directional()
+        turnaround()
 
-        
-def orbit():
-    global swarmie
-    try :
-        rospy.loginfo("fibring...")
-        home = swarmie.get_home_odom_location()
-        odom = swarmie.get_odom_location().get_pose()
-        xval = math.fabs(odom.x - home.x)
-        yval = math.fabs(odom.y - home.y)
-        if math.fabs(xval- yval) > 1 : 
-            grid = swarmie.get_home_odom_location()
-            grid.x = xval 
-            grid.y = yval + .5
-            drive_to(grid) 
-        dist = xval * 2 + .5
-        head = math.floor((odom.theta + math.pi / 2) / (math.pi/2) + .5) * math.pi / 2
-        print("facing:", odom.theta / math.pi * 180, "heading:", head / math.pi * 180)
-        
-        swarmie.set_heading(head)
-        swarmie.drive(dist)
-        #swarmie.drive_to(home)
-        
-    except ObstacleException :
-        print ("I saw an obstacle!")
-        avoid()
 
 def main():
     global swarmie 
     global rovername 
-    global first
     
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
-    swarmie.fingers_open()
-    swarmie.wrist_middle()
-    print("search start...")
-    
-    try :
-        first
-    except NameError :
-        first = False
-        try:
-            swarmie.drive(1)
-        except HomeException:
-            print("home")
-        
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
-
-    print(swarmie.get_obstacle_condition(), Obstacle.TAG_HOME)   
-    if swarmie.get_obstacle_condition() == Obstacle.TAG_HOME :
-        print("this is important")
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
-        swarmie.drive(.5, ignore=Obstacle.IS_VISION)
-        swarmie.turn(math.pi / 2, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        swarmie.drive(1, ignore=Obstacle.IS_VISION)
+    rovername = sys.argv[1]
+    swarmie = Swarmie(rovername)
+    swarmie.fingers_open()
+    swarmie.wrist_middle()
 
     try: 
-        for move in range(5) :
+        for move in range(1) :
             if rospy.is_shutdown() : 
                 exit(-1)
             try:
-                orbit()
+                zigzag(3, 5)
             
             except HomeException : 
                 print ("I saw home!")
-                odom_location = swarmie.get_odom_location().get_pose()
-                print(odom_location.y)
+                odom_location = swarmie.get_odom_location()
                 swarmie.set_home_odom_location(odom_location)
-                #turnaround()
+                turnaround()
                 
     except TagException : 
         print("I found a tag!")
@@ -175,4 +122,3 @@ def main():
 
 if __name__ == '__main__' : 
     main()
-
