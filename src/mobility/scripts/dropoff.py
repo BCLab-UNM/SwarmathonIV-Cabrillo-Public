@@ -45,6 +45,7 @@ def get_center_pose_list():
     targets = swarmie.get_latest_targets()
     for t in targets.detections :
         if t.id == 256 :
+            swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(1.0))
             odom_pose = swarmie.xform.transformPose(rovername + '/odom', t.pose)
             quat = [odom_pose.pose.orientation.x,
                 odom_pose.pose.orientation.y,
@@ -65,7 +66,8 @@ def sufficient_tags_seen(tags):
     global swarmie
     uniqTagTheta = round(abs(tags[0].theta),1) 
     for tag in tags: #yeah i'm going to iterate an extra time
-        print("Tag: x:",tag.x,"y:",tag.y,"theta:",round(abs(tag.theta),1))
+        pass
+        #print("Tag: x:",tag.x,"y:",tag.y,"theta:",round(abs(tag.theta),1))
         if uniqTagTheta != round(abs(tag.theta),1):
             return(True)
     return(False)
@@ -74,6 +76,7 @@ def find_center():
     global swarmie
 
     tags = get_center_pose_list()
+    print(tags)
     if not sufficient_tags_seen(tags):
         pass #turn and if that fails drive around or just drop it inside?
         
