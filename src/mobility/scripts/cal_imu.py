@@ -503,7 +503,7 @@ def store_calibration(req):
     global calibrating, cal, rover, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment, gyro_bias, gyro_scale, gyro_timer
-    FILE_PATH = rospy.get_param(
+    CAL_FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
     )
@@ -523,7 +523,7 @@ def store_calibration(req):
     cal['misalignment'] = misalignment
     cal['gyro_bias'] = gyro_bias
     cal['gyro_scale'] = gyro_scale
-    with open(FILE_PATH+rover+'_calibration.json', 'w') as f:
+    with open(CAL_FILE_PATH+rover+'_calibration.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
     return EmptyResponse()
 
@@ -543,7 +543,15 @@ if __name__ == "__main__":
     calibrating = None
     gyro_timer = None
     cal = {}
-    FILE_PATH = rospy.get_param(
+    LOAD_RAW_DATA = rospy.get_param(
+        '~load_raw_data',
+        default=False
+    )
+    RAW_DATA_PATH = rospy.get_param(
+        '~raw_data_path',
+        default='/home/robot/'
+    )
+    CAL_FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
     )
@@ -553,14 +561,42 @@ if __name__ == "__main__":
     mag_data = [[], [], []]
     gyro_data = [[], [], []]
 
-    try:
-        with open(FILE_PATH+rover+'_calibration.json', 'r') as f:
-            cal = json.loads(f.read())
-        rospy.loginfo('IMU calibration file found at '+FILE_PATH+rover+'_calibration.json')
-    except IOError as e:
-        rospy.logwarn('No IMU calibration file found.')
-    except ValueError as e:
-        rospy.logwarn('Invalid IMU calibration file. Starting from scratch.')
+    if LOAD_RAW_DATA:
+        try:
+            raw_data = numpy.loadtxt(
+                RAW_DATA_PATH + 'raw_cal.txt',
+                delimiter=','
+            )
+            (cal['mag_offsets'], cal['mag_transform']) = ellipsoid_fit(
+                raw_data[:,0],
+                raw_data[:,1],
+                raw_data[:,2]
+            )
+            (cal['acc_offsets'], cal['acc_transform']) = ellipsoid_fit(
+                raw_data[:,3],
+                raw_data[:,4],
+                raw_data[:,5]
+            )
+            cal['misalignment'] = [[1., 0, 0],
+                                   [0, 1., 0],
+                                   [0, 0, 1.]]
+            cal['gyro_bias'] = [[0], [0], [0]]
+            cal['gyro_scale'] = [[1., 0, 0],
+                                 [0, 1., 0],
+                                 [0, 0, 1.]]
+            rospy.loginfo(rover+': IMU raw data file loaded from '+RAW_DATA_PATH+'raw_cal.txt')
+        except IOError as e:
+            rospy.logerr(rover+': Error reading raw IMU data file.')
+
+    else:
+        try:
+            with open(CAL_FILE_PATH + rover + '_calibration.json', 'r') as f:
+                cal = json.loads(f.read())
+            rospy.loginfo(rover+': IMU calibration file found at '+CAL_FILE_PATH+rover+'_calibration.json')
+        except IOError as e:
+            rospy.logerr(rover+': No IMU calibration file found.')
+        except ValueError as e:
+            rospy.logerr(rover+': Invalid IMU calibration file. Starting from scratch.')
 
     # Calibration matrices are stored as lists and converted to numpy arrays
     # when needed.
