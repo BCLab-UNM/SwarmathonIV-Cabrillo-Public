@@ -38,9 +38,19 @@ void setup()
 
     // Set the mag data rate to 50Hz
     ctrl5 &= ~0b00011100;
-    ctrl5 |= ~0b00010000;
-    
+    ctrl5 |=  0b00010000;
+
     lsm303.writeReg(0x24, ctrl5);
+
+    // Set the acc data rate to 50Hz
+    byte ctrl1 = lsm303.readReg(0x20);
+    ctrl1 &= ~0b11110000;
+    ctrl1 |=  0b01010000;
+
+    // Enable BDU - Synchronized conversion. 
+    ctrl1 |= 0b00001000;
+
+    lsm303.writeReg(0x20, ctrl1);
   }
 }
 
@@ -77,7 +87,7 @@ void loop()
     imu_data[5] = acc.z;
     imu_data[6] = temp_lo;
     imu_data[7] = temp_hi;
-    imu_data[8] = lsm303.readReg(0x24);
+    imu_data[8] = lsm303.readReg(0x20);
     imu_pub.publish(&imu_msg);
   }
 
