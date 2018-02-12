@@ -42,17 +42,18 @@ def avoid():
             swarmie.set_heading(angle + math.pi/10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
-            swarmie.drive(1, ingnore=Obstacle.SONAR_RIGHT)
+            swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
         except ObstacleException:
             if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
-                print("this is broken")
+                print("this is still broken")
             else:
                 print("obstacle still present")
         
         print("after obstacle present")        
-        while not swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT :
-            swarmie.set_heading(angle - math.pi / 9, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        while not swarmie.get_obstacle_condition() & 7 == 7 :
+            swarmie.set_heading(angle - math.pi / 8, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
         #make conditional apon allignment being of path
+        swarmie.set_heading(angle + math.pi / 2, ignore=Obstacle.IS_SONAR)
         if swarmie.get_obstacle_condition() & 1 == Obstacle.SONAR_LEFT or swarmie.get_obstacle_condition() & 4 == Obstacle.SONAR_CENTER:
             rpath = False
     swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
@@ -80,7 +81,7 @@ def avoid_wall():
             swarmie.drive(1, ingnore=Obstacle.SONAR_RIGHT)
         except ObstacleException:
             if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
-                print("this is broken")
+                print("this is still broken")
             else:
                 print("obstacle still present")
         
@@ -240,7 +241,7 @@ def main():
             if rospy.is_shutdown() : 
                 exit(-1)
             try:
-                print("new")
+                print("new1")
                 triangle()
                 #wander()
             
