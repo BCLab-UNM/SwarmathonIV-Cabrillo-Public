@@ -43,6 +43,7 @@ echo "Copying installation files."
 cp -R deploy/install/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
+cp -R Swarmathon-Arduino/ $TEMPDIR
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {
   cd ~
