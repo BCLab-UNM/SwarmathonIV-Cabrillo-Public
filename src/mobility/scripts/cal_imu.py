@@ -43,6 +43,7 @@ from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
+from std_srvs.srv import Trigger, TriggerResponse
 
 from swarmie_msgs.msg import SwarmieIMU
 
@@ -510,6 +511,64 @@ def store_calibration(req):
     return EmptyResponse()
 
 
+def load_json_calibration_file(req):
+    """
+    Loads calibration from JSON file if one exists.
+    Returns TriggerResponse indicating whether the file was found and
+    loaded successfully.
+    """
+    global acc_offsets, acc_transform, mag_offsets, mag_transform
+    global gyro_bias, gyro_scale, misalignment
+
+    CAL_FILE_PATH = rospy.get_param(
+        '~calibration_file_path',
+        default='/home/robot/'
+    )
+    cal = {}
+    response = TriggerResponse()
+
+    try:
+        with open(CAL_FILE_PATH + rover + '_calibration.json', 'r') as f:
+            cal = json.loads(f.read())
+            rospy.loginfo(
+                rover + ': IMU calibration file found at ' +
+                CAL_FILE_PATH + rover + '_calibration.json'
+            )
+            response.success = True
+            response.message = (rover + ': IMU calibration file found at ' +
+                                CAL_FILE_PATH + rover + '_calibration.json')
+    except IOError as e:
+        rospy.logerr(
+            rover +
+            ': No IMU calibration file found. Keeping current calibration.'
+        )
+        response.success = False
+        response.message = (rover +
+                            ': No IMU calibration file found. Keeping ' +
+                            'current calibration.')
+    except ValueError as e:
+        rospy.logerr(
+            rover +
+            ': Invalid IMU calibration file. Keeping current calibration.'
+        )
+        response.success = False
+        response.message = (rover +
+                            ': Invalid IMU calibration file. Keeping ' +
+                            'current calibration.')
+
+    if response.success:
+        acc_offsets = cal['acc_offsets']
+        acc_transform = cal['acc_transform']
+        mag_offsets = cal['mag_offsets']
+        mag_transform = cal['mag_transform']
+        misalignment = cal['misalignment']
+        gyro_bias = cal['gyro_bias']
+        gyro_scale = cal['gyro_scale']
+        publish_diagnostic_msg()
+
+    return response
+
+
 if __name__ == "__main__":
     global rover, calibrating, cal, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
@@ -676,6 +735,11 @@ if __name__ == "__main__":
         rover + '/start_gyro_scale_calibration',
         Empty,
         start_gyro_scale_calibration
+    )
+    load_json_file = rospy.Service(
+        rover + '/load_json_calibration_file',
+        Trigger,
+        load_json_calibration_file
     )
 
     # Publish current calibration once:
