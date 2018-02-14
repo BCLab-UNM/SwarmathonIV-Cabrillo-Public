@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
     fingerAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/fingerAngle/prev_cmd"), 10);
     wristAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/wristAngle/prev_cmd"), 10);
     imuPublish = aNH.advertise<sensor_msgs::Imu>((publishedName + "/imu/arduino"), 10);
-	imuRawPublish = aNH.advertise<swarmie_msgs::SwarmieIMU>((publishedName + "/imu/raw"), 10);
+    imuRawPublish = aNH.advertise<swarmie_msgs::SwarmieIMU>((publishedName + "/imu/raw"), 10);
     odomPublish = aNH.advertise<nav_msgs::Odometry>((publishedName + "/odom"), 10);
     sonarLeftPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarLeft"), 10);
     sonarCenterPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarCenter"), 10);
@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
     imu.header.frame_id = publishedName+"/base_link";
-	imuRaw.header.frame_id = publishedName+"/base_link";
+    imuRaw.header.frame_id = publishedName+"/base_link";
 
     odom.header.frame_id = publishedName+"/odom";
     odom.child_frame_id = publishedName+"/base_link";
@@ -332,7 +332,7 @@ void publishRosTopics() {
     fingerAnglePublish.publish(fingerAngle);
     wristAnglePublish.publish(wristAngle);
     imuPublish.publish(imu);
-	imuRawPublish.publish(imuRaw);
+    imuRawPublish.publish(imuRaw);
     odomPublish.publish(odom);
     sonarLeftPublish.publish(sonarLeft);
     sonarCenterPublish.publish(sonarCenter);
@@ -373,16 +373,16 @@ void parseData(string str) {
 				imu.angular_velocity.y = atof(dataSet.at(6).c_str());
 				imu.angular_velocity.z = atof(dataSet.at(7).c_str());
 				imu.orientation = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(8).c_str()), atof(dataSet.at(9).c_str()), atof(dataSet.at(10).c_str()));
-                imuRaw.header.stamp = imu.header.stamp;
+				imuRaw.header.stamp = imu.header.stamp;
 				imuRaw.accelerometer.x = atof(dataSet.at(11).c_str());
 				imuRaw.accelerometer.y  = atof(dataSet.at(12).c_str());
 				imuRaw.accelerometer.z = atof(dataSet.at(13).c_str());
 				imuRaw.magnetometer.x = atof(dataSet.at(14).c_str());
 				imuRaw.magnetometer.y = atof(dataSet.at(15).c_str());
 				imuRaw.magnetometer.z = atof(dataSet.at(16).c_str());
-                imuRaw.angular_velocity.x = atof(dataSet.at(17).c_str());
-                imuRaw.angular_velocity.y = atof(dataSet.at(18).c_str());
-                imuRaw.angular_velocity.z = atof(dataSet.at(19).c_str());
+				imuRaw.angular_velocity.x = atof(dataSet.at(17).c_str());
+				imuRaw.angular_velocity.y = atof(dataSet.at(18).c_str());
+				imuRaw.angular_velocity.z = atof(dataSet.at(19).c_str());
 			}
 			else if (dataSet.at(0) == "ODOM") {
 				leftTicks = atoi(dataSet.at(2).c_str());

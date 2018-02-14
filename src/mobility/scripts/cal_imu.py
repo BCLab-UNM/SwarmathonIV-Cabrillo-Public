@@ -3,7 +3,7 @@
 Ellipsoid fit, from:
 https://github.com/aleksandrbazhin/ellipsoid_fit_python
 
-Apdapted to work in ROS.
+Adapted for ROS by Darren Churchill, Cabrillo College.
 
 The MIT License (MIT)
 
@@ -27,10 +27,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-todo: is storing the globals as lists and building numpy arrays every time ok?
-It looks like numpy.append doens't occur in-place, so it might not be
-practical to store the data in a numpy array either
-todo: where should calibration files be stored? add rosparam for path
+todo: Put paths to competition files when UNM finalizes location and filename
+todo: ROS params for calibration matrices? at least misalignment and gyro in case node dies for some reason
 """
 from __future__ import print_function
 import json
@@ -121,8 +119,7 @@ def calc_misalignment(H, current_misalign):
     return misalignment
 
 
-def compute_calibrated_data(x, y, z, offset, transform=None,
-                            use_misalignment=True):
+def compute_calibrated_data(x, y, z, offset, transform, use_misalignment=True):
     """
     Map the raw x, y, z accelerometer or magnetometer vector onto the
     calibrated unit sphere. Skips misalignment transformation if we are in
@@ -141,13 +138,9 @@ def compute_calibrated_data(x, y, z, offset, transform=None,
     else:
         M_m = numpy.array(misalignment)
 
-    # Dot product of transformation matrix, if given
-    if transform is not None:
-        transform = numpy.array(transform)
-        T = M_m.dot(transform)
-        v = T.dot(v - offset)
-    else:
-        v = v - offset
+    transform = numpy.array(transform)
+    T = M_m.dot(transform)
+    v = T.dot(v - offset)
 
     return v.item(0), v.item(1), v.item(2)
 
@@ -193,7 +186,6 @@ def imu_callback(imu_raw_msg):
     Computes calibrated accelerometer and magnetometer data, transformed from
     the IMU's frame into the rover's frame, calculates roll, pitch, yaw, and
     publishes a calibrated IMU message.
-    todo might check whether there is a debug-mode param first
     """
     global calibrating, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
@@ -239,11 +231,15 @@ def imu_callback(imu_raw_msg):
     if calibrating == 'gyro_scale':
         current_time = rospy.Time.now().to_sec()
         if current_time - gyro_start_time < 10:
-            gyro_status_msg = rover+': Collecting data from first gyro rotation.'
+            gyro_status_msg = (
+                    rover + ': Collecting data from first gyro rotation.'
+            )
             gyro_data[0].append(imu_raw_msg.header.stamp.to_sec())
             gyro_data[1].append(imu_cal.angular_velocity.z)
         elif current_time - gyro_start_time < 20:
-            gyro_status_msg = rover+': Collecting data from second gyro rotation.'
+            gyro_status_msg = (
+                    rover + ': Collecting data from second gyro rotation.'
+            )
             gyro_data[2].append(imu_raw_msg.header.stamp.to_sec())
             gyro_data[3].append(imu_cal.angular_velocity.z)
         else:
@@ -251,9 +247,8 @@ def imu_callback(imu_raw_msg):
             angle_2 = numpy.trapz(gyro_data[3], x=gyro_data[2])
             z_scale = (abs(math.pi/angle_1) + abs(math.pi/angle_2)) / 2
             gyro_scale[2][2] = z_scale
-            msg = String(rover
-                         +': Finished collecting gyro rotation data. Z-Scale: '
-                         +str(z_scale))
+            msg = (rover + ': Finished collecting gyro rotation data. ' +
+                   'Z-Scale: ' + str(z_scale))
             info_log.publish(msg)
             store_calibration(EmptyRequest())
 
@@ -266,7 +261,10 @@ def imu_callback(imu_raw_msg):
         mag_data[2].append(imu_raw_msg.magnetometer.z)
 
         if len(acc_data[0]) > DATA_SIZE_LIMIT:
-            rospy.logwarn('IMU calibration timeout exceeded. Saving current calculated matrix.')
+            rospy.logwarn(
+                'IMU calibration timeout exceeded. ' +
+                'Saving current calculated matrix.'
+            )
             store_calibration(EmptyRequest())
 
         # Don't fit until some data has been collected.
@@ -323,7 +321,10 @@ def imu_callback(imu_raw_msg):
         mag_data[2].append(mag_z)
 
         if len(mag_data[0]) > DATA_SIZE_LIMIT:
-            rospy.logwarn('Misalignment calibration timeout exceeded. Saving current calculated matrix.')
+            rospy.logwarn(
+                'Misalignment calibration timeout exceeded. ' +
+                'Saving current calculated matrix.'
+            )
             store_calibration(EmptyRequest())
 
         # Wait until some data has been collected.
@@ -335,9 +336,9 @@ def imu_callback(imu_raw_msg):
     # swap x and y to orient measurements in the rover's frame
     # Done here so the misalignment calibration can use data in the original
     # IMU frame
-    tmp = mag_x
+    tmp = -mag_x
     mag_x = mag_y
-    mag_y = -tmp
+    mag_y = tmp
 
     # From: Computing tilt measurement and tilt-compensated e-compass
     # www.st.com/resource/en/design_tip/dm00269987.pdf
@@ -364,30 +365,6 @@ def imu_callback(imu_raw_msg):
     Bx3 = mag_x * math.cos(pitch) + Bz2 * math.sin(pitch)
     yaw = math.pi / 2 + math.atan2(By2, Bx3)
 
-    # Original roll, pitch, yaws as calculated on Arduino:
-    # This yaw is very unstable during even small rolls or pitches
-    # Xh = mag_y * math.cos(pitch) + mag_z * math.sin(pitch)
-    # Yh = (mag_y * math.sin(roll) * math.sin(pitch)
-    #       + mag_x * math.cos(roll)
-    #       - mag_z * math.sin(roll) * math.cos(pitch))
-    # yaw = math.atan(Yh / Xh)
-
-    # roll = math.atan2(
-    #     imu_cal.linear_acceleration.y,
-    #     math.sqrt(imu_cal.linear_acceleration.x**2
-    #               + imu_cal.linear_acceleration.z**2)
-    # )
-    # pitch = -math.atan2(
-    #     imu_cal.linear_acceleration.x,
-    #     math.sqrt(imu_cal.linear_acceleration.y**2
-    #               + imu_cal.linear_acceleration.z**2)
-    # )
-    # yaw = math.pi + math.atan2(
-    #     -mag_y*math.cos(roll) + mag_z*math.sin(roll),
-    #     mag_x*math.cos(pitch)
-    #     + mag_y*math.sin(pitch)*math.sin(roll)
-    #     + mag_z*math.sin(pitch)*math.cos(roll)
-    # )
     imu_cal.orientation = Quaternion(
         *tf.transformations.quaternion_from_euler(
             roll,
@@ -503,6 +480,7 @@ def store_calibration(req):
     global calibrating, cal, rover, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global misalignment, gyro_bias, gyro_scale, gyro_timer
+
     CAL_FILE_PATH = rospy.get_param(
         '~calibration_file_path',
         default='/home/robot/'
@@ -523,8 +501,12 @@ def store_calibration(req):
     cal['misalignment'] = misalignment
     cal['gyro_bias'] = gyro_bias
     cal['gyro_scale'] = gyro_scale
+
     with open(CAL_FILE_PATH+rover+'_calibration.json', 'w') as f:
         f.write(json.dumps(cal, sort_keys=True, indent=2))
+
+    publish_diagnostic_msg()
+
     return EmptyResponse()
 
 
@@ -584,31 +566,43 @@ if __name__ == "__main__":
             cal['gyro_scale'] = [[1., 0, 0],
                                  [0, 1., 0],
                                  [0, 0, 1.]]
-            rospy.loginfo(rover+': IMU raw data file loaded from '+RAW_DATA_PATH+'raw_cal.txt')
+            rospy.loginfo(
+                rover + ': IMU raw data file loaded from ' +
+                RAW_DATA_PATH+'raw_cal.txt'
+            )
         except IOError as e:
-            rospy.logerr(rover+': Error reading raw IMU data file.')
+            rospy.logerr(
+                rover +
+                ': Error reading raw IMU data file. Starting from scratch.'
+            )
 
     else:
         try:
             with open(CAL_FILE_PATH + rover + '_calibration.json', 'r') as f:
                 cal = json.loads(f.read())
-            rospy.loginfo(rover+': IMU calibration file found at '+CAL_FILE_PATH+rover+'_calibration.json')
+            rospy.loginfo(
+                rover + ': IMU calibration file found at ' + CAL_FILE_PATH +
+                rover + '_calibration.json'
+            )
         except IOError as e:
             rospy.logerr(rover+': No IMU calibration file found.')
         except ValueError as e:
-            rospy.logerr(rover+': Invalid IMU calibration file. Starting from scratch.')
+            rospy.logerr(
+                rover +
+                ': Invalid IMU calibration file. Starting from scratch.'
+            )
 
     # Calibration matrices are stored as lists and converted to numpy arrays
     # when needed.
     if not cal:
         acc_offsets = [[0], [0], [0]]
-        acc_transform = [[1, 0, 0],
-                         [0, 1, 0],
-                         [0, 0, 1]]
+        acc_transform = [[1., 0, 0],
+                         [0, 1., 0],
+                         [0, 0, 1.]]
         mag_offsets = [[0], [0], [0]]
-        mag_transform = [[1, 0, 0],
-                         [0, 1, 0],
-                         [0, 0, 1]]
+        mag_transform = [[1., 0, 0],
+                         [0, 1., 0],
+                         [0, 0, 1.]]
         misalignment = [[1., 0, 0],
                         [0, 1., 0],
                         [0, 0, 1.]]
@@ -627,10 +621,6 @@ if __name__ == "__main__":
 
 
     # Subscribers
-    # imu_sub = message_filters.Subscriber(
-    #     rover + '/imu/arduino',
-    #     Imu
-    # )
     imu_raw_sub = rospy.Subscriber(
         rover + '/imu/raw',
         SwarmieIMU,
