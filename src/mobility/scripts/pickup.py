@@ -22,32 +22,29 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
-    try :
-        swarmie.fingers_open()
-        swarmie.set_wrist_angle(1.1)
-        # Drive to the block
-        try: 
-            block = swarmie.get_nearest_block_location()
-        except tf.Exception as e : 
-            # Something went wrong and we can't locate the block.
-            print(e)
-            return False
-            
+    swarmie.fingers_open()
+    swarmie.set_wrist_angle(1.1)
+    # Drive to the block 
+    
+    block = swarmie.get_nearest_block_location()
+    if block is not None:            
         # claw_offset for swarmie not overshooting the block.
         swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
-   
-        # Grab
-        swarmie.pickup()
-
+        # Grab - minimal pickup
+        finger_close_angle = .5
+        if self.simulator_running():
+            finger_close_angle = 0
+        self.set_finger_angle(finger_close_angle) #close
+        rospy.sleep(1)
+        self.wrist_up()
+        # did we succesuflly grab a block?
         if swarmie.has_block() :
             swarmie.wrist_middle()
             return True        
-                
-    except rospy.ServiceException as e:
-        print ("There doesn't seem to be any blocks on the map.", e)
 
-    swarmie.fingers_open()
+    # otherwise reset claw and return Falase
     swarmie.wrist_middle()
+    swarmie.fingers_close()
     return False
 
 def recover():
