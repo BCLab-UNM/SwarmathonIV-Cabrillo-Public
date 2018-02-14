@@ -23,8 +23,18 @@ def wait_for_tag_transform():
     # block detections.
     for _i in range(10):
         targets = [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] #only get the home tags
-        if len(targets) == 0 :
-            raise IndexError("There are no home tags seen!")
+        
+        # If I dont see a hometag I turn to both sides and if I still dont see a tag I drop the block and throw a ServiceException
+        if len(targets) == 0:
+            swarmie.turn(math.pi/8, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            tags = get_center_pose_list()
+            if len(targets) == 0:
+                swarmie.turn(-math.pi/4, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+                tags = get_center_pose_list()
+                if len(targets) == 0:
+                    swarmie.putdown() 
+                    raise IndexError("There are no home tags seen!")
+                
         seen_time = targets[0].pose.header.stamp
         try:
             swarmie.xform.waitForTransform(rovername + '/odom', rovername + '/camera_link', seen_time, rospy.Duration(1))
@@ -36,53 +46,45 @@ def wait_for_tag_transform():
     raise(e)
 
 
-def get_center_pose_list():
-    global swarmie
-    global rovername
+def get_center_pose_list(): #changed so i can import and use with rdb swarmie
+    global swarmie #this is changed  
+    global rovername #put back after testing
+    #rovername = 'achilles' #just for testing
 
-    #[tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ]
     pose_list = []
-    targets = swarmie.get_latest_targets()
-    for t in targets.detections :
-        if t.id == 256 :
-            swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(1.0))
-            odom_pose = swarmie.xform.transformPose(rovername + '/odom', t.pose)
-            quat = [odom_pose.pose.orientation.x,
-                odom_pose.pose.orientation.y,
-                odom_pose.pose.orientation.z,
-                odom_pose.pose.orientation.w,
-            ]
-            (_r, _p, y) = tf.transformations.euler_from_quaternion(quat)
-            pose = Pose2D()
-            pose.x = odom_pose.pose.position.x
-            pose.y = odom_pose.pose.position.y
-            pose.theta = y
-            pose_list.append(pose)
-
+    for t in [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] :
+        swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(1.0))
+        odom_pose = swarmie.xform.transformPose(rovername + '/odom', t.pose)
+        quat = [odom_pose.pose.orientation.x, odom_pose.pose.orientation.y,
+                odom_pose.pose.orientation.z, odom_pose.pose.orientation.w,
+                ]
+        (_r, _p, y) = tf.transformations.euler_from_quaternion(quat)
+        pose = Pose2D()
+        pose.x = odom_pose.pose.position.x
+        pose.y = odom_pose.pose.position.y
+        pose.theta = y
+        pose_list.append(pose)
     return pose_list
-
-def sufficient_tags_seen(tags):
-    ''' returns True if 2+ tags have a differnt orientation "theta", False otherwise '''
-    global swarmie
-    uniqTagTheta = round(abs(tags[0].theta),1) 
-    for tag in tags: #yeah i'm going to iterate an extra time
-        pass
-        #print("Tag: x:",tag.x,"y:",tag.y,"theta:",round(abs(tag.theta),1))
-        if uniqTagTheta != round(abs(tag.theta),1):
-            return(True)
-    return(False)
 
 def find_center():
     global swarmie
-
     tags = get_center_pose_list()
     print(tags)
-    if not sufficient_tags_seen(tags):
-        pass #turn and if that fails drive around or just drop it inside?
-        
-    # TODO: Figure out where center is from the tag poses. 
     
-    #print (tags)
+    #if 2+ corner tags have been seen, theta values seen 0,1,3
+    if len(set( int(abs(t.theta)) for t in tags)) > 1:
+        #do a triangle and take the mid point of the hypotenuse
+        pass
+    else: #hopefuly pointing to the middel of home so just squareup and drive in
+        pass
+        #notes https://plot.ly/python/linear-fits/ 
+        '''
+        import matplotlib.pyplot as plt
+        xs = [ t.x for t in dropoff.get_center_pose_list(swarmie) ]
+        ys = [ t.y for t in dropoff.get_center_pose_list(swarmie) ]
+        plt.scatter(xs, ys)
+        plt.show()
+        '''
     
     ''' START Temp drop just past if not on hometag'''
     if len(tags) > 0:
