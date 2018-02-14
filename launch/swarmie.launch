@@ -167,6 +167,7 @@
       <param name="raw_data_path" value="/home/robot/" />
       <param name="load_raw_data" value="true" />
       <param name="calibration_file_path" value="/home/robot/"/>
+      <param name="publish_debug_topic" value="false" />
     </node>
     
     <node name="$(arg name)_UBLOX" pkg="ublox_gps" type="ublox_gps" respawn="true">
