@@ -176,7 +176,7 @@ def publish_diagnostic_msg():
     return
 
 
-def imu_callback(imu_raw_msg):
+def imu_callback(imu_raw):
     """
     Callback for the SwarmieIMU message containing raw accelerometer and
     magnetometer data.
@@ -191,43 +191,48 @@ def imu_callback(imu_raw_msg):
     global calibrating, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global gyro_bias, gyro_scale, gyro_start_time, gyro_status_msg
-    global misalignment
+    global misalignment, DEBUG
 
     # In case someone forgets to exit either calibration state.
     DATA_SIZE_LIMIT = 3000  # 5 min worth of data at 10 Hz
     MIN_DATA_SIZE = 50
 
-    # Message for raw, calibrated data
-    imu_cal_data = SwarmieIMU()
-    imu_cal_data.header = imu_raw_msg.header
-    imu_cal_data.angular_velocity = imu_raw_msg.angular_velocity
+    if DEBUG:
+        # Message for raw, calibrated data. Published only when debugging
+        imu_raw_cal = SwarmieIMU()
+        imu_raw_cal.header = imu_raw.header
+        imu_raw_cal.angular_velocity = imu_raw.angular_velocity
 
     # IMU Message
     imu_cal = Imu()
-    imu_cal.header = imu_raw_msg.header
+    imu_cal.header = imu_raw.header
 
     if calibrating == 'gyro_bias':
-        gyro_data[0].append(imu_raw_msg.angular_velocity.x)
-        gyro_data[1].append(imu_raw_msg.angular_velocity.y)
-        gyro_data[2].append(imu_raw_msg.angular_velocity.z)
+        gyro_data[0].append(imu_raw.angular_velocity.x)
+        gyro_data[1].append(imu_raw.angular_velocity.y)
+        gyro_data[2].append(imu_raw.angular_velocity.z)
         gyro_bias[0][0] = numpy.mean(gyro_data[0])
         gyro_bias[1][0] = numpy.mean(gyro_data[1])
         gyro_bias[2][0] = numpy.mean(gyro_data[2])
 
     (gyro_x, gyro_y, gyro_z) = compute_calibrated_data(
-        imu_raw_msg.angular_velocity.x,
-        imu_raw_msg.angular_velocity.y,
-        imu_raw_msg.angular_velocity.z,
+        imu_raw.angular_velocity.x,
+        imu_raw.angular_velocity.y,
+        imu_raw.angular_velocity.z,
         gyro_bias,
         gyro_scale,
         use_misalignment=False
     )
+    if DEBUG:
+        imu_raw_cal.angular_velocity.x = gyro_x
+        imu_raw_cal.angular_velocity.y = gyro_y
+        imu_raw_cal.angular_velocity.z = gyro_z
     # Convert gyroscope digits to millidegrees per second, then to degrees per
     # second, and finally to radians per second.
-    # axes mismatched as in arduino code
-    imu_cal.angular_velocity.x = gyro_y*8.75/1000*(math.pi/180)
-    imu_cal.angular_velocity.y = -gyro_x*8.75/1000*(math.pi/180)
-    imu_cal.angular_velocity.z = gyro_z*8.75/1000*(math.pi/180)
+    # axes mismatched as in original arduino code to match rover's coord frame
+    imu_cal.angular_velocity.x = gyro_y * 8.75 / 1000 * (math.pi / 180)
+    imu_cal.angular_velocity.y = -gyro_x * 8.75 / 1000 * (math.pi / 180)
+    imu_cal.angular_velocity.z = gyro_z * 8.75 / 1000 * (math.pi / 180)
 
     if calibrating == 'gyro_scale':
         current_time = rospy.Time.now().to_sec()
@@ -235,13 +240,13 @@ def imu_callback(imu_raw_msg):
             gyro_status_msg = (
                     rover + ': Collecting data from first gyro rotation.'
             )
-            gyro_data[0].append(imu_raw_msg.header.stamp.to_sec())
+            gyro_data[0].append(imu_raw.header.stamp.to_sec())
             gyro_data[1].append(imu_cal.angular_velocity.z)
         elif current_time - gyro_start_time < 20:
             gyro_status_msg = (
                     rover + ': Collecting data from second gyro rotation.'
             )
-            gyro_data[2].append(imu_raw_msg.header.stamp.to_sec())
+            gyro_data[2].append(imu_raw.header.stamp.to_sec())
             gyro_data[3].append(imu_cal.angular_velocity.z)
         else:
             angle_1 = numpy.trapz(gyro_data[1], x=gyro_data[0])
@@ -254,12 +259,12 @@ def imu_callback(imu_raw_msg):
             store_calibration(EmptyRequest())
 
     if calibrating == 'imu':
-        acc_data[0].append(imu_raw_msg.accelerometer.x)
-        acc_data[1].append(imu_raw_msg.accelerometer.y)
-        acc_data[2].append(imu_raw_msg.accelerometer.z)
-        mag_data[0].append(imu_raw_msg.magnetometer.x)
-        mag_data[1].append(imu_raw_msg.magnetometer.y)
-        mag_data[2].append(imu_raw_msg.magnetometer.z)
+        acc_data[0].append(imu_raw.accelerometer.x)
+        acc_data[1].append(imu_raw.accelerometer.y)
+        acc_data[2].append(imu_raw.accelerometer.z)
+        mag_data[0].append(imu_raw.magnetometer.x)
+        mag_data[1].append(imu_raw.magnetometer.y)
+        mag_data[2].append(imu_raw.magnetometer.z)
 
         if len(acc_data[0]) > DATA_SIZE_LIMIT:
             rospy.logwarn(
@@ -285,15 +290,16 @@ def imu_callback(imu_raw_msg):
             publish_diagnostic_msg()
 
     (acc_x, acc_y, acc_z) = compute_calibrated_data(
-        imu_raw_msg.accelerometer.x,
-        imu_raw_msg.accelerometer.y,
-        imu_raw_msg.accelerometer.z,
+        imu_raw.accelerometer.x,
+        imu_raw.accelerometer.y,
+        imu_raw.accelerometer.z,
         acc_offsets,
         acc_transform
     )
-    imu_cal_data.accelerometer.x = acc_x
-    imu_cal_data.accelerometer.y = acc_y
-    imu_cal_data.accelerometer.z = acc_z
+    if DEBUG:
+        imu_raw_cal.accelerometer.x = acc_x
+        imu_raw_cal.accelerometer.y = acc_y
+        imu_raw_cal.accelerometer.z = acc_z
 
     # swap x and y to orient measurements in the rover's frame
     tmp = -acc_x
@@ -306,15 +312,16 @@ def imu_callback(imu_raw_msg):
     imu_cal.linear_acceleration.z = acc_z * 9.81
 
     (mag_x, mag_y, mag_z) = compute_calibrated_data(
-        imu_raw_msg.magnetometer.x,
-        imu_raw_msg.magnetometer.y,
-        imu_raw_msg.magnetometer.z,
+        imu_raw.magnetometer.x,
+        imu_raw.magnetometer.y,
+        imu_raw.magnetometer.z,
         mag_offsets,
         mag_transform
     )
-    imu_cal_data.magnetometer.x = mag_x
-    imu_cal_data.magnetometer.y = mag_y
-    imu_cal_data.magnetometer.z = mag_z
+    if DEBUG:
+        imu_raw_cal.magnetometer.x = mag_x
+        imu_raw_cal.magnetometer.y = mag_y
+        imu_raw_cal.magnetometer.z = mag_z
 
     if calibrating == 'misalignment':
         mag_data[0].append(mag_x)
@@ -374,7 +381,8 @@ def imu_callback(imu_raw_msg):
         )
     )
 
-    imu_cal_data_pub.publish(imu_cal_data)
+    if DEBUG:
+        imu_cal_data_pub.publish(imu_raw_cal)
     imu_pub.publish(imu_cal)
 
     return
@@ -573,7 +581,7 @@ if __name__ == "__main__":
     global rover, calibrating, cal, acc_data, mag_data, gyro_data
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global gyro_bias, gyro_scale, gyro_start_time, gyro_timer, gyro_status_msg
-    global misalignment
+    global misalignment, DEBUG
 
     if len(sys.argv) < 2:
         print('usage:', sys.argv[0], '<rovername>')
@@ -584,6 +592,10 @@ if __name__ == "__main__":
     calibrating = None
     gyro_timer = None
     cal = {}
+    DEBUG = rospy.get_param(
+        '~publish_debug_topic',
+        default=False
+    )
     LOAD_RAW_DATA = rospy.get_param(
         '~load_raw_data',
         default=False
@@ -699,11 +711,12 @@ if __name__ == "__main__":
         queue_size=10,
         latch=True
     )
-    imu_cal_data_pub = rospy.Publisher(
-        rover + '/imu/raw/calibrated',
-        SwarmieIMU,
-        queue_size=10
-    )
+    if DEBUG:
+        imu_cal_data_pub = rospy.Publisher(
+                    rover + '/imu/raw/calibrated',
+                    SwarmieIMU,
+                    queue_size=10
+        )
     info_log = rospy.Publisher(
         '/infoLog',
         String,
