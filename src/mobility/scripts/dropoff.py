@@ -27,10 +27,10 @@ def wait_for_tag_transform():
         # If I dont see a hometag I turn to both sides and if I still dont see a tag I drop the block and throw a ServiceException
         if len(targets) == 0:
             swarmie.turn(math.pi/8, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-            tags = get_center_pose_list()
+            targets = get_center_pose_list()
             if len(targets) == 0:
                 swarmie.turn(-math.pi/4, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-                tags = get_center_pose_list()
+                targets = get_center_pose_list()
                 if len(targets) == 0:
                     swarmie.putdown() 
                     raise IndexError("There are no home tags seen!")
@@ -46,10 +46,9 @@ def wait_for_tag_transform():
     raise(e)
 
 
-def get_center_pose_list(): #changed so i can import and use with rdb swarmie
-    global swarmie #this is changed  
-    global rovername #put back after testing
-    #rovername = 'achilles' #just for testing
+def get_center_pose_list(swarmie,rovername): #changed so i can import and use with rdb swarmie
+    #global swarmie #put back after testing 
+    #global rovername #put back after testing
 
     pose_list = []
     for t in [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] :
@@ -79,11 +78,18 @@ def find_center():
         pass
         #notes https://plot.ly/python/linear-fits/ 
         '''
+        import dropoff
         import matplotlib.pyplot as plt
-        xs = [ t.x for t in dropoff.get_center_pose_list(swarmie) ]
-        ys = [ t.y for t in dropoff.get_center_pose_list(swarmie) ]
-        plt.scatter(xs, ys)
+        x = [ t.x for t in dropoff.get_center_pose_list(swarmie,swarmie.rover_name)]
+        y = [ t.y for t in dropoff.get_center_pose_list(swarmie,swarmie.rover_name)]
+        x,y,theta = zip(*list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name)))
+        x,y,theta = zip(iter(list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name))))
+        plt.scatter(x,y)
         plt.show()
+        
+        
+        plt.scatter(zip(*list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name))))
+        #plt.show()
         '''
     
     ''' START Temp drop just past if not on hometag'''
