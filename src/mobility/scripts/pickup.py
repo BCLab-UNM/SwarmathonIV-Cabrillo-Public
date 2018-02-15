@@ -22,25 +22,33 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
-    swarmie.fingers_open()
-    swarmie.set_wrist_angle(1.1)
-    # Drive to the block 
-    
-    block = swarmie.get_nearest_block_location()
-    if block is not None:            
-        # claw_offset for swarmie not overshooting the block.
-        swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
-        # Grab - minimal pickup
-        finger_close_angle = .5
-        if self.simulator_running():
-            finger_close_angle = 0
-        self.set_finger_angle(finger_close_angle) #close
-        rospy.sleep(1)
-        self.wrist_up()
-        # did we succesuflly grab a block?
-        if swarmie.has_block() :
-            swarmie.wrist_middle()
-            return True        
+    try:
+        swarmie.fingers_open()
+        swarmie.set_wrist_angle(1.1)
+        
+        try:
+            block = swarmie.get_nearest_block_location()
+        except tf.Exception as e:
+            # Something went wrong and we can't locate the block.
+            print(e)
+            return False
+
+        if block is not None:            
+            # claw_offset to adjust swarmie drive distance.
+            swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            # Grab - minimal pickup
+            finger_close_angle = .5
+            if self.simulator_running():
+                finger_close_angle = 0
+            self.set_finger_angle(finger_close_angle) #close
+            rospy.sleep(1)
+            self.wrist_up()
+            # did we succesuflly grab a block?
+            if swarmie.has_block():
+                swarmie.wrist_middle()
+                return True        
+    except rospy.ServiceException as e:
+        print ("There doesn't seem to be any blocks on the map.", e)
 
     # otherwise reset claw and return Falase
     swarmie.wrist_middle()
@@ -51,8 +59,8 @@ def recover():
     global swarmie 
     print ("Missed, trying to recover.")
     
-    try :
-        swarmie.drive(-1);
+    try:
+        swarmie.drive(-1)
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
@@ -64,7 +72,7 @@ def main():
     global swarmie 
     global rovername 
     
-    if len(sys.argv) < 2 :
+    if len(sys.argv) < 2:
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
@@ -74,8 +82,8 @@ def main():
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
 
-    for i in range(3) : 
-        if approach() :
+    for i in range(3): 
+        if approach():
             print ("Got it!")
             exit(0)        
         recover()
