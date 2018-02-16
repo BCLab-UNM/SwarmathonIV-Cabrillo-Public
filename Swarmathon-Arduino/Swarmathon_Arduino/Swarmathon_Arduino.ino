@@ -162,15 +162,9 @@ void parse() {
       Serial.println();
     }
 
-    Serial.print("IMU,");
-    bool imuStatusFlag = imuStatus();
-    Serial.print(String(imuStatusFlag) + ",");
-    if (imuStatusFlag) {
+    if (imuStatus()) {
       imuInit();
       Serial.println(updateIMU());
-    }
-    else {
-      Serial.println(",,,,,,,,");
     }
 
     Serial.println("ODOM," + String(1) + "," + updateOdom());
@@ -236,7 +230,8 @@ String updateIMU() {
     LSM303::vector<int16_t> mag = magnetometer_accelerometer.m;
 
     //Append data to buffer
-    String txBuffer = String(acc.x) + "," +
+    String txBuffer = String("IMU,1,") +
+               String(acc.x) + "," +
                String(acc.y) + "," +
                String(acc.z) + "," +
                String(mag.x) + "," +
