@@ -50,6 +50,7 @@ catkin_install_python (
 	scripts/gohome.py 
 	scripts/dropoff.py
 	scripts/cal_imu.py
+	scripts/test_square.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

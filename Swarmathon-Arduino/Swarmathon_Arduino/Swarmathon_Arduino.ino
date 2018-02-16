@@ -15,7 +15,7 @@
 #include <Servo.h>
 
 // Constants
-#define PI 3.14159265358979323846
+// #define PI 3.14159265358979323846
 #define RAD2DEG(radianAngle) (radianAngle * 180.0 / PI)
 #define DEG2RAD(degreeAngle) (degreeAngle * PI / 180.0)
 
@@ -144,6 +144,26 @@ void parse() {
     move.stop();
   }
   else if (rxBuffer == "d") {
+    static int ping_state = 0;
+    static int leftUSValue = 300;
+    static int rightUSValue = 300;
+    static int centerUSValue = 300;
+
+    // Only do one sonar at a time to prevent crosstalk. 
+    if (ping_state == 0) {
+      leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
+      //leftUSValue = leftUS.ping_cm();
+    }
+    else if (ping_state == 1) {
+      rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
+      //rightUSValue = rightUS.ping_cm();
+    }
+    else{
+      centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
+      //centerUSValue = centerUS.ping_cm();
+    }
+    ping_state = (ping_state + 1) % 3;
+    
     Serial.print("GRF,");
     Serial.print(String(fingers.attached()) + ",");
     if (fingers.attached()) {
@@ -162,48 +182,17 @@ void parse() {
       Serial.println();
     }
 
-    Serial.print("IMU,");
-    bool imuStatusFlag = imuStatus();
-    Serial.print(String(imuStatusFlag) + ",");
-    if (imuStatusFlag) {
+    if (imuStatus()) {
       imuInit();
       Serial.println(updateIMU());
     }
-    else {
-      Serial.println(",,,,,,,,");
-    }
 
-    Serial.println("ODOM," + String(1) + "," + updateOdom());
+    Serial.println("ODOM,1," + updateOdom());
 
-    Serial.print("USL,");
-    int leftUSValue = leftUS.ping_cm();
-    Serial.print(String(leftUSValue > 0 ? 1 : 0) + ",");
-    if (leftUSValue > 0) {
-      Serial.println(String(leftUSValue));
-    }
-    else {
-      Serial.println();
-    }
+    Serial.println("USC,1," + String(centerUSValue));
+    Serial.println("USR,1," + String(rightUSValue));
+    Serial.println("USL,1," + String(leftUSValue));
 
-    Serial.print("USC,");
-    int centerUSValue = centerUS.ping_cm();
-    Serial.print(String(centerUSValue > 0 ? 1 : 0) + ",");
-    if (centerUSValue > 0) {
-      Serial.println(String(centerUSValue));
-    }
-    else {
-      Serial.println();
-    }
-
-    Serial.print("USR,");
-    int rightUSValue = rightUS.ping_cm();
-    Serial.print(String(rightUSValue > 0 ? 1 : 0) + ",");
-    if (rightUSValue > 0) {
-      Serial.println(String(rightUSValue));
-    }
-    else {
-      Serial.println();
-    }
   }
   else if (rxBuffer == "f") {
     float radianAngle = Serial.parseFloat();
@@ -236,7 +225,8 @@ String updateIMU() {
     LSM303::vector<int16_t> mag = magnetometer_accelerometer.m;
 
     //Append data to buffer
-    String txBuffer = String(acc.x) + "," +
+    String txBuffer = String("IMU,1,") +
+               String(acc.x) + "," +
                String(acc.y) + "," +
                String(acc.z) + "," +
                String(mag.x) + "," +
