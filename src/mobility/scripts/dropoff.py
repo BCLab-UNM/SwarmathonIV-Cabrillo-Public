@@ -12,7 +12,7 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie
 
-
+#being repurposed for if tags are seen /not seen
 def wait_for_tag_transform():
     global swarmie
     global rovername
@@ -34,7 +34,7 @@ def wait_for_tag_transform():
                 if len(targets) == 0:
                     swarmie.putdown() 
                     raise IndexError("There are no home tags seen!")
-                
+                '''
         seen_time = targets[0].pose.header.stamp
         try:
             swarmie.xform.waitForTransform(rovername + '/odom', rovername + '/camera_link', seen_time, rospy.Duration(1))
@@ -44,11 +44,12 @@ def wait_for_tag_transform():
     # Uh-oh. No transform after 10 seconds. There must be a problem
     # somewhere else in the rover.
     raise(e)
+    '''
 
 
-def get_center_pose_list(swarmie,rovername): #changed so i can import and use with rdb swarmie
-    #global swarmie #put back after testing 
-    #global rovername #put back after testing
+def get_center_pose_list(): #changed so I can import and use with rdb swarmie swarmie,rovername
+    global swarmie #put back after testing 
+    global rovername #put back after testing
 
     pose_list = []
     for t in [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] :
@@ -65,19 +66,9 @@ def get_center_pose_list(swarmie,rovername): #changed so i can import and use wi
         pose_list.append(pose)
     return pose_list
 
-def find_center():
-    global swarmie
-    tags = get_center_pose_list()
-    print(tags)
-    
-    #if 2+ corner tags have been seen, theta values seen 0,1,3
-    if len(set( int(abs(t.theta)) for t in tags)) > 1:
-        #do a triangle and take the mid point of the hypotenuse
-        pass
-    else: #hopefuly pointing to the middel of home so just squareup and drive in
-        pass
+
+'''
         #notes https://plot.ly/python/linear-fits/ 
-        '''
         import dropoff
         import matplotlib.pyplot as plt
         x = [ t.x for t in dropoff.get_center_pose_list(swarmie,swarmie.rover_name)]
@@ -87,15 +78,70 @@ def find_center():
         plt.scatter(x,y)
         plt.show()
         
-        
         plt.scatter(zip(*list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name))))
         #plt.show()
+        
+import matplotlib.pyplot as plt
+xs = [1,2]
+ys = [2,1]
+sum(xs)/2
+plt.scatter(xs,yw)
+plt.show()
+'''
+
+def get_furthest_hometags_location(tags):
+        global swarmie
+        global rovername
+        '''should only be called if 2 different orenations(thetas) of tags are seen '''
+        # Find the nearest home tag
+        #homeTags = get_center_pose_list()
+        loc = swarmie.get_odom_location().get_pose()
+        
+        tagThetasSeen = list(set( int(abs(t.theta)) for t in tags))
+        homeTags1 = [t for t in tags if int(abs(t.theta)) is tagThetasSeen[0] ]
+        homeTags2 = [t for t in tags if int(abs(t.theta)) is tagThetasSeen[1] ]
+        #print("homeTags1:",homeTags1)
+        #print("homeTags2:",homeTags2)
+        homeTag1 = sorted(homeTags1, key=lambda x :
+                        math.hypot(loc.y - x.y,
+                                  loc.x - x.x),reverse=True)[0]
+        homeTag2 = sorted(homeTags2, key=lambda x :
+                        math.hypot(loc.y - x.y,
+                                  loc.x - x.x),reverse=True)[0]
+        #print("furthestTags:",homeTag1,homeTag2)
         '''
-    
-    ''' START Temp drop just past if not on hometag'''
-    if len(tags) > 0:
+        swarmie.xform.waitForTransform(rovername + '/odom',
+                        homeTag1.pose.header.frame_id, homeTag1.pose.header.stamp,
+                        rospy.Duration(3.0))
+                        
+        swarmie.xform.waitForTransform(rovername + '/odom',
+                        homeTag2.pose.header.frame_id, homeTag2.pose.header.stamp,
+                        rospy.Duration(3.0))
+
+        return(swarmie.xform.transformPose(rovername + '/odom', homeTag1.pose).pose.position,
+                swarmie.xform.transformPose(rovername + '/odom', homeTag2.pose).pose.position )
+        '''
+        return(homeTag1,homeTag2)
+
+#need case of no tags
+def find_center():
+    global swarmie
+    tags = get_center_pose_list()
+    #print(tags)
+    #print("------------")
+    #if 2+ corner tags have been seen, theta values seen 0,1,3
+    if len(set( int(abs(t.theta)) for t in tags)) > 1:
+        print("Dropoff in Corner:", set(int(abs(t.theta)) for t in tags))
+        #do a triangle and take the mid point of the hypotenuse?
+        t1, t2 = get_furthest_hometags_location(tags)
+        pose = Pose2D()
+        pose.x = (t1.x + t2.x) /2 #right now just avraging the value 
+        pose.y = (t1.y + t2.y) /2
+        pose.theta = (t1.theta + t2.theta) /2
+        return(pose)
+    else: #hopefuly pointing to the middle of home so just squareup? and drive in
+        print("Dropoff on side:", tags[0].theta)
         return(tags[0])
-    ''' END Temp drop ust past if not on hometag'''
 
 def main():
     global swarmie
