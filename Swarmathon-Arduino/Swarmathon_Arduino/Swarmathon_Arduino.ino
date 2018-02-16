@@ -15,7 +15,7 @@
 #include <Servo.h>
 
 // Constants
-#define PI 3.14159265358979323846
+// #define PI 3.14159265358979323846
 #define RAD2DEG(radianAngle) (radianAngle * 180.0 / PI)
 #define DEG2RAD(degreeAngle) (degreeAngle * PI / 180.0)
 
