@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   nav_msgs
   dynamic_reconfigure
+  swarmie_msgs
 )
 
 generate_dynamic_reconfigure_options(
@@ -16,7 +17,7 @@ generate_dynamic_reconfigure_options(
 )
 
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp std_msgs sensor_msgs std_msgs tf nav_msgs dynamic_reconfigure
+  CATKIN_DEPENDS geometry_msgs roscpp std_msgs sensor_msgs std_msgs tf nav_msgs dynamic_reconfigure swarmie_msgs
 )
 
 include_directories(

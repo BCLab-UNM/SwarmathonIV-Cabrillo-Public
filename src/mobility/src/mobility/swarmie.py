@@ -164,8 +164,11 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
-        self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
-        self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
+        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
@@ -515,13 +518,54 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
-    def start_magnetometer_calibration(self):
-        '''Start calibrating the magnetometer on a rover.'''
-        self._start_magnetometer_calibration()
-    
-    def store_magnetometer_calibration(self):
-        '''Finish calibrating the magnetometer on a rover.'''
-        self._store_magnetometer_calibration()
+    def start_imu_calibration(self):
+        '''Start calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed before the rover starts operating
+        in a new environment.
+
+        Raw accelerometer and magnetometer is collected during the
+        calibration process. During this time, the rover should perform six
+        full in-place rotations, one rotation with each of its body axes
+        up and down. These should be slow 2D rotations.
+
+        When the 2D rotations are complete, the rover should also perform
+        3D random rotations to put its IMU in as many additional orientations
+        as possible.'''
+        self._start_imu_calibration()
+
+    def start_misalignment_calibration(self):
+        '''Start calibration Step Two for the IMU's misalignment.
+
+        Raw magnetometer data is collected while the rover performs at least
+        one slow 2D rotation with its z axis up. This can be performed by
+        having the rover spin slowly in place on level ground using the teleop.
+
+        This is only one third of a typical misalignment calibration procedure,
+        but since the rover only operates in two dimensions on relatively level
+        ground, it should be ok to skip the x-down and y-down rotations that
+        are part of a complete misalignment calibration.'''
+        self._start_misalignment_calibration()
+
+    def start_gyro_bias_calibration(self):
+        '''Start calibration Step Three for the rover's IMU.
+
+        Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
+        self._start_gyro_bias_calibration()
+
+    def start_gyro_scale_calibration(self):
+        '''Start calibration Step Four for the rover's IMU.
+
+        Calibrate gyroscope scale factor. Rover must rotate exactly 180 degrees
+        in one direction during first 10 seconds afer calling this function,
+        and rotate exactly 180 degrees in the opposite direction during the
+        second 10 seconds after calling this function. Progress can be
+        monitored in rdb.py or by echoing the /infoLog topic.'''
+        self._start_gyro_scale_calibration()
+
+    def store_imu_calibration(self):
+        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
+        self._store_imu_calibration()
         
     def get_odom_location(self):
         '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
