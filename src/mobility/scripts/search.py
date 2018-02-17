@@ -14,6 +14,7 @@ import tf
 from swarmie_msgs.msg import Obstacle
 from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Range
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 from Tkconstants import FIRST
@@ -29,6 +30,7 @@ def turnaround():
 def avoid():
     global swarmie
     global angle
+    global sonar_left
     #if swarmie.get_obstacle_condition() & 3 == Obstacle.SONAR_LEFT:
         
     #elif swarmie.get_obsticle_condition() & 3 == Obstacle.SONAR_RIGHT:
@@ -46,6 +48,7 @@ def avoid():
         except ObstacleException:
             if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
                 print("this is still broken")
+                print(sonar_left)
             else:
                 print("obstacle still present")
         
@@ -78,12 +81,12 @@ def avoid_wall():
             swarmie.set_heading(angle + math.pi/10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
-            swarmie.drive(1, ingnore=Obstacle.SONAR_RIGHT)
+            swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
         except ObstacleException:
             if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
-                print("this is still broken")
+                print("this is still broken , wall")
             else:
-                print("obstacle still present")
+                print("obstacle still present, wall")
         
         print("after obstacle present")        
         while not swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT :
@@ -142,7 +145,7 @@ def go_back():
     try:        
         try:        
             home = swarmie.get_home_odom_location() 
-            odom = get_odom_location().get_pose()
+            odom = swarmie.get_odom_location().get_pose()
             swarmie.drive_to(home)
         except ObstacleException:
                 avoid()
@@ -187,6 +190,18 @@ def get_angle(msg):
    
     #print(info/math.pi * 180, "\n", swarmie.get_odom_location().get_pose().theta / math.pi * 180, "\n", max(math.fabs(info/math.pi * 180 - swarmie.get_odom_location().get_pose().theta / math.pi * 180)), "\n")
 
+def get_sonar_left(msg):
+    global sonar_left 
+    sonar_left = msg.range
+    
+def get_sonar_right(msg):
+    global sonar_right
+    sonar_right = msg.range
+    
+def get_sonar_center(msg):
+    global sonar_center 
+    sonar_center = msg.range
+    
 #def max(largest):
 #    global maximum
 #    if largest > maximum and largest < 350:
@@ -218,6 +233,9 @@ def main():
     print("search start...")
    
     rospy.Subscriber(rovername + '/imu', Imu, get_angle)
+    rospy.Subscriber(rovername + '/sonarLeft', Range, get_sonar_left)
+    rospy.Subscriber(rovername + '/sonarRight', Range, get_sonar_right)
+    rospy.Subscriber(rovername + '/sonarCenter', Range, get_sonar_center)
      
             
     if len(sys.argv) < 2 :
