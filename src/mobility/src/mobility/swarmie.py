@@ -709,8 +709,12 @@ class Swarmie:
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
-        self.turn(angle, **kwargs)
-        self.drive(dist-claw_offset, **kwargs)
+
+        req = MoveRequest(
+            theta=angle, 
+            r=dist, 
+        )        
+        return self.__drive(req, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
