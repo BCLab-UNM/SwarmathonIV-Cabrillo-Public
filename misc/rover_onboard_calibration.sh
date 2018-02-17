@@ -10,11 +10,6 @@ else
   ublox_dev=/dev/ttyACM0
 fi
 
-launchfile="$projdir/launch/calibration.launch"
-if [ -f ./launch/calibration.launch ]; then
-    launchfile=./launch/calibration.launch
-fi
-
 echo "Loading Arduino code."
 if [ -x ~/arduino-1.*/arduino ]; then
     arduino=~/arduino-1.*/arduino
