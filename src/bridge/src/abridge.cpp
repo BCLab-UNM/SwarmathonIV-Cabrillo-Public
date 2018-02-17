@@ -15,10 +15,12 @@
 #include <geometry_msgs/QuaternionStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
-#include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Range.h>
 #include <std_msgs/UInt8.h>
 #include <std_srvs/Empty.h>
+
+// Project messages
+#include <swarmie_msgs/SwarmieIMU.h>
 
 //Package include
 #include <usbSerial.h>
@@ -40,7 +42,7 @@ void initialconfig();
 //Globals
 geometry_msgs::QuaternionStamped fingerAngle;
 geometry_msgs::QuaternionStamped wristAngle;
-sensor_msgs::Imu imu;
+swarmie_msgs::SwarmieIMU imuRaw;
 nav_msgs::Odometry odom;
 double odomTheta = 0;
 sensor_msgs::Range sonarLeft;
@@ -80,7 +82,7 @@ PID right_pid(0, 0, 0, 0, 120, -120, 0, -1);
 //Publishers
 ros::Publisher fingerAnglePublish;
 ros::Publisher wristAnglePublish;
-ros::Publisher imuPublish;
+ros::Publisher imuRawPublish;
 ros::Publisher odomPublish;
 ros::Publisher sonarLeftPublish;
 ros::Publisher sonarCenterPublish;
@@ -108,8 +110,6 @@ double ff;
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
 void reconfigure(bridge::pidConfig &cfg, uint32_t level);
 void modeHandler(const std_msgs::UInt8::ConstPtr& message);
-bool store_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
-bool start_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
 bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
 
 int main(int argc, char **argv) {
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
     
     fingerAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/fingerAngle/prev_cmd"), 10);
     wristAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/wristAngle/prev_cmd"), 10);
-    imuPublish = aNH.advertise<sensor_msgs::Imu>((publishedName + "/imu"), 10);
+    imuRawPublish = aNH.advertise<swarmie_msgs::SwarmieIMU>((publishedName + "/imu/raw"), 10);
     odomPublish = aNH.advertise<nav_msgs::Odometry>((publishedName + "/odom"), 10);
     sonarLeftPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarLeft"), 10);
     sonarCenterPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarCenter"), 10);
@@ -152,18 +152,14 @@ int main(int argc, char **argv) {
     wristAngleSubscriber = aNH.subscribe((publishedName + "/wristAngle/cmd"), 1, wristAngleHandler);
     modeSubscriber = aNH.subscribe((publishedName + "/mode"), 1, modeHandler);
 
-    // Service to tell the Arduino to store calibration
-    ros::ServiceServer stc = aNH.advertiseService((publishedName + "/store_magnetometer_calibration"), store_calibration);
-    ros::ServiceServer str = aNH.advertiseService((publishedName + "/start_magnetometer_calibration"), start_calibration);
-
     // Service to reset odometry during testing
     ros::ServiceServer resetOdom = aNH.advertiseService(publishedName + "/reset_odometry", reset_odometry);
 
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
-    imu.header.frame_id = publishedName+"/base_link";
-    
+    imuRaw.header.frame_id = publishedName+"/base_link";
+
     odom.header.frame_id = publishedName+"/odom";
     odom.child_frame_id = publishedName+"/base_link";
 
@@ -275,30 +271,14 @@ double thetaToDiff(double theta) {
 	return theta * wheelBase * 1.50;
 }
 
-bool store_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
-	char cmd[16]={'\0'};
-	sprintf(cmd, "C\n");
-	usb.sendData(cmd);
-	memset(&cmd, '\0', sizeof (cmd));
-	return true;
-}
-
-bool start_calibration(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
-	char cmd[16]={'\0'};
-	sprintf(cmd, "M\n");
-	usb.sendData(cmd);
-	memset(&cmd, '\0', sizeof (cmd));
-	return true;
-}
-
 bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
     odomTheta = 0;
     odom.header.stamp = ros::Time::now();
     odom.pose.pose.position.x = 0;
     odom.pose.pose.position.y = 0;
     odom.pose.pose.position.z = 0;
-    odom.pose.pose.orientation.x = 0;
     odom.pose.pose.orientation.y = 0;
+    odom.pose.pose.orientation.x = 0;
     odom.pose.pose.orientation.z = 0;
     odom.pose.pose.orientation.w = 0;
     odom.twist.twist.linear.x = 0;
@@ -363,13 +343,15 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 }
 
 void publishRosTopics() {
+	/*
     fingerAnglePublish.publish(fingerAngle);
     wristAnglePublish.publish(wristAngle);
-    imuPublish.publish(imu);
+    imuRawPublish.publish(imuRaw);
     odomPublish.publish(odom);
     sonarLeftPublish.publish(sonarLeft);
     sonarCenterPublish.publish(sonarCenter);
     sonarRightPublish.publish(sonarRight);
+    */
 }
 
 void parseData(string str) {
@@ -389,23 +371,27 @@ void parseData(string str) {
 
 		if (dataSet.size() >= 3 && dataSet.at(1) == "1") {
 
-            if (dataSet.at(0) == "GRF") {
-                fingerAngle.header.stamp = ros::Time::now();
-                fingerAngle.quaternion = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(2).c_str()), 0.0, 0.0);
+			if (dataSet.at(0) == "GRF") {
+				fingerAngle.header.stamp = ros::Time::now();
+				fingerAngle.quaternion = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(2).c_str()), 0.0, 0.0);
             }
 			else if (dataSet.at(0) == "GRW") {
 				wristAngle.header.stamp = ros::Time::now();
 				wristAngle.quaternion = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(2).c_str()), 0.0, 0.0);
 			}
 			else if (dataSet.at(0) == "IMU") {
-				imu.header.stamp = ros::Time::now();
-				imu.linear_acceleration.x = atof(dataSet.at(2).c_str());
-				imu.linear_acceleration.y = 0; //atof(dataSet.at(3).c_str());
-				imu.linear_acceleration.z = atof(dataSet.at(4).c_str());
-				imu.angular_velocity.x = atof(dataSet.at(5).c_str());
-				imu.angular_velocity.y = atof(dataSet.at(6).c_str());
-				imu.angular_velocity.z = atof(dataSet.at(7).c_str());
-				imu.orientation = tf::createQuaternionMsgFromRollPitchYaw(atof(dataSet.at(8).c_str()), atof(dataSet.at(9).c_str()), atof(dataSet.at(10).c_str()));
+				imuRaw.header.stamp = ros::Time::now();
+				imuRaw.accelerometer.x = atof(dataSet.at(2).c_str());
+				imuRaw.accelerometer.y  = atof(dataSet.at(3).c_str());
+				imuRaw.accelerometer.z = atof(dataSet.at(4).c_str());
+				imuRaw.magnetometer.x = atof(dataSet.at(5).c_str());
+				imuRaw.magnetometer.y = atof(dataSet.at(6).c_str());
+				imuRaw.magnetometer.z = atof(dataSet.at(7).c_str());
+				imuRaw.angular_velocity.x = atof(dataSet.at(8).c_str());
+				imuRaw.angular_velocity.y = atof(dataSet.at(9).c_str());
+				imuRaw.angular_velocity.z = atof(dataSet.at(10).c_str());
+
+			    imuRawPublish.publish(imuRaw);
 			}
 			else if (dataSet.at(0) == "ODOM") {
 				leftTicks = atoi(dataSet.at(2).c_str());
@@ -459,18 +445,23 @@ void parseData(string str) {
 				odom.twist.twist.linear.x = vx;
 				odom.twist.twist.linear.y = vy;
 				odom.twist.twist.angular.z = vtheta;
+
+			    odomPublish.publish(odom);
 			}
 			else if (dataSet.at(0) == "USL") {
 				sonarLeft.header.stamp = ros::Time::now();
 				sonarLeft.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarLeftPublish.publish(sonarLeft);
 			}
 			else if (dataSet.at(0) == "USC") {
 				sonarCenter.header.stamp = ros::Time::now();
 				sonarCenter.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarCenterPublish.publish(sonarCenter);
 			}
 			else if (dataSet.at(0) == "USR") {
 				sonarRight.header.stamp = ros::Time::now();
 				sonarRight.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarRightPublish.publish(sonarRight);
 			}
 
 		}

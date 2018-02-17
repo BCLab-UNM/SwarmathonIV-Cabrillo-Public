@@ -6,17 +6,37 @@
   <arg name="ublox_dev" default="None" />
 
   <param name="tf_prefix" value="$(arg name)" />
-  <node name="$(arg name)_BASE2CAM" pkg="tf" type="static_transform_publisher" args="0.12 -0.03 0.195 -1.57 0 -2.22 $(arg name)/base_link $(arg name)/camera_link 100" respawn="true"/>
+  <node name="$(arg name)_BASE2CAM"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 100"
+        respawn="true"/>
+  <node name="$(arg name)_BASE2SONARLEFT"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.11 0.05 0.155 0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_left 100"
+        respawn="true" />
+  <node name="$(arg name)_BASE2SONARCENTER"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.12 0 0.155 0 0 0 $(arg name)/base_link $(arg name)/sonar_center 100"
+        respawn="true" />
+  <node name="$(arg name)_BASE2SONARRIGHT"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.11 -0.05 0.155 -0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_right 100"
+        respawn="true" />
   <node name="$(arg name)_DIAGNOSTICS" pkg="diagnostics" type="diagnostics" args="$(arg name)" respawn="true"/>
   <node name="$(arg name)_MOBILITY" pkg="mobility" type="core.py" args="$(arg name)" respawn="true">
     <param name="DRIVE_SPEED" value="0.2"/>
     <param name="REVERSE_SPEED" value="0.2"/>
     <param name="TURN_SPEED" value="0.6"/>
-    <param name="HEADING_RESTORE_FACTOR" value="4"/>
+    <param name="HEADING_RESTORE_FACTOR" value="1.0"/>
     <param name="GOAL_DISTANCE_OK" value="0.1"/>
     <param name="ROTATE_THRESHOLD" value="0.19625"/>
-    <param name="DRIVE_ANGLE_ABORT" value="0.35"/>
+    <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
   </node>
+
   <node name="$(arg name)_MAPPING" pkg="mapping" type="mapping" args="$(arg name)" respawn="true"/>
   <node pkg="robot_localization" type="navsat_transform_node" name="$(arg name)_NAVSAT" respawn="true">
 
@@ -153,12 +173,20 @@
       <param name="device" value="$(arg swarmie_dev)"/>
       <param name="scale" value="0.001" />
       <param name="Kp" value="0.1" />
-      <param name="Ki" value="0.05" />
+      <param name="Ki" value="0.0" />
       <param name="Kd" value="0.0" />
       <param name="db" value="0.0" />
       <param name="st" value="0.0" />
       <param name="wu" value="65535" />
       <param name="ff" value="0.009" />
+    </node>
+
+    <node name="$(arg name)_IMU" pkg="mobility" type="cal_imu.py"
+          args="$(arg name)" respawn="true" >
+      <param name="raw_data_path" value="/home/robot/" />
+      <param name="load_raw_data" value="true" />
+      <param name="calibration_file_path" value="/home/robot/"/>
+      <param name="publish_debug_topic" value="false" />
     </node>
     
     <node name="$(arg name)_UBLOX" pkg="ublox_gps" type="ublox_gps" respawn="true">

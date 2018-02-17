@@ -26,6 +26,7 @@ from grid_map_msgs.msg import GridMap
 from mapping import RoverMap 
 
 import threading 
+
 swarmie_lock = threading.Lock()
 
 from mobility import sync
@@ -131,6 +132,8 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
+        self.TargetsDict = {}
+        self.targets_timeout = 3
         
         # Intialize this ROS node.
         if 'node_suffix' in kwargs and kwargs['node_suffix']:
@@ -161,21 +164,30 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
-        self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
-        self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
+        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
+
+        # Transform listener. Use this to transform between coordinate spaces.
+        # Transform messages must predate any sensor messages so initialize this first.
+        self.xform = tf.TransformListener()
+        rospy.sleep(1)
 
         # Subscribe to useful topics 
+        # These topics only update data. The data is used in other places to initialize
+        # these and wait for valid data so that users of this data don't get errors.
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
+        rospy.sleep(0.5)
+
+        # The targets subscriber needs odom data since Carter's patch. Make sure odom data
+        # exists before we get a target callback.
         rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
-
-        # Transform listener. Use this to transform between coordinate spaces.
-        self.xform = tf.TransformListener() 
-
-        # Wait for sensors and tf to have data (this sucks)
         rospy.sleep(1)
-        
+
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
     @sync(swarmie_lock)
@@ -193,7 +205,18 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
-        self.Targets = msg
+        if self._is_moving():
+            self.Targets = msg
+            #create a dict of tags as values and rounded coordinates as the key
+            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
+            
+        else:
+            #remove old tags from the dict
+            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+            #adding currently seen tags to the dict
+            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+            #get the tags from the dict and saves them to Targets
+            self.Targets.detections = self.TargetsDict.values() 
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -437,7 +460,7 @@ class Swarmie:
         
         nearest = blocks[0]
         x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.1 :
+        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
             return True 
             
         # Third test: The block never seems to affect the sonar in the simulator. 
@@ -495,13 +518,54 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
-    def start_magnetometer_calibration(self):
-        '''Start calibrating the magnetometer on a rover.'''
-        self._start_magnetometer_calibration()
-    
-    def store_magnetometer_calibration(self):
-        '''Finish calibrating the magnetometer on a rover.'''
-        self._store_magnetometer_calibration()
+    def start_imu_calibration(self):
+        '''Start calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed before the rover starts operating
+        in a new environment.
+
+        Raw accelerometer and magnetometer is collected during the
+        calibration process. During this time, the rover should perform six
+        full in-place rotations, one rotation with each of its body axes
+        up and down. These should be slow 2D rotations.
+
+        When the 2D rotations are complete, the rover should also perform
+        3D random rotations to put its IMU in as many additional orientations
+        as possible.'''
+        self._start_imu_calibration()
+
+    def start_misalignment_calibration(self):
+        '''Start calibration Step Two for the IMU's misalignment.
+
+        Raw magnetometer data is collected while the rover performs at least
+        one slow 2D rotation with its z axis up. This can be performed by
+        having the rover spin slowly in place on level ground using the teleop.
+
+        This is only one third of a typical misalignment calibration procedure,
+        but since the rover only operates in two dimensions on relatively level
+        ground, it should be ok to skip the x-down and y-down rotations that
+        are part of a complete misalignment calibration.'''
+        self._start_misalignment_calibration()
+
+    def start_gyro_bias_calibration(self):
+        '''Start calibration Step Three for the rover's IMU.
+
+        Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
+        self._start_gyro_bias_calibration()
+
+    def start_gyro_scale_calibration(self):
+        '''Start calibration Step Four for the rover's IMU.
+
+        Calibrate gyroscope scale factor. Rover must rotate exactly 180 degrees
+        in one direction during first 10 seconds afer calling this function,
+        and rotate exactly 180 degrees in the opposite direction during the
+        second 10 seconds after calling this function. Progress can be
+        monitored in rdb.py or by echoing the /infoLog topic.'''
+        self._start_gyro_scale_calibration()
+
+    def store_imu_calibration(self):
+        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
+        self._store_imu_calibration()
         
     def get_odom_location(self):
         '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
@@ -625,7 +689,7 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
-    def drive_to(self, place, **kwargs):
+    def drive_to(self, place, claw_offset = 0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
         
@@ -636,6 +700,8 @@ class Swarmie:
         Keyword Arguments/Returns/Raises:
         
         * See `mobility.swarmie.Swarmie.drive`
+        * claw_offset to the odometry reference frame.  Appropriate value
+        to be passed in, otherwise the reference frame remains unchanged.
             
         '''
         loc = self.get_odom_location().get_pose()
@@ -643,8 +709,12 @@ class Swarmie:
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
-        self.turn(angle, **kwargs)
-        self.drive(dist, **kwargs)
+
+        req = MoveRequest(
+            theta=angle, 
+            r=dist, 
+        )        
+        return self.__drive(req, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
@@ -661,3 +731,46 @@ class Swarmie:
         loc = self.get_odom_location().get_pose()
         angle = angles.shortest_angular_distance(loc.theta, heading)
         self.turn(angle, **kwargs)
+    
+    @sync(swarmie_lock)
+    def is_moving(self):
+        ''' calls _is_moving that uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return(self._is_moving())
+        
+    def _is_moving(self):
+        ''' uses OdomLocation angular.z & linear.x  
+        Returns: 
+
+        * (`bool`) : True if swarmie is moving and False if stationary
+        '''
+        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+                
+
+    def get_nearest_block_location(self):
+        '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
+        Returns:
+
+        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
+        '''
+        global rovername, swarmie
+
+        # Find the nearest block
+        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        if len(blocks) == 0 :
+            return None
+
+        loc = self.get_odom_location().get_pose()
+        blocks = sorted(blocks, key=lambda x :
+                        math.hypot(loc.y - x.pose.pose.position.y,
+                                  loc.x - x.pose.pose.position.x))
+
+        nearest = blocks[0]
+        self.xform.waitForTransform(self.rover_name + '/odom',
+                        nearest.pose.header.frame_id, nearest.pose.header.stamp,
+                        rospy.Duration(3.0))
+
+        return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position

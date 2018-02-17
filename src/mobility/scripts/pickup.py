@@ -19,41 +19,23 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 
 '''Pickup node.''' 
 
-def get_block_location():
-    global rovername, swarmie 
-    
-        
-    # Find the nearest block
-    blocks = swarmie.get_latest_targets()        
-    blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
-    nearest = blocks[0]
-
-    swarmie.xform.waitForTransform(rovername + '/odom', 
-                    nearest.pose.header.frame_id, nearest.pose.header.stamp, 
-                    rospy.Duration(3.0))
-        
-    point = swarmie.xform.transformPose(rovername + '/odom', nearest.pose).pose.position
-    print ('Transform says that the block is at: ', point)
-    return point
-
-
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
     try :
         swarmie.fingers_open()
         swarmie.wrist_down()
-
-
+        # swarmie.set_wrist_angle(1.1)
         # Drive to the block
         try: 
-            block = get_block_location()
+            block = swarmie.get_nearest_block_location()
         except tf.Exception as e : 
             # Something went wrong and we can't locate the block.
             print(e)
             return False
             
-        swarmie.drive_to(block, ignore=Obstacle.IS_VISION)
+        # claw_offset for swarmie not overshooting the block.
+        swarmie.drive_to(block, claw_offset = 0.1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
    
         # Grab
         swarmie.pickup()
@@ -74,7 +56,7 @@ def recover():
     print ("Missed, trying to recover.")
     
     try :
-        swarmie.drive(-0.5);
+        swarmie.drive(-1);
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
