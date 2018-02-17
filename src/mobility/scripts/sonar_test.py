@@ -22,7 +22,7 @@ from numpy import angle
 from asyncore import poll
 
 
-def detect():
+def detectm():
     global angle
     global sonar_left
     global sonar_right
@@ -40,29 +40,98 @@ def detect():
             l = sonar_left
             r = sonar_right
             c =  sonar_center
-            if ml < math.fabs(avgl / y - l):
+            if ml < math.fabs(avgl / (y + 1) - l):
                 ml = l
-            if mr < math.fabs(avgr / y - r):
+            if mr < math.fabs(avgr / (y + 1) - r):
                 mr = r
-            if mc < math.fabs(avgc / y - c):
+            if mc < math.fabs(avgc / (y + 1) - c):
                 mc = c
             avgl = avgl + l
             avgr = avgr + r
             avgc = avgc + c
+            avgl = avgl / 20
+            avgr = avgr / 20
+            avgc = avgc / 20 
+        try:
+            swarmie.drive(1,ignore= Obstacle.IS_VISION)
+        except ObstacleException:
+            print("obstacle hit:")
+            print("    avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+            print("    avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+            print("    avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            if math.fabs(sonar_left - avgl) > 0.5:
+                print("    change in varience left:")
+                print("        avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+                print("        avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+                print("        avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            if math.fabs(sonar_right - avgr) > 0.5:
+                print("    change in varience right:")
+                print("        avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+                print("        avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+                print("        avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            if math.fabs(sonar_center - avgc) > 0.5:
+                print("    change in varience center:")
+                print("        avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+                print("        avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+                print("        avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            exit(1)    
         
-        lo = avgl = avgl / 20
-        ro = avgr = avgr / 20
-        co = avgc = avgc / 20 
-       
-        if math.fabs(lo - avgl) > 0.5:
-           print("avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(lo - ml))
-           x = 1
-        if math.fabs(ro - avgr) > 0.5:
-            print("avg left:", avgr, "now:", sonar_right, "max varience:" , math.fabs(ro - mr))
+        print("avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+        print("avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+        print("avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+        if math.fabs(sonar_left - avgl) > 0.5:
+            print("change in varience left:")
+            print("    avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+            print("    avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+            print("    avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
             x = 1
-        if math.fabs(co - avgc) > 0.5:
-            print("avg left:", avgc, "now:", sonar_center, "max varience:" , math.fabs(co - mc))
+        if math.fabs(sonar_right - avgr) > 0.5:
+            print("change in varience right:")
+            print("    avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+            print("    avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+            print("    avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
             x = 1
+        if math.fabs(sonar_center - avgc) > 0.5:
+            print("change in varience center:")
+            print("    avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+            print("    avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+            print("    avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            x = 1
+    
+def detect():
+    global angle
+    global sonar_left
+    global sonar_right
+    global sonar_center
+    avgl = 0
+    avgr = 0
+    avgc = 0
+    x = 0
+    ml = -9999
+    mr = -9999
+    mc = -9999
+
+    for y in range(20):
+        rospy.sleep(.1)
+        l = sonar_left
+        r = sonar_right
+        c =  sonar_center
+        if ml < math.fabs(avgl / (y + 1) - l):
+            ml = l
+        if mr < math.fabs(avgr / (y + 1) - r):
+            mr = r
+        if mc < math.fabs(avgc / (y + 1) - c):
+            mc = c
+        avgl = avgl + l
+        avgr = avgr + r
+        avgc = avgc + c
+        
+    avgl = avgl / 20
+    avgr = avgr / 20
+    avgc = avgc / 20 
+    print("avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+    print("avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+    print("avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
              
 
 def get_angle(msg):
@@ -111,6 +180,9 @@ def main():
     global rovername 
     #global lhome
     global angle
+    global sonar_left
+    global sonar_right
+    global sonar_center
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
@@ -128,8 +200,8 @@ def main():
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
         
-    for do in range(20) :
-        detect()
+    #for do in range(20) :
+    detect()
         
     print ("End of sensing")
     exit(1)
