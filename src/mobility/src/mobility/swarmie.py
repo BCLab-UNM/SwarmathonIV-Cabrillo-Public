@@ -132,6 +132,7 @@ class Swarmie:
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
+        self.TargetsDict = {}
         self.targets_timeout = 3
         
         # Intialize this ROS node.
@@ -163,8 +164,11 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
-        self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
-        self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
+        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
@@ -203,9 +207,16 @@ class Swarmie:
     def _targets(self, msg) : 
         if self._is_moving():
             self.Targets = msg
+            #create a dict of tags as values and rounded coordinates as the key
+            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
+            
         else:
-            #adds tags missing to the previous detections and removes tags older then 3 seconds
-            self.Targets.detections = [tag for tag in list(set(msg.detections + self.Targets.detections)) if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) ]
+            #remove old tags from the dict
+            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+            #adding currently seen tags to the dict
+            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+            #get the tags from the dict and saves them to Targets
+            self.Targets.detections = self.TargetsDict.values() 
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -507,13 +518,54 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
-    def start_magnetometer_calibration(self):
-        '''Start calibrating the magnetometer on a rover.'''
-        self._start_magnetometer_calibration()
-    
-    def store_magnetometer_calibration(self):
-        '''Finish calibrating the magnetometer on a rover.'''
-        self._store_magnetometer_calibration()
+    def start_imu_calibration(self):
+        '''Start calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed before the rover starts operating
+        in a new environment.
+
+        Raw accelerometer and magnetometer is collected during the
+        calibration process. During this time, the rover should perform six
+        full in-place rotations, one rotation with each of its body axes
+        up and down. These should be slow 2D rotations.
+
+        When the 2D rotations are complete, the rover should also perform
+        3D random rotations to put its IMU in as many additional orientations
+        as possible.'''
+        self._start_imu_calibration()
+
+    def start_misalignment_calibration(self):
+        '''Start calibration Step Two for the IMU's misalignment.
+
+        Raw magnetometer data is collected while the rover performs at least
+        one slow 2D rotation with its z axis up. This can be performed by
+        having the rover spin slowly in place on level ground using the teleop.
+
+        This is only one third of a typical misalignment calibration procedure,
+        but since the rover only operates in two dimensions on relatively level
+        ground, it should be ok to skip the x-down and y-down rotations that
+        are part of a complete misalignment calibration.'''
+        self._start_misalignment_calibration()
+
+    def start_gyro_bias_calibration(self):
+        '''Start calibration Step Three for the rover's IMU.
+
+        Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
+        self._start_gyro_bias_calibration()
+
+    def start_gyro_scale_calibration(self):
+        '''Start calibration Step Four for the rover's IMU.
+
+        Calibrate gyroscope scale factor. Rover must rotate exactly 180 degrees
+        in one direction during first 10 seconds afer calling this function,
+        and rotate exactly 180 degrees in the opposite direction during the
+        second 10 seconds after calling this function. Progress can be
+        monitored in rdb.py or by echoing the /infoLog topic.'''
+        self._start_gyro_scale_calibration()
+
+    def store_imu_calibration(self):
+        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
+        self._store_imu_calibration()
         
     def get_odom_location(self):
         '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
@@ -657,8 +709,12 @@ class Swarmie:
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
-        self.turn(angle, **kwargs)
-        self.drive(dist-claw_offset, **kwargs)
+
+        req = MoveRequest(
+            theta=angle, 
+            r=dist, 
+        )        
+        return self.__drive(req, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
