@@ -24,7 +24,8 @@ def approach():
     print ("Attempting a pickup.")
     try :
         swarmie.fingers_open()
-        swarmie.set_wrist_angle(1.1)
+        swarmie.wrist_down()
+        # swarmie.set_wrist_angle(1.1)
         # Drive to the block
         try: 
             block = swarmie.get_nearest_block_location()
@@ -34,7 +35,7 @@ def approach():
             return False
             
         # claw_offset for swarmie not overshooting the block.
-        swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+        swarmie.drive_to(block, claw_offset = 0.1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
    
         # Grab
         swarmie.pickup()

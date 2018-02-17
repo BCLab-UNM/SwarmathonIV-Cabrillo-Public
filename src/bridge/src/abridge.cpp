@@ -300,6 +300,7 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 }
 
 void publishRosTopics() {
+	/*
     fingerAnglePublish.publish(fingerAngle);
     wristAnglePublish.publish(wristAngle);
     imuRawPublish.publish(imuRaw);
@@ -307,6 +308,7 @@ void publishRosTopics() {
     sonarLeftPublish.publish(sonarLeft);
     sonarCenterPublish.publish(sonarCenter);
     sonarRightPublish.publish(sonarRight);
+    */
 }
 
 void parseData(string str) {
@@ -345,6 +347,8 @@ void parseData(string str) {
 				imuRaw.angular_velocity.x = atof(dataSet.at(8).c_str());
 				imuRaw.angular_velocity.y = atof(dataSet.at(9).c_str());
 				imuRaw.angular_velocity.z = atof(dataSet.at(10).c_str());
+
+			    imuRawPublish.publish(imuRaw);
 			}
 			else if (dataSet.at(0) == "ODOM") {
 				leftTicks = atoi(dataSet.at(2).c_str());
@@ -390,18 +394,23 @@ void parseData(string str) {
 				odom.twist.twist.linear.x = vx;
 				odom.twist.twist.linear.y = vy;
 				odom.twist.twist.angular.z = vtheta;
+
+			    odomPublish.publish(odom);
 			}
 			else if (dataSet.at(0) == "USL") {
 				sonarLeft.header.stamp = ros::Time::now();
 				sonarLeft.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarLeftPublish.publish(sonarLeft);
 			}
 			else if (dataSet.at(0) == "USC") {
 				sonarCenter.header.stamp = ros::Time::now();
 				sonarCenter.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarCenterPublish.publish(sonarCenter);
 			}
 			else if (dataSet.at(0) == "USR") {
 				sonarRight.header.stamp = ros::Time::now();
 				sonarRight.range = atof(dataSet.at(2).c_str()) / 100.0;
+			    sonarRightPublish.publish(sonarRight);
 			}
 
 		}

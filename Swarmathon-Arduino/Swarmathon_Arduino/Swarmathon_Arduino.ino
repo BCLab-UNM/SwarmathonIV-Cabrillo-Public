@@ -149,21 +149,6 @@ void parse() {
     static int rightUSValue = 300;
     static int centerUSValue = 300;
 
-    // Only do one sonar at a time to prevent crosstalk. 
-    if (ping_state == 0) {
-      leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
-      //leftUSValue = leftUS.ping_cm();
-    }
-    else if (ping_state == 1) {
-      rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
-      //rightUSValue = rightUS.ping_cm();
-    }
-    else{
-      centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
-      //centerUSValue = centerUS.ping_cm();
-    }
-    ping_state = (ping_state + 1) % 3;
-    
     Serial.print("GRF,");
     Serial.print(String(fingers.attached()) + ",");
     if (fingers.attached()) {
@@ -189,9 +174,23 @@ void parse() {
 
     Serial.println("ODOM,1," + updateOdom());
 
-    Serial.println("USC,1," + String(centerUSValue));
-    Serial.println("USR,1," + String(rightUSValue));
-    Serial.println("USL,1," + String(leftUSValue));
+    // Only do one sonar at a time to prevent crosstalk.
+    if (ping_state == 0) {
+      leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
+      //leftUSValue = leftUS.ping_cm();
+      Serial.println("USL,1," + String(leftUSValue));
+    }
+    else if (ping_state == 1) {
+      rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
+      //rightUSValue = rightUS.ping_cm();
+      Serial.println("USR,1," + String(rightUSValue));
+    }
+    else{
+      centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
+      //centerUSValue = centerUS.ping_cm();
+      Serial.println("USC,1," + String(centerUSValue));
+    }
+    ping_state = (ping_state + 1) % 3;
 
   }
   else if (rxBuffer == "f") {
