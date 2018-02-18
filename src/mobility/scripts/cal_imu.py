@@ -206,6 +206,8 @@ def imu_callback(imu_raw):
     # IMU Message
     imu_cal = Imu()
     imu_cal.header = imu_raw.header
+    imu_cal.orientation_covariance[8] = 0.00004
+    imu_cal.angular_velocity_covariance[8] = 0.00001
 
     if calibrating == 'gyro_bias':
         gyro_data[0].append(imu_raw.angular_velocity.x)
