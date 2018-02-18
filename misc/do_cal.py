@@ -226,9 +226,11 @@ if __name__ == '__main__' :
     print('Checking roll and pitch...')
     rolls = []
     pitches = []
+    rate = rospy.Rate(50)
     for i in range(20):
         rolls.append(roll)
         pitches.append(pitch)
+        rate.sleep()
     avg_roll = deg(np.average(rolls))
     avg_pitch = deg(np.average(pitches))
 
