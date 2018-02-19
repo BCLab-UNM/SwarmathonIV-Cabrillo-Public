@@ -109,7 +109,6 @@ double ff;
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
 void reconfigure(bridge::pidConfig &cfg, uint32_t level);
 void modeHandler(const std_msgs::UInt8::ConstPtr& message);
-bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp);
 
 int main(int argc, char **argv) {
     
@@ -262,22 +261,6 @@ double diffToTheta(double right, double left) {
 double thetaToDiff(double theta) {
 	// scale factor improves headings
 	return theta * wheelBase * 1.50;
-}
-
-bool reset_odometry(std_srvs::Empty::Request &req, std_srvs::Empty::Response &rsp) {
-    odomTheta = 0;
-    odom.header.stamp = ros::Time::now();
-    odom.pose.pose.position.x = 0;
-    odom.pose.pose.position.y = 0;
-    odom.pose.pose.position.z = 0;
-    odom.pose.pose.orientation.y = 0;
-    odom.pose.pose.orientation.x = 0;
-    odom.pose.pose.orientation.z = 0;
-    odom.pose.pose.orientation.w = 0;
-    odom.twist.twist.linear.x = 0;
-    odom.twist.twist.linear.y = 0;
-    odom.twist.twist.angular.z = 0;
-    return true;
 }
 
 void serialActivityTimer(const ros::TimerEvent& e) {
