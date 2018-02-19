@@ -66,7 +66,6 @@ unsigned int min_usb_send_delay = 100;
 float heartbeat_publish_interval = 2;
 
 const double wheelBase = 0.278; //distance between left and right wheels (in M)
-const double wheelDiameter = 0.122; //diameter of wheel (in M)
 const double leftWheelCircumference = 0.3651; // avg for 3 rovers (in M)
 const double rightWheelCircumference = 0.3662; // avg for 3 rovers (in M)
 const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
@@ -152,9 +151,6 @@ int main(int argc, char **argv) {
     wristAngleSubscriber = aNH.subscribe((publishedName + "/wristAngle/cmd"), 1, wristAngleHandler);
     modeSubscriber = aNH.subscribe((publishedName + "/mode"), 1, modeHandler);
 
-    // Service to reset odometry during testing
-    ros::ServiceServer resetOdom = aNH.advertiseService(publishedName + "/reset_odometry", reset_odometry);
-
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
@@ -237,9 +233,6 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
   memset(&cmd, '\0', sizeof (cmd));
 }
 
-double ticksToMeters(double ticks) {
-	return (M_PI * wheelDiameter * ticks) / cpr;
-}
 
 double leftTicksToMeters(double leftTicks) {
 	return (leftWheelCircumference * leftTicks) / cpr;
@@ -250,7 +243,6 @@ double rightTicksToMeters(double rightTicks) {
 }
 
 double metersToTicks(double meters) {
-//	return (meters * cpr) / (M_PI * wheelDiameter);
     return (meters * cpr) / ((leftWheelCircumference + rightWheelCircumference) / 2);
 }
 
@@ -263,11 +255,12 @@ double rightMetersToTicks(double meters) {
 }
 
 double diffToTheta(double right, double left) {
-//	return (right - left) / wheelBase;
+	// scale factor improves headings
 	return (right - left) / (wheelBase * 1.50);
 }
 
 double thetaToDiff(double theta) {
+	// scale factor improves headings
 	return theta * wheelBase * 1.50;
 }
 
@@ -304,8 +297,6 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-//		double left_sp = linear_sp - angular_sp;
-//		double right_sp = linear_sp + angular_sp;
         double left_sp = leftMetersToTicks(speedCommand.linear.x) - angular_sp;
         double right_sp = rightMetersToTicks(speedCommand.linear.x) + angular_sp;
 
@@ -358,7 +349,6 @@ void parseData(string str) {
     istringstream oss(str);
     string sentence;
     static double lastOdomTS = 0;
-//    static double odomTheta = 0;
 
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
@@ -398,10 +388,8 @@ void parseData(string str) {
 				rightTicks = atoi(dataSet.at(3).c_str());
 				odomTS = atof(dataSet.at(4).c_str()) / 1000; // Seconds
 
-//				double rightWheelDistance = ticksToMeters(rightTicks);
                 double rightWheelDistance = rightTicksToMeters(rightTicks);
 
-//				double leftWheelDistance = ticksToMeters(leftTicks);
                 double leftWheelDistance = leftTicksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
