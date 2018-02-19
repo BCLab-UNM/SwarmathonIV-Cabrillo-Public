@@ -24,21 +24,20 @@ def approach():
     print ("Attempting a pickup.")
     try:
         swarmie.fingers_open()
-        swarmie.set_wrist_angle(1.1)
+        rospy.sleep(1)
+        swarmie.wrist_down()
         
         try:
             block = swarmie.get_nearest_block_location()
         except tf.Exception as e:
-            # Something went wrong and we can't locate the block.
-            print(e)
+            print("Something went wrong and we can't locate the block. ", e)
             swarmie.wrist_middle()
-            swarmie.fingers_close()
             exit(1)
 
         if block is not None:            
-            # claw_offset to adjust swarmie drive distance.
-            swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
-            # Grab - minimal pickup
+            # claw_offset should be a positive distance of how short drive_to needs to be.
+            swarmie.drive_to(block, claw_offset = 0.24, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            # Grab - minimal pickup with sim_check.
             finger_close_angle = .5
             if swarmie.simulator_running():
                 finger_close_angle = 0
@@ -50,22 +49,16 @@ def approach():
                 swarmie.wrist_middle()
                 return True
         else:
-            print("No blocks detecnted.")
+            print("No blocks detected.")
             swarmie.wrist_middle()
-            rospy.sleep(1)
-            swarmie.fingers_close()
             exit(1)
     except rospy.ServiceException as e:
-        print ("There doesn't seem to be any blocks on the map.", e)
+        print ("There doesn't seem to be any blocks on the map. ", e)
         swarmie.wrist_middle()
-        rospy.sleep(1)
-        swarmie.fingers_close()
         exit(1)
 
     # otherwise reset claw and return Falase
     swarmie.wrist_middle()
-    rospy.sleep(1)
-    swarmie.fingers_close()
     return False
 
 def recover():
