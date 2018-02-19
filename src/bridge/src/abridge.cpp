@@ -44,6 +44,7 @@ geometry_msgs::QuaternionStamped fingerAngle;
 geometry_msgs::QuaternionStamped wristAngle;
 swarmie_msgs::SwarmieIMU imuRaw;
 nav_msgs::Odometry odom;
+double odomTheta = 0;
 sensor_msgs::Range sonarLeft;
 sensor_msgs::Range sonarCenter;
 sensor_msgs::Range sonarRight;
@@ -65,7 +66,8 @@ unsigned int min_usb_send_delay = 100;
 float heartbeat_publish_interval = 2;
 
 const double wheelBase = 0.278; //distance between left and right wheels (in M)
-const double wheelDiameter = 0.122; //diameter of wheel (in M)
+const double leftWheelCircumference = 0.3651; // avg for 3 rovers (in M)
+const double rightWheelCircumference = 0.3662; // avg for 3 rovers (in M)
 const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
 double leftTicks = 0;
@@ -230,20 +232,35 @@ void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
   memset(&cmd, '\0', sizeof (cmd));
 }
 
-double ticksToMeters(double ticks) {
-	return (M_PI * wheelDiameter * ticks) / cpr;
+
+double leftTicksToMeters(double leftTicks) {
+	return (leftWheelCircumference * leftTicks) / cpr;
+}
+
+double rightTicksToMeters(double rightTicks) {
+	return (rightWheelCircumference * rightTicks) / cpr;
 }
 
 double metersToTicks(double meters) {
-	return (meters * cpr) / (M_PI * wheelDiameter);
+    return (meters * cpr) / ((leftWheelCircumference + rightWheelCircumference) / 2);
+}
+
+double leftMetersToTicks(double meters) {
+    return (meters * cpr) / leftWheelCircumference;
+}
+
+double rightMetersToTicks(double meters) {
+    return (meters * cpr) / rightWheelCircumference;
 }
 
 double diffToTheta(double right, double left) {
-	return (right - left) / wheelBase;
+	// scale factor improves headings
+	return (right - left) / (wheelBase * 1.50);
 }
 
 double thetaToDiff(double theta) {
-	return theta * wheelBase;
+	// scale factor improves headings
+	return theta * wheelBase * 1.50;
 }
 
 void serialActivityTimer(const ros::TimerEvent& e) {
@@ -263,8 +280,8 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		double linear_sp = metersToTicks(speedCommand.linear.x);
 		double angular_sp = metersToTicks(thetaToDiff(speedCommand.angular.z));
 
-		double left_sp = linear_sp - angular_sp;
-		double right_sp = linear_sp + angular_sp;
+        double left_sp = leftMetersToTicks(speedCommand.linear.x) - angular_sp;
+        double right_sp = rightMetersToTicks(speedCommand.linear.x) + angular_sp;
 
 		int l = round(left_pid.step(left_sp, leftTicks, odomTS));
 		int r = round(right_pid.step(right_sp, rightTicks, odomTS));
@@ -315,7 +332,6 @@ void parseData(string str) {
     istringstream oss(str);
     string sentence;
     static double lastOdomTS = 0;
-    static double odomTheta = 0;
 
     while (getline(oss, sentence, '\n')) {
 		istringstream wss(sentence);
@@ -355,8 +371,9 @@ void parseData(string str) {
 				rightTicks = atoi(dataSet.at(3).c_str());
 				odomTS = atof(dataSet.at(4).c_str()) / 1000; // Seconds
 
-				double rightWheelDistance = ticksToMeters(rightTicks);
-				double leftWheelDistance = ticksToMeters(leftTicks);
+                double rightWheelDistance = rightTicksToMeters(rightTicks);
+
+                double leftWheelDistance = leftTicksToMeters(leftTicks);
 
 			    //Calculate relative angle that robot has turned
 				double dtheta = diffToTheta(rightWheelDistance, leftWheelDistance);
@@ -366,18 +383,23 @@ void parseData(string str) {
 
 			    //Decompose linear distance into its component values
 			    double meanWheelDistance = (rightWheelDistance + leftWheelDistance) / 2;
-			    double x = meanWheelDistance * cos(dtheta);
-			    double y = meanWheelDistance * sin(dtheta);
+                //Twist is in base_link frame, use relative heading
+			    double twistX = meanWheelDistance * cos(dtheta);
+			    double twistY = meanWheelDistance * sin(dtheta);
+                //Pose is in the odom frame, use absolute heading
+                double poseX = meanWheelDistance * cos(odomTheta);
+                double poseY = meanWheelDistance * sin(odomTheta);
 
-			    // Calculate velocities if possible.
+
+                // Calculate velocities if possible.
 			    double vtheta = 0;
 			    double vx = 0;
 			    double vy = 0;
 			    if (lastOdomTS > 0) {
 			    	double deltaT = odomTS - lastOdomTS;
 			    	vtheta = dtheta / deltaT;
-			    	vx = x / deltaT;
-			    	vy = y / deltaT;
+			    	vx = twistX / deltaT;
+			    	vy = twistY / deltaT;
 
 			    	// Normalize ticks to ticks/s
 			    	leftTicks = leftTicks / deltaT;
@@ -386,8 +408,8 @@ void parseData(string str) {
 		    	lastOdomTS = odomTS;
 
 				odom.header.stamp = ros::Time::now();
-				odom.pose.pose.position.x += x;
-				odom.pose.pose.position.y += y;
+				odom.pose.pose.position.x += poseX;
+				odom.pose.pose.position.y += poseY;
 				odom.pose.pose.position.z = 0;
 				odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(odomTheta);
 
