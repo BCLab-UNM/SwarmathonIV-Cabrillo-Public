@@ -33,7 +33,7 @@
     <param name="TURN_SPEED" value="0.6"/>
     <param name="HEADING_RESTORE_FACTOR" value="2.0"/>
     <param name="GOAL_DISTANCE_OK" value="0.1"/>
-    <param name="ROTATE_THRESHOLD" value="0.01"/>
+    <param name="ROTATE_THRESHOLD" value="0.1"/>
     <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
   </node>
 
