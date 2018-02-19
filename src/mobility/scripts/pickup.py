@@ -22,32 +22,42 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 def approach():
     global swarmie 
     print ("Attempting a pickup.")
-    try :
+    try:
         swarmie.fingers_open()
+        rospy.sleep(1)
         swarmie.wrist_down()
-        # swarmie.set_wrist_angle(1.1)
-        # Drive to the block
-        try: 
+        
+        try:
             block = swarmie.get_nearest_block_location()
-        except tf.Exception as e : 
-            # Something went wrong and we can't locate the block.
-            print(e)
-            return False
-            
-        # claw_offset for swarmie not overshooting the block.
-        swarmie.drive_to(block, claw_offset = 0.1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
-   
-        # Grab
-        swarmie.pickup()
-
-        if swarmie.has_block() :
+        except tf.Exception as e:
+            print("Something went wrong and we can't locate the block. ", e)
             swarmie.wrist_middle()
-            return True        
-                
-    except rospy.ServiceException as e:
-        print ("There doesn't seem to be any blocks on the map.", e)
+            exit(1)
 
-    swarmie.fingers_open()
+        if block is not None:            
+            # claw_offset should be a positive distance of how short drive_to needs to be.
+            swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            # Grab - minimal pickup with sim_check.
+            finger_close_angle = .5
+            if swarmie.simulator_running():
+                finger_close_angle = 0
+            swarmie.set_finger_angle(finger_close_angle) #close
+            rospy.sleep(1)
+            swarmie.wrist_up()
+            # did we succesuflly grab a block?
+            if swarmie.has_block():
+                swarmie.wrist_middle()
+                return True
+        else:
+            print("No blocks detected.")
+            swarmie.wrist_middle()
+            exit(1)
+    except rospy.ServiceException as e:
+        print ("There doesn't seem to be any blocks on the map. ", e)
+        swarmie.wrist_middle()
+        exit(1)
+
+    # otherwise reset claw and return Falase
     swarmie.wrist_middle()
     return False
 
@@ -55,8 +65,8 @@ def recover():
     global swarmie 
     print ("Missed, trying to recover.")
     
-    try :
-        swarmie.drive(-1);
+    try:
+        swarmie.drive(-1)
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
@@ -68,7 +78,7 @@ def main():
     global swarmie 
     global rovername 
     
-    if len(sys.argv) < 2 :
+    if len(sys.argv) < 2:
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
@@ -78,8 +88,8 @@ def main():
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
 
-    for i in range(3) : 
-        if approach() :
+    for i in range(3): 
+        if approach():
             print ("Got it!")
             exit(0)        
         recover()
