@@ -254,13 +254,11 @@ double rightMetersToTicks(double meters) {
 }
 
 double diffToTheta(double right, double left) {
-	// scale factor improves headings
-	return (right - left) / (wheelBase * 1.50);
+	return (right - left) / wheelBase;
 }
 
 double thetaToDiff(double theta) {
-	// scale factor improves headings
-	return theta * wheelBase * 1.50;
+	return theta * wheelBase;
 }
 
 void serialActivityTimer(const ros::TimerEvent& e) {
