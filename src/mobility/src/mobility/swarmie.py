@@ -689,7 +689,7 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
-    def drive_to(self, place, claw_offset = 0, **kwargs):
+    def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
         
@@ -709,8 +709,12 @@ class Swarmie:
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
-        self.turn(angle, **kwargs)
-        self.drive(dist-claw_offset, **kwargs)
+
+        req = MoveRequest(
+            theta=angle, 
+            r=dist-claw_offset,
+        )        
+        return self.__drive(req, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
@@ -748,6 +752,9 @@ class Swarmie:
 
     def get_nearest_block_location(self):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
+
+        Nearest block will be the nearest to the camera, which should almost always be good enough.
+
         Returns:
 
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
@@ -759,10 +766,11 @@ class Swarmie:
         if len(blocks) == 0 :
             return None
 
-        loc = self.get_odom_location().get_pose()
+        # Sort blocks by their distance from the camera_link frame
         blocks = sorted(blocks, key=lambda x :
-                        math.hypot(loc.y - x.pose.pose.position.y,
-                                  loc.x - x.pose.pose.position.x))
+                        math.sqrt(x.pose.pose.position.x**2
+                                  + x.pose.pose.position.y**2
+                                  + x.pose.pose.position.z**2))
 
         nearest = blocks[0]
         self.xform.waitForTransform(self.rover_name + '/odom',

@@ -50,7 +50,22 @@ def smart_square(swarmie, distance):
     
     swarmie.set_heading(start_pose.theta)
     
+def abs_square(swarmie, distance):
     
+    start_pose = swarmie.get_odom_location().get_pose()
+    
+    swarmie.drive(distance, ignore=Obstacle.IS_VISION)
+    swarmie.set_heading(start_pose.theta + math.pi/2, ignore=-1)
+
+    swarmie.drive(distance, ignore=Obstacle.IS_VISION)
+    swarmie.set_heading(start_pose.theta + math.pi, ignore=-1)
+
+    swarmie.drive(distance, ignore=Obstacle.IS_VISION)
+    swarmie.set_heading(start_pose.theta + (3 * math.pi)/2, ignore=-1)
+
+    swarmie.drive(distance, ignore=Obstacle.IS_VISION)
+    swarmie.set_heading(start_pose.theta, ignore=-1)
+
 def main():
     global swarmie 
     global rovername 

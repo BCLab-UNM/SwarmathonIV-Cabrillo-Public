@@ -36,7 +36,7 @@ def approach():
 
         if block is not None:            
             # claw_offset should be a positive distance of how short drive_to needs to be.
-            swarmie.drive_to(block, claw_offset = 0.24, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
             # Grab - minimal pickup with sim_check.
             finger_close_angle = .5
             if swarmie.simulator_running():

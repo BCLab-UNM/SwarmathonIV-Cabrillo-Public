@@ -105,7 +105,7 @@ def callback(data):
         if mag[2] > z_max :
             z_max = mag[2]
 
-        logfile.write('{}, {}, {}, {}, {}, {}, {}, {}, {}\n'.format(*data.data))
+        logfile.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(*data.data))
     elif calculating_data:
         acc = data.data[3:6]
         (acc_x, acc_y, acc_z) = compute_calibrated_data(
@@ -226,9 +226,11 @@ if __name__ == '__main__' :
     print('Checking roll and pitch...')
     rolls = []
     pitches = []
+    rate = rospy.Rate(50)
     for i in range(20):
         rolls.append(roll)
         pitches.append(pitch)
+        rate.sleep()
     avg_roll = deg(np.average(rolls))
     avg_pitch = deg(np.average(pitches))
 
