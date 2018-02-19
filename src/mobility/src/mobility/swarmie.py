@@ -689,7 +689,7 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
-    def drive_to(self, place, claw_offset = 0, **kwargs):
+    def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
         
@@ -712,7 +712,7 @@ class Swarmie:
 
         req = MoveRequest(
             theta=angle, 
-            r=dist, 
+            r=dist-claw_offset,
         )        
         return self.__drive(req, **kwargs)
     
