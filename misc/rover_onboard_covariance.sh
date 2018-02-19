@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 projdir=$(dirname $0)/..
 
 if udevadm info /dev/ttyACM0 | grep -q Leonardo; then
@@ -22,16 +24,16 @@ fi
 
 echo Using Arduino executable: $arduino
 
-if [ -f ./Swarmathon-Arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
+if [ -f ./Swarmathon-Arduino/Covariance/Covariance.ino ]; then
     repo=$(realpath ./Swarmathon-Arduino)
-elif [ -f $(catkin locate)/Swarmathon-Arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
+elif [ -f $(catkin locate)/Swarmathon-Arduino/Covariance/Covariance.ino ]; then
     repo=$(catkin locate)
 else
-    echo "Couldn't locate calibration sketch."
+    echo "Couldn't locate covariance sketch."
     exit 1 
 fi
 
-sketch=$repo/CabrilloCalibrator/CabrilloCalibrator.ino
+sketch=$repo/Covariance/Covariance.ino
 build=$repo/build
 
 $arduino --upload --preserve-temp-files --pref serial.port=$swarmie_dev --pref build.verbose=1 --pref upload.verbose=1 --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
@@ -40,6 +42,6 @@ roscore &
 sleep 1
 rosrun rosserial_python serial_node.py $swarmie_dev &
 sleep 2
-python $projdir/misc/do_cal.py 
+python $projdir/misc/do_covariance.py 
 pkill rosrun
 pkill roscore

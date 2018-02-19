@@ -15,7 +15,7 @@
 #include <Servo.h>
 
 // Constants
-#define PI 3.14159265358979323846
+// #define PI 3.14159265358979323846
 #define RAD2DEG(radianAngle) (radianAngle * 180.0 / PI)
 #define DEG2RAD(degreeAngle) (degreeAngle * PI / 180.0)
 
@@ -39,16 +39,11 @@ byte leftDirectionA = A5; //"clockwise" input
 byte leftDirectionB = A4; //"counterclockwise" input
 byte leftSpeedPin = 10; //PWM input
 
-// Modify before merge
-
 //Odometry (8400 CPR Encoder)
 byte rightEncoderA = 7;
 byte rightEncoderB = 8;
 byte leftEncoderA = 0;
 byte leftEncoderB = 1;
-float wheelBase = 27.8; //distance between left and right wheels (in cm)
-float wheelDiameter = 12.2; //diameter of wheel (in cm)
-int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
 //Serial (USB <--> Intel NUC)
 String rxBuffer;
@@ -69,7 +64,7 @@ L3G gyroscope;
 LSM303 magnetometer_accelerometer;
 LPS pressure;
 Movement move = Movement(rightSpeedPin, rightDirectionA, rightDirectionB, leftSpeedPin, leftDirectionA, leftDirectionB);
-Odometry odom = Odometry(rightEncoderA, rightEncoderB, leftEncoderA, leftEncoderB, wheelBase, wheelDiameter, cpr);
+Odometry odom = Odometry(rightEncoderA, rightEncoderB, leftEncoderA, leftEncoderB);
 Servo fingers;
 Servo wrist;
 NewPing leftUS(leftSignal, leftSignal, 330);
@@ -149,6 +144,11 @@ void parse() {
     move.stop();
   }
   else if (rxBuffer == "d") {
+    static int ping_state = 0;
+    static int leftUSValue = 300;
+    static int rightUSValue = 300;
+    static int centerUSValue = 300;
+
     Serial.print("GRF,");
     Serial.print(String(fingers.attached()) + ",");
     if (fingers.attached()) {
@@ -167,48 +167,31 @@ void parse() {
       Serial.println();
     }
 
-    Serial.print("IMU,");
-    bool imuStatusFlag = imuStatus();
-    Serial.print(String(imuStatusFlag) + ",");
-    if (imuStatusFlag) {
+    if (imuStatus()) {
       imuInit();
       Serial.println(updateIMU());
     }
-    else {
-      Serial.println(",,,,,,,,");
-    }
 
-    Serial.println("ODOM," + String(1) + "," + updateOdom());
+    Serial.println("ODOM,1," + updateOdom());
 
-    Serial.print("USL,");
-    int leftUSValue = leftUS.ping_cm();
-    Serial.print(String(leftUSValue > 0 ? 1 : 0) + ",");
-    if (leftUSValue > 0) {
-      Serial.println(String(leftUSValue));
+    // Only do one sonar at a time to prevent crosstalk.
+    if (ping_state == 0) {
+      leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
+      //leftUSValue = leftUS.ping_cm();
+      Serial.println("USL,1," + String(leftUSValue));
     }
-    else {
-      Serial.println();
+    else if (ping_state == 1) {
+      rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
+      //rightUSValue = rightUS.ping_cm();
+      Serial.println("USR,1," + String(rightUSValue));
     }
+    else{
+      centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
+      //centerUSValue = centerUS.ping_cm();
+      Serial.println("USC,1," + String(centerUSValue));
+    }
+    ping_state = (ping_state + 1) % 3;
 
-    Serial.print("USC,");
-    int centerUSValue = centerUS.ping_cm();
-    Serial.print(String(centerUSValue > 0 ? 1 : 0) + ",");
-    if (centerUSValue > 0) {
-      Serial.println(String(centerUSValue));
-    }
-    else {
-      Serial.println();
-    }
-
-    Serial.print("USR,");
-    int rightUSValue = rightUS.ping_cm();
-    Serial.print(String(rightUSValue > 0 ? 1 : 0) + ",");
-    if (rightUSValue > 0) {
-      Serial.println(String(rightUSValue));
-    }
-    else {
-      Serial.println();
-    }
   }
   else if (rxBuffer == "f") {
     float radianAngle = Serial.parseFloat();
@@ -229,7 +212,7 @@ void parse() {
 //Update transmit buffer//
 //////////////////////////
 
-String updateIMU() {
+String updateIMU() {  
   //Update current sensor values
   gyroscope.read();
   magnetometer_accelerometer.read();
@@ -240,33 +223,17 @@ String updateIMU() {
     L3G::vector<int16_t> gyro = gyroscope.g;
     LSM303::vector<int16_t> mag = magnetometer_accelerometer.m;
 
-    //Convert accelerometer digits to milligravities, then to gravities, and finally to meters per second squared
-    LSM303::vector<float> linear_acceleration = {acc.y*0.061/1000*9.81, -acc.x*0.061/1000*9.81, acc.z*0.061/1000*9.81};
-
-    //Convert gyroscope digits to millidegrees per second, then to degrees per second, and finally to radians per second
-    L3G::vector<float> angular_velocity = {gyro.y*8.75/1000*(PI/180), -gyro.x*8.75/1000*(PI/180), gyro.z*8.75/1000*(PI/180)};
-
-    //Combine normalized magnetometer and accelerometer digits to produce Euler angles, i.e. pitch, roll, and yaw
-    LSM303::vector<float> orientation = {(float)mag.x, (float)mag.y, (float)mag.z};
-    orientation.x -= (magnetometer_accelerometer.m_min.x + magnetometer_accelerometer.m_max.x) / 2;
-    orientation.y -= (magnetometer_accelerometer.m_min.y + magnetometer_accelerometer.m_max.y) / 2;
-    orientation.z -= (magnetometer_accelerometer.m_min.z + magnetometer_accelerometer.m_max.z) / 2;
-    LSM303::vector_normalize(&orientation);
-    float roll = atan2(linear_acceleration.y, sqrt(pow(linear_acceleration.x,2) + pow(linear_acceleration.z,2)));
-    float pitch = -atan2(linear_acceleration.x, sqrt(pow(linear_acceleration.y,2) + pow(linear_acceleration.z,2)));
-    float yaw = atan2(-orientation.y*cos(roll) + orientation.z*sin(roll), orientation.x*cos(pitch) + orientation.y*sin(pitch)*sin(roll) + orientation.z*sin(pitch)*cos(roll)) + PI;
-    orientation = {roll, pitch, yaw};
-
     //Append data to buffer
-    String txBuffer = String(linear_acceleration.x) + "," +
-               String(linear_acceleration.y) + "," +
-               String(linear_acceleration.z) + "," +
-               String(angular_velocity.x) + "," +
-               String(angular_velocity.y) + "," +
-               String(angular_velocity.z) + "," +
-               String(orientation.x) + "," +
-               String(orientation.y) + "," +
-               String(orientation.z);
+    String txBuffer = String("IMU,1,") +
+               String(acc.x) + "," +
+               String(acc.y) + "," +
+               String(acc.z) + "," +
+               String(mag.x) + "," +
+               String(mag.y) + "," +
+               String(mag.z) + "," +
+               String(gyro.x) + "," +
+               String(gyro.y) + "," +
+               String(gyro.z);
 
     return txBuffer;
   }
@@ -278,12 +245,9 @@ String updateOdom() {
   String txBuffer;
   odom.update();
 
-  txBuffer = String(odom.x) + "," +
-             String(odom.y) + "," +
-             String(odom.theta) + "," +
-             String(odom.vx) + "," +
-             String(odom.vy) + "," +
-             String(odom.vtheta);
+  txBuffer = String(odom.left) + "," +
+             String(odom.right) + "," +
+             String(odom.clock);
 
   return txBuffer;
 }
@@ -301,8 +265,7 @@ void imuInit() {
 
   magnetometer_accelerometer.init();
   magnetometer_accelerometer.enableDefault();
-  magnetometer_accelerometer.m_min = (LSM303::vector<int16_t>){ -2247,  -2068,  -1114};
-  magnetometer_accelerometer.m_max = (LSM303::vector<int16_t>){+3369,  +2877,  +3634};
+
   magnetometer_accelerometer.setTimeout(1);
 
   pressure.init();
