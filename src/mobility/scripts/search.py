@@ -65,8 +65,11 @@ def avoid():
         #conditional apon allignment being of path
         cpos = swarmie.get_odom_location().get_pose()
         hyp = math.sqrt(math.pow(cpos.x - head.x,2) + math.pow(cpos.y - head.y,2))
-        if math.floor(math.sin(head.theta) * hyp - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp - cpos.x) < pVar:
+        #stang = angles.shortest_angular_distance(0,head.theta)
+        print("position:", cpos, "y",math.sin(head.theta) * hyp,"x",math.cos(head.theta) * hyp)
+        if math.floor(math.sin(head.theta) * hyp + head.y - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp + head.x - cpos.x) < pVar:
             swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
+            print("escaped obstacle")
             if swarmie.get_obstacle_condition() == 0:
                 rpath = False
             else:
@@ -114,7 +117,9 @@ def avoid_wall():
         #conditional apon allignment being of path
         cpos = swarmie.get_odom_location().get_pose()
         hyp = math.sqrt(math.pow(cpos.x - head.x,2) + math.pow(cpos.y - head.y,2))
-        if math.floor(math.sin(head.theta) * hyp - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp - cpos.x) < pVar:
+        #stang = angles.shortest_angular_distance(0,head.theta)
+        print("position:", cpos, "y",math.sin(head.theta) * hyp + head.y,"x",math.cos(head.theta) * hyp + head.x)
+        if math.floor(math.sin(head.theta) * hyp + head.y - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp + head.x - cpos.x) < pVar:
             swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
             if swarmie.get_obstacle_condition() == 0:
                 rpath = False
@@ -122,7 +127,7 @@ def avoid_wall():
                 swarmie.set_heading(cpos.theta, ignore=Obstacle.IS_SONAR)
         #placeholder for difference change latter 
         if math.hypot(swarmie.get_odom_location().get_pose().y - head.y, 
-                      swarmie.get_odom_location().get_pose().x - head.x) > 2:
+                      swarmie.get_odom_location().get_pose().x - head.x) > 3:
             print("test return")
             return
     swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
@@ -227,6 +232,7 @@ def get_sonar_left(msg):
     global sonar_left 
     sonar_left = msg.range
     
+    
 def get_sonar_right(msg):
     global sonar_right
     sonar_right = msg.range
@@ -240,6 +246,51 @@ def get_sonar_center(msg):
 #    if largest > maximum and largest < 350:
 #        maximum = largest
 #    return maximum
+
+def cleanup():
+    global angle
+    global sonar_left
+    global sonar_right
+    global sonar_center
+    global sonVar
+    avgl = 0
+    avgr = 0
+    avgc = 0
+    lo = ro = co = 0
+    
+    ml = sonar_left
+    mr = sonar_right
+    mc = sonar_center
+
+    for y in range(20):
+        rospy.sleep(.01)
+        l = sonar_left
+        r = sonar_right
+        c =  sonar_center
+        if sonVar < math.fabs(avgl / (y + 1) - l):
+            ml = l
+            lo = lo + 1
+        if sonVar < math.fabs(avgr / (y + 1) - r):
+            mr = r
+            ro = ro + 1
+        if sonVar < math.fabs(avgc / (y + 1) - c):
+            mc = c
+            co = co + 1
+        avgl = avgl + l
+        avgr = avgr + r
+        avgc = avgc + c
+        
+    avgl = avgl / 20
+    avgr = avgr / 20
+    avgc = avgc / 20 
+    if lo > 10:
+        avgl = ml
+    if ro > 10:
+        avgr = mr
+    if co > 10:
+        avgc = mc
+    (l,c,r) = [avgl,avgc,avgr]
+    return (l,c,r)
 
 def aprox_angle(poll):
     global angle
@@ -265,11 +316,13 @@ def main():
     global sRPer
     global sCPer
     global pVar
+    global sonVar
     
     sVar = 0.5
     sRPer = 0.8
     sCPer = 1.6
     pVar =  0.5
+    sonVar = 0.5
     
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
