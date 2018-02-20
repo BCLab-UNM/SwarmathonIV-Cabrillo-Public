@@ -280,12 +280,12 @@ class State:
                 self.CurrentState = State.STATE_IDLE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
                     
-            elif abs(goal_angle) > State.DRIVE_ANGLE_ABORT / 2 :
+            elif abs(heading_error) > State.DRIVE_ANGLE_ABORT / 2 :
                 self._stop_now(MoveResult.PATH_FAIL)
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
                 self.drive(State.DRIVE_SPEED,
-                           goal_angle * State.HEADING_RESTORE_FACTOR,
+                           heading_error * State.HEADING_RESTORE_FACTOR,
                            State.DRIVE_MODE_PID)
     
         elif self.CurrentState == State.STATE_REVERSE :
