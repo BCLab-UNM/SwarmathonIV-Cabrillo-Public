@@ -18,46 +18,57 @@ from mobility.swarmie import Swarmie
 ## TODO general improvement of location of resource placement
 
 def quick_look_for_tags():
-    '''If I dont see a hometag I turn to both sides and if I still dont see a tag I drop the block and throw a ServiceException'''
     global swarmie
     global rovername
+
+    targets0 = get_center_pose_list(256)
+    swarmie.turn(math.pi/6, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    targets1 = get_center_pose_list(256)
+    swarmie.turn(-math.pi/3, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    targets2 = get_center_pose_list(256)
     
-    targets = [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] #only get the home tags
-    if len(targets) == 0:
-        swarmie.turn(math.pi/8, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-        targets = get_center_pose_list()
-        if len(targets) == 0:
-            swarmie.turn(-math.pi/4, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-            targets = get_center_pose_list()
-            if len(targets) == 0:
-                swarmie.putdown() 
-                raise IndexError("There are no home tags seen!")
-            else: #if tags were seen on the right side
-                return;
-        else: #if tags were seen on the left side
-            return;          
-    else: #if tags were seen ahead
-            return;
+    if (len(targets0) is 0) and (len(targets1) is 0) and (len(targets2) is 0):
+        raise IndexError("There are no home tags seen!")
+    
+    if (len(targets0) > len(targets1)) and (len(targets0) > len(targets2))
+    
+    #promote targets when a corner is seen
+    targetsList.append(get_center_pose_list(256))
+    swarmie.turn(math.pi/6, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    targetsList.append(get_center_pose_list(256))
+    swarmie.turn(-math.pi/3, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    targetsList.append(get_center_pose_list(256))
+    
+    
+    #
+    if (len(targets0) is 0) and (len(targets1) is o) and (len(targets2) is 0):
+        raise IndexError("There are no home tags seen!")
+    
+    if (len(targets0) > len(targets1)) and (len(targets0) > len(targets2))
+    
+    #promote targets when a corner is seen
 
-
-def get_center_pose_list():
+def has_two_thetas(targets):
+    return(len(set( int(abs(t.theta)) for t in targets)) > 1)   
+    
+#I think its polor coordinates
+def convert_to_polar(t):
     global swarmie
     global rovername
+    swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(1.0))
+    odom_pose = swarmie.xform.transformPose(rovername + '/odom', t.pose)
+    quat = [odom_pose.pose.orientation.x, odom_pose.pose.orientation.y,
+            odom_pose.pose.orientation.z, odom_pose.pose.orientation.w,
+            ]
+    (_r, _p, y) = tf.transformations.euler_from_quaternion(quat)
+    pose = Pose2D()
+    pose.x = odom_pose.pose.position.x
+    pose.y = odom_pose.pose.position.y
+    pose.theta = y
+    return(pose)
 
-    pose_list = []
-    for t in [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ] :
-        swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(1.0))
-        odom_pose = swarmie.xform.transformPose(rovername + '/odom', t.pose)
-        quat = [odom_pose.pose.orientation.x, odom_pose.pose.orientation.y,
-                odom_pose.pose.orientation.z, odom_pose.pose.orientation.w,
-                ]
-        (_r, _p, y) = tf.transformations.euler_from_quaternion(quat)
-        pose = Pose2D()
-        pose.x = odom_pose.pose.position.x
-        pose.y = odom_pose.pose.position.y
-        pose.theta = y
-        pose_list.append(pose)
-    return pose_list
+def get_center_pose_list(id):
+    return [convert_to_polar(tag) for tag in swarmie.get_latest_targets().detections if tag.id is id ]
 
 
 def get_furthest_hometags_location(tags):
@@ -77,7 +88,7 @@ def get_furthest_hometags_location(tags):
 def find_center():
     global swarmie
     
-    tags = get_center_pose_list()
+    tags = get_center_pose_list(256)
     #if 2+ corner tags have been seen, theta values seen 0,1,3
     if len(set( int(abs(t.theta)) for t in tags)) > 1:
         print(rovername, "dropping off in Corner:", set(int(abs(t.theta)) for t in tags))
@@ -92,6 +103,7 @@ def find_center():
         return(tags[0])
 
 def main():
+    '''Dropoff throws IndexError when no tags near swarmie '''
     global swarmie
     global rovername
 
@@ -110,8 +122,6 @@ def main():
         quick_look_for_tags()
         swarmie.drive_to(find_center(), ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
     except:
-        swarmie.putdown() #best attempt to get it close to home or should I keep it and keep let search find home?
-        swarmie.drive(-.3, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         raise
 
     # Recalibrate the home location because we're here.
