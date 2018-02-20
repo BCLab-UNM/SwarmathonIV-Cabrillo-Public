@@ -29,13 +29,12 @@ def approach():
         
         try:
             block = swarmie.get_nearest_block_location()
-            targets = [tag for tag in swarmie.get_latest_targets().detections if tag.id is 256 ]
         except tf.Exception as e:
             print("Something went wrong and we can't locate the block. ", e)
             swarmie.wrist_up()
             exit(1)
 
-        if block is not None and targets is None:            
+        if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
             swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
             # Grab - minimal pickup with sim_check.

@@ -749,7 +749,6 @@ class Swarmie:
         '''
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-
     def get_nearest_block_location(self):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
@@ -761,8 +760,8 @@ class Swarmie:
         '''
         global rovername, swarmie
 
-        # Find the nearest block
-        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        # Finds all visable  apriltags
+        blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 
@@ -773,8 +772,14 @@ class Swarmie:
                                   + x.pose.pose.position.z**2))
 
         nearest = blocks[0]
+
+        # checks for hometag between rover and block.
+        if nearest.id==256:
+            return None
+
         self.xform.waitForTransform(self.rover_name + '/odom',
                         nearest.pose.header.frame_id, nearest.pose.header.stamp,
                         rospy.Duration(3.0))
-
+        
+        # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
