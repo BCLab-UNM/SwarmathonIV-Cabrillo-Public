@@ -31,7 +31,7 @@ def approach():
             block = swarmie.get_nearest_block_location()
         except tf.Exception as e:
             print("Something went wrong and we can't locate the block. ", e)
-            swarmie.wrist_middle()
+            swarmie.wrist_up()
             exit(1)
 
         if block is not None:            
@@ -50,15 +50,15 @@ def approach():
                 return True
         else:
             print("No blocks detected.")
-            swarmie.wrist_middle()
+            swarmie.wrist_up()
             exit(1)
     except rospy.ServiceException as e:
         print ("There doesn't seem to be any blocks on the map. ", e)
-        swarmie.wrist_middle()
+        swarmie.wrist_up()
         exit(1)
 
     # otherwise reset claw and return Falase
-    swarmie.wrist_middle()
+    swarmie.wrist_up()
     return False
 
 def recover():
