@@ -92,6 +92,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
+    double sonar_depth = 0.1;  // limit view_poly to 10cm past measured ranges
 
 	// Update the timestamp in the Obstacle map.
 	obstacle_map.setTimestamp(ros::Time::now().toNSec());
@@ -117,20 +118,20 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Left sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + 3 * sin(currentLocation.theta + M_PI_4)
+			grid_map::Position(currentLocation.x + (sonarLeft->range + sonar_depth) * cos(currentLocation.theta + M_PI_4),
+					currentLocation.y + (sonarLeft->range + sonar_depth) * sin(currentLocation.theta + M_PI_4)
 			));
 
 	// Center sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta),
-					currentLocation.y + 3 * sin(currentLocation.theta)
+			grid_map::Position(currentLocation.x + (sonarCenter->range + sonar_depth) * cos(currentLocation.theta),
+					currentLocation.y + (sonarCenter->range + sonar_depth) * sin(currentLocation.theta)
 			));
 
 	// Right sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + 3 * sin(currentLocation.theta - M_PI_4)
+			grid_map::Position(currentLocation.x + (sonarRight->range + sonar_depth) * cos(currentLocation.theta - M_PI_4),
+					currentLocation.y + (sonarRight->range + sonar_depth) * sin(currentLocation.theta - M_PI_4)
 			));
 
 	// Increase the "obstacleness" of the viewable area.
