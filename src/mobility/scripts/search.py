@@ -53,7 +53,7 @@ def avoid(head):
             swarmie.set_heading(angle + math.pi/12, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
-            swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
+            swarmie.drive(.2, ignore=Obstacle.SONAR_RIGHT)
             driveS = driveS + 1
         except ObstacleException:
             if swarmie.get_obstacle_condition() == Obstacle.SONAR_RIGHT:
@@ -124,13 +124,13 @@ def triangle():
         print ("I saw an obstacle!")
         z = 0
         facing = swarmie.get_odom_location().get_pose()
-        while z < 2 :
+        while z < 1 :
             z = 0
             try : 
                 swarmie.drive(10)
             except ObstacleException:
                 print("hit things")
-            while avoid(facing) and z < 2: 
+            while avoid(facing) and z < 1: 
                 print(z + 1, "times trying to avoid")
                 z = z + 1
     print("going home")
