@@ -32,7 +32,7 @@ def turnaround():
         
 def avoid(head):
     global swarmie
-    global angle
+    global anglei
     global sonar_left
     global sonar_right
     global sonar_center
@@ -50,10 +50,10 @@ def avoid(head):
         rospy.sleep(0.1)
         print("Sonar conditions in avoid:",sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
         while sonar_right < sRPer - sVar or sonar_center < sCPer - sVar :
-            swarmie.set_heading(angle + math.pi/12, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.set_heading(anglei + math.pi/12, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
-            swarmie.drive(.2, ignore=Obstacle.SONAR_RIGHT)
+            swarmie.drive(.5, ignore=Obstacle.SONAR_RIGHT)
             driveS = driveS + 1
         except ObstacleException:
             if swarmie.get_obstacle_condition() == Obstacle.SONAR_RIGHT:
@@ -65,7 +65,7 @@ def avoid(head):
         print("after drive drive number:", driveS)        
         x = 0
         while (sonar_right > sRPer + sVar or sonar_center > sCPer + sVar) and x < 11 :
-            swarmie.set_heading(angle - math.pi / 6, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.set_heading(anglei - math.pi / 6, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             x = x + 1
         if x >= 11:
             return False
@@ -107,14 +107,14 @@ def wander():
         
 def triangle():
     global swarmie
-    global angle
+    global anglei
     
-    swarmie.set_heading(angle + math.pi / 10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION )
+    swarmie.set_heading(anglei + math.pi / 10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION )
     try :
-        rospy.loginfo("pieangle...")
+        rospy.loginfo("pieanglei...")
         swarmie.drive(10)
         print("wall?")
-        swarmie.set_heading(angle - math.pi, ignore=Obstacle.IS_SONAR)
+        swarmie.set_heading(anglei - math.pi, ignore=Obstacle.IS_SONAR)
         try:
             swarmie.drive(2)
         except ObstacleException:
@@ -141,7 +141,7 @@ def triangle():
         go_back()
     
 def go_back():
-    global angle
+    global anglei
     try:        
         try:  
             for x in range(20):      
@@ -158,7 +158,7 @@ def go_back():
                 go_back()
     except HomeException:
         #figure out home vectors (rvis?)
-        swarmie.set_heading(angle + math.pi * 0.9 , ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        swarmie.set_heading(anglei + math.pi * 0.9 , ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
 
         
 def orbit(home):
@@ -187,13 +187,13 @@ def orbit(home):
         avoid()
         
 def get_angle(msg):
-    global angle 
+    global anglei 
     quat = [    msg.orientation.x, 
                 msg.orientation.y, 
                 msg.orientation.z, 
                 msg.orientation.w, 
                 ] 
-    angle = tf.transformations.euler_from_quaternion(quat)[2]
+    anglei = tf.transformations.euler_from_quaternion(quat)[2]
    
     #print(info/math.pi * 180, "\n", swarmie.get_odom_location().get_pose().theta / math.pi * 180, "\n", max(math.fabs(info/math.pi * 180 - swarmie.get_odom_location().get_pose().theta / math.pi * 180)), "\n")
 
@@ -217,7 +217,7 @@ def get_sonar_center(msg):
 #    return maximum
 
 def cleanup():
-    global angle
+    global anglei
     global sonar_left
     global sonar_right
     global sonar_center
@@ -262,22 +262,22 @@ def cleanup():
     return (l,c,r)
 
 def aprox_angle(poll):
-    global angle
+    global anglei
     avg = 0
     if not swarmie.is_moving() :
         for i in range(0,poll):
-            avg = avg + angle
+            avg = avg + anglei
             rospy.sleep(.1)
         avg = avg / poll
     else :
-        avg = angle
+        avg = anglei
     return (math.floor(avg / (math.pi/4) + 4.5) - 4) * math.pi 
 
 def main():
     global swarmie 
     global rovername 
     #global lhome
-    global angle
+    global anglei
     global sonar_left
     global sonar_right
     global sonar_center
@@ -309,18 +309,19 @@ def main():
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
         
-    try :
-        print("map:    ", swarmie.get_obstacle_map().map)
-        swarmie.drive(1)
-    except HomeException :
-        swarmie.set_home_odom_location(swarmie.get_odom_location())
-        swarmie.drive(-.5 , ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
-        #swarmie.set_heading(angles.shortest_angular_distance(0 , angle + math.pi), ignore=Obstacle.IS_VISION)
-        swarmie.set_heading(angle + math.pi/2, ignore=Obstacle.IS_VISION)
-        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
-        swarmie.set_heading(angle + math.pi/2, ignore=Obstacle.IS_VISION)
-        print(angle/ math.pi * 180, aprox_angle(5) / math.pi * 180)
+    #try :
+    #    print("map:    ", swarmie.get_obstacle_map().map)
+    #    swarmie.drive(1)
+    #except HomeException :
+    #    swarmie.set_home_odom_location(swarmie.get_odom_location())
+    #    swarmie.drive(-.5 , ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    #    print(anglei/ math.pi * 180, aprox_anglei(5) / math.pi * 180)
+        #swarmie.set_heading(angleis.shortest_angular_distance(0 , anglei + math.pi), ignore=Obstacle.IS_VISION)
+    #    swarmie.set_heading(anglei + math.pi/2, ignore=Obstacle.IS_VISION)
+    rospy.sleep(1)
+    print(anglei / math.pi * 180, aprox_angle(5) / math.pi * 180)
+    swarmie.set_heading(anglei + math.pi / 4, ignore=Obstacle.IS_VISION)
+    #    print(anglei/ math.pi * 180, aprox_anglei(5) / math.pi * 180)
 
 
     try: 
