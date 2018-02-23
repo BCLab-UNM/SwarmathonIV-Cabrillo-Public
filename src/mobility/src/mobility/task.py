@@ -137,7 +137,12 @@ class Task :
                 self.current_state = Task.STATE_GOHOME 
                         
         elif self.current_state == Task.STATE_DROPOFF : 
-            self.print_state('Dropoff complete. Back to searching.')
-            self.has_block = False
-            self.launch(Task.PROG_SEARCH)
-            self.current_state = Task.STATE_SEARCH
+            if self.task.exit_code == 0 :
+                self.print_state('Dropoff complete. Back to searching.')
+                self.has_block = False
+                self.launch(Task.PROG_SEARCH)
+                self.current_state = Task.STATE_SEARCH
+            else:
+                self.print_state('Dropoff failed. Back to searching for home.')
+                self.launch(Task.PROG_GOHOME)
+                self.current_state = Task.STATE_GOHOME
