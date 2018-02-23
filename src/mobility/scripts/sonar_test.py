@@ -28,6 +28,7 @@ def detectm():
     global sonar_right
     global sonar_center
     avgl = 0
+    mm = angle
     avgr = 0
     avgc = 0
     x = 0
@@ -74,6 +75,11 @@ def detectm():
                 print("        avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
                 print("        avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
                 print("        avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
+            swarmie.set_heading(angle + math.pi/2, ignore=Obstacle.IS_SONAR)
+            print("obstacle hit:")
+            print("    avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
+            print("    avg right:", avgr, "now:", sonar_right, "max varience:" , math.fabs(avgr - mr))
+            print("    avg center:", avgc, "now:", sonar_center, "max varience:" , math.fabs(avgc - mc))
             exit(1)    
         
         print("avg left:", avgl, "now:", sonar_left, "max varience:" , math.fabs(avgl - ml))
@@ -201,7 +207,7 @@ def main():
         exit (-1)
         
     #for do in range(20) :
-    detect()
+    detectm()
         
     print ("End of sensing")
     exit(1)

@@ -28,7 +28,9 @@ def turnaround():
     global swarmie
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
-def avoid():
+
+        
+def avoid(head):
     global swarmie
     global angle
     global sonar_left
@@ -43,98 +45,52 @@ def avoid():
     #elif swarmie.get_obsticle_condition() & 3 == Obstacle.SONAR_RIGHT:
     
     nrpath = True
-    head = swarmie.get_odom_location().get_pose()
-    print(swarmie.get_obstacle_condition(), Obstacle.SONAR_LEFT, Obstacle.SONAR_RIGHT)
+    driveS = 0
     while nrpath :
-        print(sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
-        while sonar_right < sRPer - sVar / 2 or sonar_center < sCPer - sVar / 2 :
-            swarmie.set_heading(angle + math.pi/10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        rospy.sleep(0.1)
+        print("Sonar conditions in avoid:",sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
+        while sonar_right < sRPer - sVar or sonar_center < sCPer - sVar :
+            swarmie.set_heading(angle + math.pi/12, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
             swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
+            driveS = driveS + 1
         except ObstacleException:
-            if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
+            if swarmie.get_obstacle_condition() == Obstacle.SONAR_RIGHT:
                 print("this is still broken")
                 print(sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
             else:
-                print("obstacle still present")
+                print("hit exception in drive, sonar reading:", sonar_left,sonar_center,sonar_right)
         
-        print("after obstacle present")        
-        while sonar_right > sRPer + sVar or sonar_center > sCPer + sVar :
-            swarmie.set_heading(angle - math.pi / 10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+        print("after drive drive number:", driveS)        
+        x = 0
+        while (sonar_right > sRPer + sVar or sonar_center > sCPer + sVar) and x < 11 :
+            swarmie.set_heading(angle - math.pi / 6, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            x = x + 1
+        if x >= 11:
+            return False
         #conditional apon allignment being of path
         cpos = swarmie.get_odom_location().get_pose()
         hyp = math.sqrt(math.pow(cpos.x - head.x,2) + math.pow(cpos.y - head.y,2))
-        #stang = angles.shortest_angular_distance(0,head.theta)
-        print("position:", cpos, "y",math.sin(head.theta) * hyp,"x",math.cos(head.theta) * hyp)
-        if math.floor(math.sin(head.theta) * hyp + head.y - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp + head.x - cpos.x) < pVar:
+        stang = angles.shortest_angular_distance(0,head.theta)
+        print("wtf math. Ys:",math.sin(stang) * hyp + head.y,cpos.y,"Xs:",math.cos(stang) * hyp + head.x,cpos.x)
+        if math.fabs(math.sin(stang) * hyp + head.y - cpos.y) < pVar and math.fabs(math.cos(stang) * hyp + head.x - cpos.x) < pVar:
+            print("found path")
             swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
-            print("escaped obstacle")
+            rospy.sleep(0.1)
             if swarmie.get_obstacle_condition() == 0:
-                rpath = False
+                print("escaped obstacle")
+                return False
             else:
-                swarmie.set_heading(cpos.theta, ignore=Obstacle.IS_SONAR)
-    swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
-    try: 
-        drive(0.5)
-    except ObstacleException:
-        avoid()
-        
-def avoid_wall():
-    global swarmie
-    global angle
-    global sonar_left
-    global sonar_right
-    global sonar_center
-    global sVar
-    global sRPer
-    global sCPer
-    global pVar
-    #if swarmie.get_obstacle_condition() & 3 == Obstacle.SONAR_LEFT:
-        
-    #elif swarmie.get_obsticle_condition() & 3 == Obstacle.SONAR_RIGHT:
-    
-    nrpath = True
-    head = swarmie.get_odom_location().get_pose()
-    print(swarmie.get_obstacle_condition(), Obstacle.SONAR_LEFT, Obstacle.SONAR_RIGHT)
-    while nrpath :
-        print(sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
-        while sonar_right < sRPer - sVar / 2 or sonar_center < sCPer - sVar / 2 :
-            swarmie.set_heading(angle + math.pi/10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            
-        try:
-            swarmie.drive(1, ignore=Obstacle.SONAR_RIGHT)
-        except ObstacleException:
-            if swarmie.get_obstacle_condition() & 2 == Obstacle.SONAR_RIGHT:
-                print("this is still broken")
-                print(sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
-            else:
-                print("obstacle still present")
-        
-        print("after obstacle present")        
-        while sonar_right > sRPer + sVar or sonar_center > sCPer + sVar :
-            swarmie.set_heading(angle - math.pi / 10, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        #conditional apon allignment being of path
-        cpos = swarmie.get_odom_location().get_pose()
-        hyp = math.sqrt(math.pow(cpos.x - head.x,2) + math.pow(cpos.y - head.y,2))
-        #stang = angles.shortest_angular_distance(0,head.theta)
-        print("position:", cpos, "y",math.sin(head.theta) * hyp + head.y,"x",math.cos(head.theta) * hyp + head.x)
-        if math.floor(math.sin(head.theta) * hyp + head.y - cpos.y) < pVar and math.floor(math.cos(head.theta) * hyp + head.x - cpos.x) < pVar:
-            swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
-            if swarmie.get_obstacle_condition() == 0:
-                rpath = False
-            else:
+                print("new obstacle, reseting avoid")
                 swarmie.set_heading(cpos.theta, ignore=Obstacle.IS_SONAR)
         #placeholder for difference change latter 
-        if math.hypot(swarmie.get_odom_location().get_pose().y - head.y, 
-                      swarmie.get_odom_location().get_pose().x - head.x) > 3:
-            print("test return")
-            return
-    swarmie.set_heading(head.theta, ignore=Obstacle.IS_SONAR)
-    try: 
-        drive(0.5)
-    except ObstacleException:
-        avoid()
+        #if math.hypot(swarmie.get_odom_location().get_pose().y - head.y, 
+        #              swarmie.get_odom_location().get_pose().x - head.x) > 4:
+        #    return False
+        if driveS > 2 :
+            nrpath = False
+    return True
            
 def wander():
     global swarmie
@@ -162,14 +118,27 @@ def triangle():
         try:
             swarmie.drive(2)
         except ObstacleException:
-            avoid()
+            avoid(swarmie.get_odom_location().get_pose())
         
     except ObstacleException :
         print ("I saw an obstacle!")
-        avoid_wall()
-
-    print("made it")
+        z = 0
+        facing = swarmie.get_odom_location().get_pose()
+        while z < 2 :
+            z = 0
+            try : 
+                swarmie.drive(10)
+            except ObstacleException:
+                print("hit things")
+            while avoid(facing) and z < 2: 
+                print(z + 1, "times trying to avoid")
+                z = z + 1
+    print("going home")
     go_back()
+        
+    print("made it")
+    if swarmie.get_obstacle_condition() & 512 != 512:
+        go_back()
     
 def go_back():
     global angle
@@ -185,7 +154,7 @@ def go_back():
                 swarmie.drive(hyph + 1)
             exit(1)
         except ObstacleException:
-                avoid()
+                avoid(swarmie.get_odom_location().get_pose())
                 go_back()
     except HomeException:
         #figure out home vectors (rvis?)
@@ -319,8 +288,8 @@ def main():
     global sonVar
     
     sVar = 0.5
-    sRPer = 0.8
-    sCPer = 1.6
+    sRPer = 0.77
+    sCPer = 1.4
     pVar =  0.5
     sonVar = 0.5
     
@@ -341,7 +310,7 @@ def main():
         exit (-1)
         
     try :
-        print("map:    ", swarmie.get_target_map().stamp)
+        print("map:    ", swarmie.get_obstacle_map().map)
         swarmie.drive(1)
     except HomeException :
         swarmie.set_home_odom_location(swarmie.get_odom_location())
