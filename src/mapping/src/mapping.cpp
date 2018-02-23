@@ -37,12 +37,10 @@ using namespace std;
 
 string rover;
 
-grid_map::GridMap obstacle_map;
-grid_map::GridMap target_map;
+grid_map::GridMap rover_map;
 
 ros::Publisher obstaclePublish;
-ros::Publisher obstacle_map_publisher;
-ros::Publisher target_map_publisher;
+ros::Publisher rover_map_publisher;
 
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
@@ -58,23 +56,13 @@ double poseToYaw(const geometry_msgs::Pose &pose) {
     return yaw;
 }
 
-void publishObstacleMap() {
-	if (obstacle_map_publisher.getNumSubscribers() > 0) {
+void publishRoverMap() {
+	if (rover_map_publisher.getNumSubscribers() > 0) {
 		ros::Time time = ros::Time::now();
 		grid_map_msgs::GridMap message;
-		obstacle_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(obstacle_map, message);
-		obstacle_map_publisher.publish(message);
-	}
-}
-
-void publishTargetMap() {
-	if (target_map_publisher.getNumSubscribers() > 0) {
-		ros::Time time = ros::Time::now();
-		grid_map_msgs::GridMap message;
-		target_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(target_map, message);
-		target_map_publisher.publish(message);
+		rover_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(rover_map, message);
+		rover_map_publisher.publish(message);
 	}
 }
 
@@ -95,7 +83,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
     double sonar_depth = 0.1;  // limit view_poly to 10cm past measured ranges
 
 	// Update the timestamp in the Obstacle map.
-	obstacle_map.setTimestamp(ros::Time::now().toNSec());
+	rover_map.setTimestamp(ros::Time::now().toNSec());
 
 	// Calculate the obstacle status.
 	if (sonarLeft->range < collisionDistance && sonarCenter->range < collisionDistance) {
@@ -112,7 +100,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	}
 
 	grid_map::Polygon view_poly;
-	view_poly.setFrameId(obstacle_map.getFrameId());
+	view_poly.setFrameId(rover_map.getFrameId());
 
 	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
@@ -135,21 +123,21 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 			));
 
 	// Increase the "obstacleness" of the viewable area.
-	for (grid_map::PolygonIterator iterator(obstacle_map, view_poly);
+	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
 	      !iterator.isPastEnd(); ++iterator) {
-		double val = obstacle_map.at("obstacles", *iterator);
+		double val = rover_map.at("obstacle", *iterator);
 		if (isnan(val)) {
 			val = 0.5;
 		}
 		val += 0.01;
 		if (val > 1)
 			val = 1;
-	    obstacle_map.at("obstacles", *iterator) = val;
+	    rover_map.at("obstacle", *iterator) = val;
 	  }
 
 
 	grid_map::Polygon clear_poly;
-	clear_poly.setFrameId(obstacle_map.getFrameId());
+	clear_poly.setFrameId(rover_map.getFrameId());
 
 	clear_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
@@ -172,15 +160,15 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 			));
 
 	// Clear the area that's clear in sonar.
-	for (grid_map::PolygonIterator iterator(obstacle_map, clear_poly);
+	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
-		double val = obstacle_map.at("obstacles", *iterator);
+		double val = rover_map.at("obstacle", *iterator);
 		if (!isnan(val)) {
 			val -= 0.05;
 			if (val < 0)
 				val = 0;
 		}
-	    obstacle_map.at("obstacles", *iterator) = val;
+	    rover_map.at("obstacle", *iterator) = val;
 	  }
 
 	// Publish the obstacle message if there's an update to it.
@@ -193,7 +181,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	prev_status = next_status;
 
-	publishObstacleMap();
+	publishRoverMap();
 }
 
 /* sonarHandler() - Called when there's new Apriltag detection data.
@@ -210,60 +198,80 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	unsigned int next_status = 0;
 
 	// Update the timestamp in the target map.
-	target_map.setTimestamp(ros::Time::now().toNSec());
-
-	//
-	// Aging. As time goes by, the probability that a block
-	// Is still in the place we saw it shrinks. Let's iterate
-	// over the map and apply aging.
-	//
-	grid_map::Matrix &data = target_map["home"];
-	grid_map::Matrix &tdata = target_map["target"];
-	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
-		const int i = it.getLinearIndex();
-		data(i) *= 0.99;
-		tdata(i) *= 0.99;
-	}
+	rover_map.setTimestamp(ros::Time::now().toNSec());
 
 	if (message->detections.size() > 0) {
-		try {
-			// The Apriltags package can detect the pose of the tag. The pose
-			// in the detections array is relative to the camera. This transform
-			// lets us translate the camera coordinates into a world-referenced
-			// frame so we can place them on the map.
-			//
-			// This ensures that the transform is ready to be used below.
-			//
-			cameraTF->waitForTransform(
-					rover + "/odom",   // Target frame
-					message->detections[0].pose.header.frame_id, // Source frame
-					message->detections[0].pose.header.stamp,    // Time
-					ros::Duration(0.1) // How long to wait for the tf.
-			);
+		for (int i=0; i<message->detections.size(); i++) {
 
-			for (int i=0; i<message->detections.size(); i++) {
-
-				geometry_msgs::PoseStamped tagpose;
-				cameraTF->transformPose(rover + "/odom",
-						message->detections[i].pose, tagpose);
-
-				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
-				grid_map::Index ind;
-				target_map.getIndex(pos, ind);
-
-				if (message->detections[i].id == 0) {
-					next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
-					target_map.at("target", ind) = 1;
-				}
-				else if (message->detections[i].id == 256) {
-					next_status |= swarmie_msgs::Obstacle::TAG_HOME;
-					target_map.at("home", ind) = 1;
-					target_map.at("home_yaw", ind) = poseToYaw(tagpose.pose);
-				}
+			if (message->detections[i].id == 0) {
+				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
 			}
-		} catch (tf::TransformException &e) {
-			ROS_ERROR("%s", e.what());
+			else if (message->detections[i].id == 256) {
+				next_status |= swarmie_msgs::Obstacle::TAG_HOME;
+			}
 		}
+	}
+
+	grid_map::Position pos (currentLocation.x, currentLocation.y);
+	grid_map::Index map_index;
+	rover_map.getIndex(pos, map_index);
+
+	grid_map::Polygon view_poly;
+	view_poly.setFrameId(rover_map.getFrameId());
+
+	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
+
+	view_poly.addVertex(
+			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta + M_PI_4),
+					currentLocation.y + 1 * sin(currentLocation.theta + M_PI_4)
+			));
+
+	view_poly.addVertex(
+			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta),
+					currentLocation.y + 1 * sin(currentLocation.theta)
+			));
+
+	view_poly.addVertex(
+			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta - M_PI_4),
+					currentLocation.y + 1 * sin(currentLocation.theta - M_PI_4)
+			));
+
+
+	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
+	      !iterator.isPastEnd(); ++iterator) {
+
+		double home_val = rover_map.at("home", *iterator);
+		if (isnan(home_val)) {
+			home_val = 0;
+		}
+		if (next_status & swarmie_msgs::Obstacle::TAG_HOME) {
+			home_val += 1;
+			if (home_val > 1)
+				home_val = 1;
+		}
+		else {
+			home_val -= 1;
+			if (home_val < 0)
+				home_val = 0;
+		}
+		rover_map.at("home", *iterator) = home_val;
+
+		double target_val = rover_map.at("target", *iterator);
+		if (isnan(target_val)) {
+			target_val = 0;
+		}
+		if (next_status & swarmie_msgs::Obstacle::TAG_TARGET) {
+			target_val += 1;
+			if (target_val > 1)
+				target_val = 1;
+		}
+		else {
+			target_val -= 1;
+			if (target_val < 0)
+				target_val = 0;
+		}
+		rover_map.at("target", *iterator) = target_val;
+
 	}
 
 	if (next_status != prev_status) {
@@ -275,7 +283,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
 	prev_status = next_status;
 
-	publishTargetMap();
+	publishRoverMap();
 }
 
 /* odometryHandler() - Called when new odometry data is available.
@@ -288,14 +296,6 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double x = message->pose.pose.position.x;
     double y = message->pose.pose.position.y;
 
-	// Update the timestamp in both maps.
-	uint64_t now = ros::Time::now().toNSec();
-	obstacle_map.setTimestamp(now);
-	target_map.setTimestamp(now);
-
-	grid_map::Position newPos(x, y);
-    target_map.move(newPos);
-
     // Store the current location so we can use it in other places.
     currentLocation.x = x;
     currentLocation.y = y;
@@ -304,56 +304,14 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 
 /* Python API
  *
- * find_nearest_target() - Return the position of the nearest tag. Fail
- *   if there are no tags in the map.
- *
- * The service definition is in:
- * 	srv/FindTarget.srv
- *
- */
-bool find_neareset_target(mapping::FindTarget::Request &req, mapping::FindTarget::Response &resp) {
-	bool rval = false;
-	grid_map::Position mypos(currentLocation.x, currentLocation.y);
-	for (grid_map::SpiralIterator it(target_map, mypos, 2); !it.isPastEnd(); ++it) {
-		if (target_map.at("target", *it) == 0) {
-			// Found one!
-			resp.result.header.frame_id = target_map.getFrameId();
-			resp.result.header.stamp = ros::Time::now();
-			grid_map::Position tagpos;
-			obstacle_map.getPosition(*it, tagpos);
-			resp.result.point.x = tagpos.x();
-			resp.result.point.y = tagpos.y();
-			resp.result.point.z = 0; // No z() in the map.
-			rval = true;
-			break;
-		}
-	}
-	return rval;
-}
-
-/* Python API
- *
- * get_obstacle_map() - Return a view of the obstacles grid_map.
+ * get_map() - Return a view of the rover's grid_map.
  *
  * The service definition is in:
  * 	srv/GetMap.srv
  *
  */
-bool get_obstacle_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-	grid_map::GridMapRosConverter::toMessage(obstacle_map, rsp.map);
-	return true;
-}
-
-/* Python API
- *
- * get_target_map() - Return a view of the targets grid_map.
- *
- * The service definition is in:
- * 	srv/GetMap.srv
- *
- */
-bool get_target_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-	grid_map::GridMapRosConverter::toMessage(target_map, rsp.map);
+bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
+	grid_map::GridMapRosConverter::toMessage(rover_map, rsp.map);
 	return true;
 }
 
@@ -404,25 +362,18 @@ int main(int argc, char **argv) {
 
     obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>((rover + "/obstacle"), 1, true);
 
-    obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
-    target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
+    rover_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/map", 1, false);
 
     // Services
     //
     // This is the API into the Python control code
     //
-    ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
-    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
-    ros::ServiceServer tmap = mNH.advertiseService(rover + "/map/get_target_map", get_target_map);
+    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_map", get_map);
 
     // Initialize the maps.
-    obstacle_map = grid_map::GridMap({"obstacles"});
-    obstacle_map.setFrameId(rover + "/odom");
-    obstacle_map.setGeometry(grid_map::Length(25, 25), 0.5);
-
-    target_map = grid_map::GridMap({"target", "home", "home_yaw"});
-    target_map.setFrameId(rover + "/odom");
-    target_map.setGeometry(grid_map::Length(3, 3), 0.01);
+    rover_map = grid_map::GridMap({"obstacle", "target", "home"});
+    rover_map.setFrameId(rover + "/odom");
+    rover_map.setGeometry(grid_map::Length(25, 25), 0.5);
 
     ros::spin();
     return 0;

@@ -152,9 +152,7 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service(rover + '/control')
-        rospy.wait_for_service(rover + '/map/find_nearest_target')
-        rospy.wait_for_service(rover + '/map/get_obstacle_map')
-        rospy.wait_for_service(rover + '/map/get_target_map')
+        rospy.wait_for_service(rover + '/map/get_map')
 
         # Numpy-ify the GridMap 
         GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
@@ -162,8 +160,7 @@ class Swarmie:
         # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
-        self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
-        self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
+        self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
         self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
