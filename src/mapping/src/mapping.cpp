@@ -293,8 +293,8 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 	obstacle_map.setTimestamp(now);
 	target_map.setTimestamp(now);
 
-	grid_map::Position newPos(x, y);
-    target_map.move(newPos);
+//	grid_map::Position newPos(x, y);
+//    target_map.move(newPos);
 
     // Store the current location so we can use it in other places.
     currentLocation.x = x;
@@ -422,7 +422,7 @@ int main(int argc, char **argv) {
 
     target_map = grid_map::GridMap({"target", "home", "home_yaw"});
     target_map.setFrameId(rover + "/odom");
-    target_map.setGeometry(grid_map::Length(3, 3), 0.01);
+    target_map.setGeometry(grid_map::Length(25, 25), 0.25);
 
     ros::spin();
     return 0;
