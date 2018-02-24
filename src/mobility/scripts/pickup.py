@@ -16,11 +16,12 @@ from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
-claw_offset_distance = 0.2
+
 '''Pickup node.''' 
 
 def approach():
-    global swarmie 
+    global swarmie
+    global claw_offset_distance
     print ("Attempting a pickup.")
     try:
         swarmie.fingers_open()
@@ -38,7 +39,7 @@ def approach():
             # claw_offset should be a positive distance of how short drive_to needs to be.
             swarmie.drive_to(block, claw_offset = claw_offset_distance, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
             # Grab - minimal pickup with sim_check.
-            finger_close_angle = .5
+            finger_close_angle = 0.5
             if swarmie.simulator_running():
                 finger_close_angle = 0
             swarmie.set_finger_angle(finger_close_angle) #close
@@ -49,7 +50,7 @@ def approach():
                 swarmie.wrist_middle()
                 return True
             else:
-                swarmie.set_wrist_angle(.55)
+                swarmie.set_wrist_angle(0.55)
                 rospy.sleep(1)
                 swarmie.fingers_open()
         else:
@@ -67,11 +68,11 @@ def approach():
 
 def recover():
     global swarmie 
+    global claw_offset_distance
+    claw_offset_distance -= 0.01
     print ("Missed, trying to recover.")
-    
     try:
-        claw_offset_distance-=.2
-        swarmie.drive(-.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         try:
             block = swarmie.get_nearest_block_location()
         except tf.Exception as e:
@@ -81,25 +82,26 @@ def recover():
         if block is not None:
             pass
         else:
-            swarmie.drive(-.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
     except: 
-        # Hopefully this means we saw something.
         print("Oh no, we have an exception!")
 
 def main():
     global swarmie 
-    global rovername 
+    global rovername
+    global claw_offset_distance
     
     if len(sys.argv) < 2:
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
     rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)       
+    swarmie = Swarmie(rovername)
+    claw_offset_distance = 0.21      
 
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))

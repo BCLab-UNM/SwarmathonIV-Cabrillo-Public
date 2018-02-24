@@ -440,7 +440,6 @@ class Swarmie:
         * Raise the wrist all the way up. 
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
-        * Check if this is the simulator. If so, return `True`
         * Return `False`
         ''' 
 
@@ -455,18 +454,16 @@ class Swarmie:
         # Second test: Can we see a bock that's close to the camera.
         blocks = self.get_latest_targets()
         blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) == 0 :
-            return False
-        
-        nearest = blocks[0]
-        z_dist = nearest.pose.pose.position.z 
-        if abs(z_dist) < 0.15 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
-            return True 
-            
-        # Third test: The block never seems to affect the sonar in the simulator. 
-        # Also, the grasped block rarely seems to be recognized in the simulator. 
-        # Which is whack. 
-        return(self.simulator_running())
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.15 :
+                return True 
+                
+        # The block does not affect the sonar in the simulator. 
+        # Use the below check if having trouble with visual target check.
+        # return(self.simulator_running())
+        return False
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
