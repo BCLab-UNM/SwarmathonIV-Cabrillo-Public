@@ -16,7 +16,7 @@ from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
-
+claw_offset_distance = 0.2
 '''Pickup node.''' 
 
 def approach():
@@ -36,7 +36,7 @@ def approach():
 
         if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
-            swarmie.drive_to(block, claw_offset = 0.2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            swarmie.drive_to(block, claw_offset = claw_offset_distance, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
             # Grab - minimal pickup with sim_check.
             finger_close_angle = .5
             if swarmie.simulator_running():
@@ -48,6 +48,10 @@ def approach():
             if swarmie.has_block():
                 swarmie.wrist_middle()
                 return True
+            else:
+                swarmie.set_wrist_angle(.55)
+                rospy.sleep(1)
+                swarmie.fingers_open()
         else:
             print("No legal blocks detected.")
             swarmie.wrist_up()
@@ -66,13 +70,25 @@ def recover():
     print ("Missed, trying to recover.")
     
     try:
-        swarmie.drive(-1)
+        claw_offset_distance-=.2
+        swarmie.drive(-.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        try:
+            block = swarmie.get_nearest_block_location()
+        except tf.Exception as e:
+            print("Something went wrong recovering and we can't locate the block. ", e)
+            swarmie.wrist_up()
+            exit(1)
+        if block is not None:
+            pass
+        else:
+            swarmie.drive(-.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
     except: 
         # Hopefully this means we saw something.
-        pass
+        print("Oh no, we have an exception!")
 
 def main():
     global swarmie 

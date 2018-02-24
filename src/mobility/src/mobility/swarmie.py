@@ -454,13 +454,13 @@ class Swarmie:
 
         # Second test: Can we see a bock that's close to the camera.
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) == 0 :
             return False
         
         nearest = blocks[0]
-        x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
+        z_dist = nearest.pose.pose.position.z 
+        if abs(z_dist) < 0.15 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
             return True 
             
         # Third test: The block never seems to affect the sonar in the simulator. 
