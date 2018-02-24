@@ -783,3 +783,34 @@ class Swarmie:
         
         # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
+        
+    
+    def set_search_exit_location(self):
+        ''' Remember the search exit location. '''
+        odom =  self.get_odom_location()
+        gps = self.get_gps_location()
+    
+        #check if there is even a z or if its theata self.get_odom_location().Odometry.pose.pose.position
+        rospy.set_param('/' + self.rover_name + '/search_exit_location', 
+                        ({'x' : odom.Odometry.pose.pose.position.x, 'y' : odom.Odometry.pose.pose.position.y, 'z' : odom.Odometry.pose.pose.position.z},
+                        {'x' : gps.Odometry.pose.pose.position.x, 'y' : gps.Odometry.pose.pose.position.y, 'z' : gps.Odometry.pose.pose.position.z}) )
+            
+    
+    def get_search_exit_location(self):
+        ''' Getter returns the position in point from in a tuple (odom,gps) of the location search exited(seen a tag) at
+        Use:
+            swarmie.drive_to(swarmie.get_search_exit_location()[0],ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+            swarmie.set_heading(swarmie.get_search_exit_location()[0].z,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        '''
+        locations = rospy.get_param('/' + self.rover_name + '/search_exit_location', {'x' : 0, 'y' : 0, 'z' : 0})
+        return((Point(**locations[0]),Point(**locations[1])))
+
+
+    def has_search_exit_location(self):
+        '''Check to see if the search exit location parameter is set.
+        Returns:
+        * (`bool`): True if the parameter exists, False otherwise.
+        '''
+        return rospy.has_param('/' + self.rover_name + '/search_exit_location')
+    
+    
