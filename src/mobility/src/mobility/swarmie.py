@@ -440,7 +440,6 @@ class Swarmie:
         * Raise the wrist all the way up. 
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
-        * Check if this is the simulator. If so, return `True`
         * Return `False`
         ''' 
 
@@ -454,19 +453,17 @@ class Swarmie:
 
         # Second test: Can we see a bock that's close to the camera.
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
-        if len(blocks) == 0 :
-            return False
-        
-        nearest = blocks[0]
-        x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
-            return True 
-            
-        # Third test: The block never seems to affect the sonar in the simulator. 
-        # Also, the grasped block rarely seems to be recognized in the simulator. 
-        # Which is whack. 
-        return(self.simulator_running())
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.15 :
+                return True 
+                
+        # The block does not affect the sonar in the simulator. 
+        # Use the below check if having trouble with visual target check.
+        # return(self.simulator_running())
+        return False
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -749,7 +746,6 @@ class Swarmie:
         '''
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-
     def get_nearest_block_location(self):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
@@ -761,8 +757,8 @@ class Swarmie:
         '''
         global rovername, swarmie
 
-        # Find the nearest block
-        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        # Finds all visable  apriltags
+        blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 
@@ -773,10 +769,16 @@ class Swarmie:
                                   + x.pose.pose.position.z**2))
 
         nearest = blocks[0]
+
+        # checks for hometag between rover and block.
+        if nearest.id==256:
+            return None
+
         self.xform.waitForTransform(self.rover_name + '/odom',
                         nearest.pose.header.frame_id, nearest.pose.header.stamp,
                         rospy.Duration(3.0))
-
+        
+        # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
         
     
