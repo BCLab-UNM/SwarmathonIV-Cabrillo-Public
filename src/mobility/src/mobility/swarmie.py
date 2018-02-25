@@ -435,16 +435,19 @@ class Swarmie:
     def has_block(self):
         '''Try to determine if a block is in our grasp. 
         
-        Uses the algorithm: 
-        
-        * Raise the wrist all the way up. 
+        Uses the algorithm:
+
+         * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position.
+        * Check if we can see a block that's close to the camera. If so, return `True`
+        * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
         * Return `False`
-        ''' 
+        '''
 
-        # First test: Can we see a bock that's close to the camera with the wrist middle.                
-        self.wrist_middle()
+        # First test: Can we see a bock that's close to the camera with the wrist middle.
+        self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
         blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
@@ -454,7 +457,7 @@ class Swarmie:
             if abs(z_dist) < 0.18 :
                 return True 
 
-        # Second test: Can we see a bock that's close to the camera with the wirst up.                
+        # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
