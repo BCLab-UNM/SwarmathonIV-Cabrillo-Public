@@ -810,4 +810,48 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/search_exit_location')
     
-    
+
+    def sees_resource(self):
+        from matplotlib import pyplot as plt
+        from sensor_msgs.msg import CompressedImage
+        import numpy as np
+        import cv2
+        
+        try:
+            test = rospy.wait_for_message("/achilles/camera/image/compressed", CompressedImage, timeout=2)
+        except(rospy.ROSException), e:
+            print("Camera Broke?")
+            print("Error message: ", e)
+            
+        np_arr = np.fromstring(test.data, np.uint8)
+        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
+        img2 = cv2.imread('/home/carter/Robotics/atag-0.jpg',0) # trainImage
+
+        # Initiate SIFT detector
+        #sift = cv2.SIFT() #for opencv2
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(img1,None)
+        kp2, des2 = sift.detectAndCompute(img2,None)
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks = 50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1,des2,k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        good = []
+        for m,n in matches:
+            if m.distance < 0.7*n.distance:
+                good.append(m)
+                
+        if len(good)>5:
+            return(True)
+        else:
+            return(False)
+        
+#http://wiki.ros.org/cv_bridge/Tutorials/ConvertingBetweenROSImagesAndOpenCVImagesPython
