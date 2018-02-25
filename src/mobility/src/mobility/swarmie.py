@@ -812,21 +812,22 @@ class Swarmie:
     
 
     def sees_resource(self):
-        from matplotlib import pyplot as plt
+        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
+        ### TODO crop the image on where the tag in the claws would be
         from sensor_msgs.msg import CompressedImage
         import numpy as np
         import cv2
         
         try:
-            test = rospy.wait_for_message("/achilles/camera/image/compressed", CompressedImage, timeout=2)
+            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=1)
         except(rospy.ROSException), e:
             print("Camera Broke?")
             print("Error message: ", e)
             
         np_arr = np.fromstring(test.data, np.uint8)
         img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        img2 = cv2.imread('/home/carter/Robotics/atag-0.jpg',0) # trainImage
-
+        img2 = cv2.imread('misc/atag-0.jpg',0) # trainImage #works on carters system in the simulator
+        
         # Initiate SIFT detector
         #sift = cv2.SIFT() #for opencv2
         sift = cv2.xfeatures2d.SIFT_create()
@@ -848,10 +849,9 @@ class Swarmie:
         for m,n in matches:
             if m.distance < 0.7*n.distance:
                 good.append(m)
-                
-        if len(good)>5:
+        print(len(good)*10,"%")        
+        if len(good)>3:
             return(True)
         else:
             return(False)
         
-#http://wiki.ros.org/cv_bridge/Tutorials/ConvertingBetweenROSImagesAndOpenCVImagesPython
