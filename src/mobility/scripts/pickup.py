@@ -101,7 +101,9 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-    claw_offset_distance = 0.21      
+    claw_offset_distance = 0.22 
+    if(simulator_running()):
+        claw_offset_distance -= 0.02
 
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
