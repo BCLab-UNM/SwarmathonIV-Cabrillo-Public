@@ -8,6 +8,10 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <map>
+#include <set>
+#include <array>
+#include <queue>
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
@@ -24,6 +28,8 @@
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/GetPlan.h>
+#include <nav_msgs/Path.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_srvs/Empty.h>
@@ -43,12 +49,163 @@ grid_map::GridMap target_map;
 ros::Publisher obstaclePublish;
 ros::Publisher obstacle_map_publisher;
 ros::Publisher target_map_publisher;
+ros::Publisher path_publisher;
 
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
 unsigned int obstacle_status;
+
+
+/*
+ * Data structures and A* Search adapted from:
+ * https://www.redblobgames.com/pathfinding/a-star/introduction.html
+ * https://www.redblobgames.com/pathfinding/a-star/implementation.html
+ *
+ * Sample code from https://www.redblobgames.com/pathfinding/a-star/
+ *
+ * Copyright 2014 Red Blob Games <redblobgames@gmail.com>
+ * Feel free to use this code in your own projects, including commercial projects
+ * License: Apache v2.0 <http://www.apache.org/licenses/LICENSE-2.0.html>
+ */
+
+struct GridLocation {
+	int x, y;
+};
+
+// Helpers for GridLocation
+
+bool operator == (GridLocation a, GridLocation b) {
+	return a.x == b.x && a.y == b.y;
+}
+
+bool operator != (GridLocation a, GridLocation b) {
+	return !(a == b);
+}
+
+bool operator < (GridLocation a, GridLocation b) {
+	return std::tie(a.x, a.y) < std::tie(b.x, b.y);
+}
+
+bool in_bounds(grid_map::GridMap& map, GridLocation location) {
+        int width = map.getSize()(1);
+		int height = map.getSize()(0);
+		return 0 <= location.x && location.x < width
+			   && 0 <= location.y && location.y < height;
+}
+
+const std::array<GridLocation, 4> DIRECTIONS =
+		{GridLocation{1, 0}, GridLocation{0, -1}, GridLocation{-1, 0}, GridLocation{0, 1}};
+
+std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
+    std::vector<GridLocation> results;
+
+    for (GridLocation direction : DIRECTIONS) {
+        GridLocation next{location.x + direction.x, location.y + direction.y};
+		// removed passable() for now. Might want it back if you do 8-connected grid
+        if (in_bounds(map, next)) {
+            results.push_back(next);
+        }
+    }
+
+    if ((location.x + location.y) % 2 == 0) {
+        // aesthetic improvement on square grids
+        std::reverse(results.begin(), results.end());
+    }
+
+    return results;
+}
+
+// to_node should be valid position on the grid. Not necessarily with a finite
+// value, though.
+double cost(grid_map::GridMap& map, GridLocation to_node) {
+	double cost = 0.0;
+	// I think these are the correct indexes for x, y coords
+	grid_map::Index index;
+	index(0) = to_node.y;
+	index(1) = to_node.x;
+
+	if (!map.isValid(index, "obstacles")) {
+		cost = 0.0;
+	} else {
+		cost = map.at("obstacles", index);
+	}
+
+    return cost;
+}
+
+template<typename T, typename priority_t>
+struct PriorityQueue {
+	typedef std::pair<priority_t, T> PQElement;
+	std::priority_queue<PQElement, std::vector<PQElement>,
+			std::greater<PQElement>> elements;
+
+	inline bool empty() const {
+		return elements.empty();
+	}
+
+	inline void put(T item, priority_t priority) {
+		elements.emplace(priority, item);
+	}
+
+	T get() {
+		T best_item = elements.top().second;
+		elements.pop();
+		return best_item;
+	}
+};
+
+inline double heuristic(GridLocation a, GridLocation b) {
+	return abs(a.x - b.x) + abs(a.y - b.y);
+}
+
+void a_star_search(
+		grid_map::GridMap& map,
+        GridLocation start,
+        GridLocation goal,
+        std::map<GridLocation, GridLocation>& came_from,
+        std::map<GridLocation, double>& cost_so_far) {
+
+	PriorityQueue<GridLocation, double> frontier;
+	frontier.put(start, 0);
+
+	came_from[start] = start;
+	cost_so_far[start] = 0;
+
+	while (!frontier.empty()) {
+		GridLocation current = frontier.get();
+
+		if (current == goal) {
+			break;
+		}
+
+		for (GridLocation next : neighbors(map, current)) {
+			double new_cost = cost_so_far[current] + cost(map, next);
+			if (cost_so_far.find(next) == cost_so_far.end()
+				|| new_cost < cost_so_far[next]) {
+				cost_so_far[next] = new_cost;
+				double priority = new_cost + heuristic(next, goal);
+				frontier.put(next, priority);
+				came_from[next] = current;
+			}
+		}
+	}
+}
+
+std::vector<GridLocation> reconstruct_path(
+		GridLocation start, GridLocation goal,
+		std::map<GridLocation, GridLocation> came_from) {
+	std::vector<GridLocation> path;
+	GridLocation current = goal;
+	while (current != start) {
+		path.push_back(current);
+		current = came_from[current];
+	}
+	path.push_back(start); // optional
+	reverse(path.begin(), path.end());
+	return path;
+}
 
 double poseToYaw(const geometry_msgs::Pose &pose) {
     tf::Quaternion q(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
@@ -371,6 +528,67 @@ bool get_target_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rs
 	return true;
 }
 
+/*
+ * Python API
+ *
+ * get_plan() - get global plan from a start pose to a goal pose
+ * todo: string pulling? use line grid_map iterator?
+ * todo: Add 8-connected neighbors. Corner neighbors conditional on adjacents being free
+ */
+bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
+	geometry_msgs::Pose2D start_pose;
+	geometry_msgs::Pose2D goal_pose;
+    grid_map::Index start_index;
+	grid_map::Index goal_index;
+	nav_msgs::Path pose_path;
+
+//	start.x = req.start.pose.position.x;
+//	start.y = req.start.pose.position.y;
+// 	start.theta = poseToYaw(req.start.pose);
+//	goal.x = req.goal.pose.position.x;
+//	goal.y = req.goal.pose.position.y;
+//	goal.theta = poseToYaw(req.goal.pose);
+
+	obstacle_map.getIndex(grid_map::Position(req.start.pose.position.x, req.start.pose.position.y), start_index);
+	obstacle_map.getIndex(grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y), goal_index);
+
+	GridLocation start{start_index(1), start_index(0)};
+	GridLocation goal{goal_index(1), goal_index(0)};
+	std::map<GridLocation, GridLocation> came_from;
+	std::map<GridLocation, double> cost_so_far;
+
+	a_star_search(obstacle_map, start, goal, came_from, cost_so_far);
+	std::vector<GridLocation> grid_path = reconstruct_path(start, goal, came_from);
+
+	grid_map::Index index;
+	grid_map::Position position;
+	std::vector<geometry_msgs::PoseStamped> poses;
+
+	// convert vector of GridLocations to a vector of poses in /odom frame
+	for (GridLocation& location : grid_path) {
+		index(0) = location.y;
+		index(1) = location.x;
+		obstacle_map.getPosition(index, position);
+		geometry_msgs::PoseStamped pose;
+        pose.pose.position.x = position.x();
+		pose.pose.position.y = position.y();
+		poses.push_back(pose);
+	}
+
+	rsp.plan.header.stamp = ros::Time::now();
+//	std::vector<geometry_msgs::PoseStamped> poses;
+//	poses.push_back(req.goal);
+	rsp.plan.poses = poses;
+//    rsp.plan.poses.push_back(req.goal);
+
+	pose_path.header.stamp = ros::Time::now();
+	pose_path.header.frame_id = rover + "/odom";
+	pose_path.poses = poses;
+	path_publisher.publish(pose_path);
+
+	return true;
+}
+
 int main(int argc, char **argv) {
 
 	char host[128];
@@ -420,6 +638,7 @@ int main(int argc, char **argv) {
 
     obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
     target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
+	path_publisher = mNH.advertise<nav_msgs::Path>(rover + "/plan", 1, false);
 
     // Services
     //
@@ -428,6 +647,7 @@ int main(int argc, char **argv) {
     ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
     ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
     ros::ServiceServer tmap = mNH.advertiseService(rover + "/map/get_target_map", get_target_map);
+	ros::ServiceServer plan = mNH.advertiseService(rover + "/map/get_plan", get_plan);
 
     // Initialize the maps.
     obstacle_map = grid_map::GridMap({"obstacles"});
