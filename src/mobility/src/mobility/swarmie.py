@@ -463,7 +463,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return False
+        return(self.sees_resource(6))
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -811,7 +811,13 @@ class Swarmie:
         return rospy.has_param('/' + self.rover_name + '/search_exit_location')
     
 
-    def sees_resource(self):
+    def sees_resource(self, required_matches):
+        '''Check to see if a resource can be seen between the grippers
+        Args:
+        * (`int`): the minimum number of matches required to return true
+        Returns:
+        * (`bool`): True if the number of required matches has been met, False otherwise.
+        '''
         'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
         ### TODO crop the image on where the tag in the claws would be
         from sensor_msgs.msg import CompressedImage
@@ -823,10 +829,18 @@ class Swarmie:
         except(rospy.ROSException), e:
             print("Camera Broke?")
             print("Error message: ", e)
-            
+        #__file__: /home/carter/Robotics/Swarmathon-Cabrillo/src/mobility/src/mobility/swarmie.py
         np_arr = np.fromstring(test.data, np.uint8)
         img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        img2 = cv2.imread('misc/atag-0.jpg',0) # trainImage #works on carters system in the simulator
+        #print("__file__:",__file__)
+        img2 = cv2.imread(__file__.replace("/src/mobility/swarmie.py","/resources/atag-0.jpg"),0) #sooo gross
+        #img2 = cv2.imread('misc/atag-0.jpg',0) # trainImage #works on carters system in the simulator
+        img1 = img1[60:220, 50:220]
+        ''' #for testing
+        #(y1:y2, x1:x2)
+        cv2.imshow("cropped", img1)
+        cv2.waitKey(0)        
+        '''
         
         # Initiate SIFT detector
         #sift = cv2.SIFT() #for opencv2
@@ -834,7 +848,12 @@ class Swarmie:
 
         # find the keypoints and descriptors with SIFT
         kp1, des1 = sift.detectAndCompute(img1,None)
-        kp2, des2 = sift.detectAndCompute(img2,None)
+        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
+        '''
+        Throws
+        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
+        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
+        '''
 
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -849,8 +868,9 @@ class Swarmie:
         for m,n in matches:
             if m.distance < 0.7*n.distance:
                 good.append(m)
-        print(len(good)*10,"%")        
-        if len(good)>3:
+        print("Seen a resource with",len(good)*5,"% confidence")
+        
+        if len(good)>required_matches-1: #might change back to 5 becase when infront of home can match 40%
             return(True)
         else:
             return(False)
