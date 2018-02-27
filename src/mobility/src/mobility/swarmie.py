@@ -811,7 +811,7 @@ class Swarmie:
         return rospy.has_param('/' + self.rover_name + '/search_exit_location')
     
 
-    def sees_resource(self, required_matches):
+    def sees_resource(self, required_matches,crop=True):
         '''Check to see if a resource can be seen between the grippers
         Args:
         * (`int`): the minimum number of matches required to return true
@@ -825,22 +825,21 @@ class Swarmie:
         import cv2
         
         try:
-            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=1)
+            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=3)
         except(rospy.ROSException), e:
             print("Camera Broke?")
             print("Error message: ", e)
         #__file__: /home/carter/Robotics/Swarmathon-Cabrillo/src/mobility/src/mobility/swarmie.py
         np_arr = np.fromstring(test.data, np.uint8)
         img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        #print("__file__:",__file__)
-        img2 = cv2.imread(__file__.replace("/src/mobility/swarmie.py","/resources/atag-0.jpg"),0) #sooo gross
-        #img2 = cv2.imread('misc/atag-0.jpg',0) # trainImage #works on carters system in the simulator
-        img1 = img1[60:220, 50:220]
-        ''' #for testing
-        #(y1:y2, x1:x2)
+        #rosparam set 'april_tag_resource' '/home/carter/Robotics/Swarmathon-Cabrillo/src/mobility/resources/atag-0.jpg'
+        img2 = cv2.imread(rospy.get_param('/april_tag_resource'),0) 
+        if(crop):       #(y1:y2, x1:x2)
+            img1 = img1[60:220, 50:220]
+        ''' #for testing1
         cv2.imshow("cropped", img1)
         cv2.waitKey(0)        
-        '''
+        ''' #end for testing1
         
         # Initiate SIFT detector
         #sift = cv2.SIFT() #for opencv2
@@ -868,9 +867,28 @@ class Swarmie:
         for m,n in matches:
             if m.distance < 0.7*n.distance:
                 good.append(m)
+                
+        '''#for testing2 ###############################################
+        from matplotlib import pyplot as plt
+        # Need to draw only good matches, so create a mask
+        matchesMask = [[0,0] for i in xrange(len(matches))]
+
+        # ratio test as per Lowe's paper
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.7*n.distance:
+                matchesMask[i]=[1,0]
+
+        draw_params = dict(matchColor = (0,255,0),
+                           singlePointColor = (255,0,0),
+                           matchesMask = matchesMask,
+                           flags = 0)
+        img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,matches,None,**draw_params)
+        plt.imshow(img3,),plt.show()
+        '''#end for testing2   ###############################################
+        
         print("Seen a resource with",len(good)*5,"% confidence")
         
-        if len(good)>required_matches-1: #might change back to 5 becase when infront of home can match 40%
+        if len(good)>required_matches-1:
             return(True)
         else:
             return(False)
