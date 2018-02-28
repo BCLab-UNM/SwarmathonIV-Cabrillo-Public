@@ -8,6 +8,10 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <map>
+#include <set>
+#include <array>
+#include <queue>
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
@@ -24,6 +28,8 @@
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/GetPlan.h>
+#include <nav_msgs/Path.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_srvs/Empty.h>
@@ -41,12 +47,211 @@ grid_map::GridMap rover_map;
 
 ros::Publisher obstaclePublish;
 ros::Publisher rover_map_publisher;
+ros::Publisher path_publisher;
 
 geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
 unsigned int obstacle_status;
+
+
+/*
+ * Data structures and A* Search adapted from:
+ * https://www.redblobgames.com/pathfinding/a-star/introduction.html
+ * https://www.redblobgames.com/pathfinding/a-star/implementation.html
+ *
+ * Sample code from https://www.redblobgames.com/pathfinding/a-star/
+ *
+ * Copyright 2014 Red Blob Games <redblobgames@gmail.com>
+ * Feel free to use this code in your own projects, including commercial projects
+ * License: Apache v2.0 <http://www.apache.org/licenses/LICENSE-2.0.html>
+ */
+
+struct GridLocation {
+	int x, y;
+};
+
+// Helpers for GridLocation
+
+bool operator == (GridLocation a, GridLocation b) {
+	return a.x == b.x && a.y == b.y;
+}
+
+bool operator != (GridLocation a, GridLocation b) {
+	return !(a == b);
+}
+
+bool operator < (GridLocation a, GridLocation b) {
+	return std::tie(a.x, a.y) < std::tie(b.x, b.y);
+}
+
+bool in_bounds(grid_map::GridMap& map, GridLocation location) {
+        int width = map.getSize()(1);
+		int height = map.getSize()(0);
+		return 0 <= location.x && location.x < width
+			   && 0 <= location.y && location.y < height;
+}
+
+// For 4-connected grid
+//const std::array<GridLocation, 4> DIRECTIONS =
+//		{GridLocation{1, 0}, GridLocation{0, -1}, GridLocation{-1, 0}, GridLocation{0, 1}};
+
+// For 8-connected grid
+const std::array<GridLocation, 8> DIRECTIONS =
+		{GridLocation{-1, 0}, GridLocation{-1, 1},
+		 GridLocation{0, 1}, GridLocation{1, 1},
+		 GridLocation{1, 0}, GridLocation{1, -1},
+		 GridLocation{0, -1}, GridLocation{-1, -1}};
+
+// Check if location and it's neighbors obstacle values are all below threshold.
+bool passable(grid_map::GridMap& map, GridLocation location) {
+	const double OBSTACLE_THRESHOLD = 0.25;
+    grid_map::Index index;
+    index(0) = location.x;
+	index(1) = location.y;
+	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+		return false;
+	}
+	for (GridLocation direction : DIRECTIONS) {
+		GridLocation next{location.x + direction.x, location.y + direction.y};
+		if (in_bounds(map, next)) {
+			index(0) = next.x;
+			index(1) = next.y;
+			if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
+    std::vector<GridLocation> results;
+
+    for (GridLocation direction : DIRECTIONS) {
+        GridLocation next{location.x + direction.x, location.y + direction.y};
+        if (in_bounds(map, next) && passable(map, next)) {
+            results.push_back(next);
+        }
+    }
+
+    if ((location.x + location.y) % 2 == 0) {
+        // aesthetic improvement on square grids
+        std::reverse(results.begin(), results.end());
+    }
+
+    return results;
+}
+
+// to_node should be valid position on the grid. Not necessarily with a finite
+// value, though.
+double cost(grid_map::GridMap& map, GridLocation to_node) {
+	// Inflate cost of cells which are neighboring an obstacle
+//	const double INFLATION_PCT = 0.7;
+	double cost = 1.0; // not yet mapped cells will take this value
+	// I think these are the correct indexes for x, y coords
+	grid_map::Index index;
+	index(0) = to_node.x;
+	index(1) = to_node.y;
+
+	if (map.isValid(index, "obstacle")) {
+		cost = 1.0 + (map.at("obstacle", index) * 5.0);
+	}
+
+//	for (GridLocation neighbor : neighbors(map, to_node)) {
+//		index(0) = neighbor.x;
+//		index(1) = neighbor.y;
+//		if (in_bounds(map, neighbor) && map.isValid(index, "obstacle")) {
+//			cost += INFLATION_PCT * (map.at("obstacle", index) + 1) * 100;
+//		}
+//	}
+
+    return cost;
+}
+
+template<typename T, typename priority_t>
+struct PriorityQueue {
+	typedef std::pair<priority_t, T> PQElement;
+	std::priority_queue<PQElement, std::vector<PQElement>,
+			std::greater<PQElement>> elements;
+
+	inline bool empty() const {
+		return elements.empty();
+	}
+
+	inline void put(T item, priority_t priority) {
+		elements.emplace(priority, item);
+	}
+
+	T get() {
+		T best_item = elements.top().second;
+		elements.pop();
+		return best_item;
+	}
+};
+
+// manhattan distance, for 4-connected grid
+//inline double heuristic(GridLocation a, GridLocation b) {
+//	return abs(a.x - b.x) + abs(a.y - b.y);
+//}
+
+// Octile distance, for 8-connected grid
+// http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
+inline double heuristic(GridLocation a, GridLocation b) {
+    const double D = 1;
+	const double D2 = 1.41421356237; // sqrt(2)
+	double dx = abs(a.x - b.x);
+	double dy = abs(a.y - b.y);
+	return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy);
+}
+
+void a_star_search(
+		grid_map::GridMap& map,
+        GridLocation start,
+        GridLocation goal,
+        std::map<GridLocation, GridLocation>& came_from,
+        std::map<GridLocation, double>& cost_so_far) {
+
+	PriorityQueue<GridLocation, double> frontier;
+	frontier.put(start, 0);
+
+	came_from[start] = start;
+	cost_so_far[start] = 0;
+
+	while (!frontier.empty()) {
+		GridLocation current = frontier.get();
+
+		if (current == goal) {
+			break;
+		}
+
+		for (GridLocation next : neighbors(map, current)) {
+			double new_cost = cost_so_far[current] + cost(map, next);
+			if (cost_so_far.find(next) == cost_so_far.end()
+				|| new_cost < cost_so_far[next]) {
+				cost_so_far[next] = new_cost;
+				double priority = new_cost + heuristic(next, goal);
+				frontier.put(next, priority);
+				came_from[next] = current;
+			}
+		}
+	}
+}
+
+std::vector<GridLocation> reconstruct_path(
+		GridLocation start, GridLocation goal,
+		std::map<GridLocation, GridLocation> came_from) {
+	std::vector<GridLocation> path;
+	GridLocation current = goal;
+	while (current != start) {
+		path.push_back(current);
+		current = came_from[current];
+	}
+	path.push_back(start); // optional
+	reverse(path.begin(), path.end());
+	return path;
+}
 
 double poseToYaw(const geometry_msgs::Pose &pose) {
     tf::Quaternion q(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
@@ -80,7 +285,11 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
-    double sonar_depth = 0.1;  // limit view_poly to 10cm past measured ranges
+    const double sonar_depth = 0.1;  // limit view_poly to 10cm past measured ranges
+    const double view_range = 2.5;  // don't mark obstacles past this range
+	double left = sonarLeft->range;
+	double center = sonarCenter->range;
+	double right = sonarRight->range;
 
 	// Update the timestamp in the Obstacle map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
@@ -104,22 +313,32 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
+	if (sonarLeft->range >= view_range) {
+		left = view_range;
+	}
+	if (sonarCenter->range >= view_range) {
+		center = view_range;
+	}
+	if (sonarRight-> range >= view_range) {
+		right = view_range;
+	}
+
 	// Left sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (sonarLeft->range + sonar_depth) * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + (sonarLeft->range + sonar_depth) * sin(currentLocation.theta + M_PI_4)
+			grid_map::Position(currentLocation.x + (left + sonar_depth) * cos(currentLocation.theta + M_PI_4),
+					currentLocation.y + (left + sonar_depth) * sin(currentLocation.theta + M_PI_4)
 			));
 
 	// Center sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (sonarCenter->range + sonar_depth) * cos(currentLocation.theta),
-					currentLocation.y + (sonarCenter->range + sonar_depth) * sin(currentLocation.theta)
+			grid_map::Position(currentLocation.x + (center + sonar_depth) * cos(currentLocation.theta),
+					currentLocation.y + (center + sonar_depth) * sin(currentLocation.theta)
 			));
 
 	// Right sonar
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (sonarRight->range + sonar_depth) * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + (sonarRight->range + sonar_depth) * sin(currentLocation.theta - M_PI_4)
+			grid_map::Position(currentLocation.x + (right + sonar_depth) * cos(currentLocation.theta - M_PI_4),
+					currentLocation.y + (right + sonar_depth) * sin(currentLocation.theta - M_PI_4)
 			));
 
 	// Increase the "obstacleness" of the viewable area.
@@ -315,6 +534,68 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
 	return true;
 }
 
+/*
+ * Python API
+ *
+ * get_plan() - get global plan from a start pose to a goal pose
+ * todo: string pulling? use line grid_map iterator?
+ * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
+ * todo: include apriltag layers in path plan
+ */
+bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
+	geometry_msgs::Pose2D start_pose;
+	geometry_msgs::Pose2D goal_pose;
+    grid_map::Index start_index;
+	grid_map::Index goal_index;
+	nav_msgs::Path pose_path;
+
+//	start.x = req.start.pose.position.x;
+//	start.y = req.start.pose.position.y;
+// 	start.theta = poseToYaw(req.start.pose);
+//	goal.x = req.goal.pose.position.x;
+//	goal.y = req.goal.pose.position.y;
+//	goal.theta = poseToYaw(req.goal.pose);
+
+	rover_map.getIndex(grid_map::Position(req.start.pose.position.x, req.start.pose.position.y), start_index);
+	rover_map.getIndex(grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y), goal_index);
+
+	GridLocation start{start_index(0), start_index(1)};
+	GridLocation goal{goal_index(0), goal_index(1)};
+	std::map<GridLocation, GridLocation> came_from;
+	std::map<GridLocation, double> cost_so_far;
+
+	a_star_search(rover_map, start, goal, came_from, cost_so_far);
+	std::vector<GridLocation> grid_path = reconstruct_path(start, goal, came_from);
+
+	grid_map::Index index;
+	grid_map::Position position;
+	std::vector<geometry_msgs::PoseStamped> poses;
+
+	// convert vector of GridLocations to a vector of poses in /odom frame
+	for (GridLocation& location : grid_path) {
+		index(0) = location.x;
+		index(1) = location.y;
+		rover_map.getPosition(index, position);
+		geometry_msgs::PoseStamped pose;
+        pose.pose.position.x = position.x();
+		pose.pose.position.y = position.y();
+		poses.push_back(pose);
+	}
+
+	rsp.plan.header.stamp = ros::Time::now();
+//	std::vector<geometry_msgs::PoseStamped> poses;
+//	poses.push_back(req.goal);
+	rsp.plan.poses = poses;
+//    rsp.plan.poses.push_back(req.goal);
+
+	pose_path.header.stamp = ros::Time::now();
+	pose_path.header.frame_id = rover + "/odom";
+	pose_path.poses = poses;
+	path_publisher.publish(pose_path);
+
+	return true;
+}
+
 int main(int argc, char **argv) {
 
 	char host[128];
@@ -363,12 +644,14 @@ int main(int argc, char **argv) {
     obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>((rover + "/obstacle"), 1, true);
 
     rover_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/map", 1, false);
+	path_publisher = mNH.advertise<nav_msgs::Path>(rover + "/plan", 1, false);
 
     // Services
     //
     // This is the API into the Python control code
     //
     ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_map", get_map);
+	ros::ServiceServer plan = mNH.advertiseService(rover + "/map/get_plan", get_plan);
 
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacle", "target", "home"});
