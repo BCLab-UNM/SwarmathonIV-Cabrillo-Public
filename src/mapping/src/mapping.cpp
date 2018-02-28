@@ -95,16 +95,45 @@ bool in_bounds(grid_map::GridMap& map, GridLocation location) {
 			   && 0 <= location.y && location.y < height;
 }
 
-const std::array<GridLocation, 4> DIRECTIONS =
-		{GridLocation{1, 0}, GridLocation{0, -1}, GridLocation{-1, 0}, GridLocation{0, 1}};
+// For 4-connected grid
+//const std::array<GridLocation, 4> DIRECTIONS =
+//		{GridLocation{1, 0}, GridLocation{0, -1}, GridLocation{-1, 0}, GridLocation{0, 1}};
+
+// For 8-connected grid
+const std::array<GridLocation, 8> DIRECTIONS =
+		{GridLocation{-1, 0}, GridLocation{-1, 1},
+		 GridLocation{0, 1}, GridLocation{1, 1},
+		 GridLocation{1, 0}, GridLocation{1, -1},
+		 GridLocation{0, -1}, GridLocation{-1, -1}};
+
+// Check if location and it's neighbors obstacle values are all below threshold.
+bool passable(grid_map::GridMap& map, GridLocation location) {
+	const double OBSTACLE_THRESHOLD = 0.25;
+    grid_map::Index index;
+    index(0) = location.x;
+	index(1) = location.y;
+	if (map.at("obstacles", index) >= OBSTACLE_THRESHOLD) {
+		return false;
+	}
+	for (GridLocation direction : DIRECTIONS) {
+		GridLocation next{location.x + direction.x, location.y + direction.y};
+		if (in_bounds(map, next)) {
+			index(0) = next.x;
+			index(1) = next.y;
+			if (map.at("obstacles", index) >= OBSTACLE_THRESHOLD) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
 
 std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
     std::vector<GridLocation> results;
 
     for (GridLocation direction : DIRECTIONS) {
         GridLocation next{location.x + direction.x, location.y + direction.y};
-		// removed passable() for now. Might want it back if you do 8-connected grid
-        if (in_bounds(map, next)) {
+        if (in_bounds(map, next) && passable(map, next)) {
             results.push_back(next);
         }
     }
@@ -120,17 +149,25 @@ std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation locatio
 // to_node should be valid position on the grid. Not necessarily with a finite
 // value, though.
 double cost(grid_map::GridMap& map, GridLocation to_node) {
-	double cost = 0.0;
+	// Inflate cost of cells which are neighboring an obstacle
+//	const double INFLATION_PCT = 0.7;
+	double cost = 1.0; // not yet mapped cells will take this value
 	// I think these are the correct indexes for x, y coords
 	grid_map::Index index;
-	index(0) = to_node.y;
-	index(1) = to_node.x;
+	index(0) = to_node.x;
+	index(1) = to_node.y;
 
-	if (!map.isValid(index, "obstacles")) {
-		cost = 0.0;
-	} else {
-		cost = map.at("obstacles", index);
+	if (map.isValid(index, "obstacles")) {
+		cost = 1.0 + (map.at("obstacles", index) * 5.0);
 	}
+
+//	for (GridLocation neighbor : neighbors(map, to_node)) {
+//		index(0) = neighbor.x;
+//		index(1) = neighbor.y;
+//		if (in_bounds(map, neighbor) && map.isValid(index, "obstacles")) {
+//			cost += INFLATION_PCT * (map.at("obstacles", index) + 1) * 100;
+//		}
+//	}
 
     return cost;
 }
@@ -156,8 +193,19 @@ struct PriorityQueue {
 	}
 };
 
+// manhattan distance, for 4-connected grid
+//inline double heuristic(GridLocation a, GridLocation b) {
+//	return abs(a.x - b.x) + abs(a.y - b.y);
+//}
+
+// Octile distance, for 8-connected grid
+// http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
 inline double heuristic(GridLocation a, GridLocation b) {
-	return abs(a.x - b.x) + abs(a.y - b.y);
+    const double D = 1;
+	const double D2 = 1.41421356237; // sqrt(2)
+	double dx = abs(a.x - b.x);
+	double dy = abs(a.y - b.y);
+	return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy);
 }
 
 void a_star_search(
@@ -533,7 +581,8 @@ bool get_target_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rs
  *
  * get_plan() - get global plan from a start pose to a goal pose
  * todo: string pulling? use line grid_map iterator?
- * todo: Add 8-connected neighbors. Corner neighbors conditional on adjacents being free
+ * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
+ * todo: include apriltag layers in path plan
  */
 bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
 	geometry_msgs::Pose2D start_pose;
@@ -552,8 +601,8 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 	obstacle_map.getIndex(grid_map::Position(req.start.pose.position.x, req.start.pose.position.y), start_index);
 	obstacle_map.getIndex(grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y), goal_index);
 
-	GridLocation start{start_index(1), start_index(0)};
-	GridLocation goal{goal_index(1), goal_index(0)};
+	GridLocation start{start_index(0), start_index(1)};
+	GridLocation goal{goal_index(0), goal_index(1)};
 	std::map<GridLocation, GridLocation> came_from;
 	std::map<GridLocation, double> cost_so_far;
 
@@ -566,8 +615,8 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 
 	// convert vector of GridLocations to a vector of poses in /odom frame
 	for (GridLocation& location : grid_path) {
-		index(0) = location.y;
-		index(1) = location.x;
+		index(0) = location.x;
+		index(1) = location.y;
 		obstacle_map.getPosition(index, position);
 		geometry_msgs::PoseStamped pose;
         pose.pose.position.x = position.x();
@@ -652,7 +701,7 @@ int main(int argc, char **argv) {
     // Initialize the maps.
     obstacle_map = grid_map::GridMap({"obstacles"});
     obstacle_map.setFrameId(rover + "/odom");
-    obstacle_map.setGeometry(grid_map::Length(25, 25), 0.5);
+    obstacle_map.setGeometry(grid_map::Length(25, 25), 0.25);
 
     target_map = grid_map::GridMap({"target", "home", "home_yaw"});
     target_map.setFrameId(rover + "/odom");
