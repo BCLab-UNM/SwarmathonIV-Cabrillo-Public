@@ -692,7 +692,7 @@ class Swarmie:
         
         Arguments:
         
-        * `place`: (`geometry_msgs.msg.Point`): The place to drive.
+        * `place`: (`geometry_msgs.msg.Point` or `geometry_msgs.msg.Pose2D`): The place to drive.
 
         Keyword Arguments/Returns/Raises:
         
@@ -781,34 +781,49 @@ class Swarmie:
         # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
         
+    def set_search_exit_poses(self):
+        '''Remember the search exit location.'''
+        odom =  self.get_odom_location().get_pose()
+        gps = self.get_gps_location().get_pose()
     
-    def set_search_exit_location(self):
-        ''' Remember the search exit location. '''
-        odom =  self.get_odom_location()
-        gps = self.get_gps_location()
-    
-        #check if there is even a z or if its theata self.get_odom_location().Odometry.pose.pose.position
-        rospy.set_param('/' + self.rover_name + '/search_exit_location', 
-                        ({'x' : odom.Odometry.pose.pose.position.x, 'y' : odom.Odometry.pose.pose.position.y, 'z' : odom.Odometry.pose.pose.position.z},
-                        {'x' : gps.Odometry.pose.pose.position.x, 'y' : gps.Odometry.pose.pose.position.y, 'z' : gps.Odometry.pose.pose.position.z}) )
-            
-    
-    def get_search_exit_location(self):
-        ''' Getter returns the position in point from in a tuple (odom,gps) of the location search exited(seen a tag) at
-        Use:
-            swarmie.drive_to(swarmie.get_search_exit_location()[0],ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-            swarmie.set_heading(swarmie.get_search_exit_location()[0].z,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-        '''
-        locations = rospy.get_param('/' + self.rover_name + '/search_exit_location', {'x' : 0, 'y' : 0, 'z' : 0})
-        return((Point(**locations[0]),Point(**locations[1])))
+        rospy.set_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},
+             'gps': {'x': gps.x, 'y': gps.y, 'theta': gps.theta}}
+        )
 
+    def get_search_exit_poses(self):
+        '''Get the odom and gps poses (location and heading) where search last
+        exited (saw a tag).
 
-    def has_search_exit_location(self):
-        '''Check to see if the search exit location parameter is set.
         Returns:
+
+        * (`geometry_msgs.msg.Pose2D`): odom_pose - The pose in the /odom frame
+        * (`geometry_msgs.msg.Pose2D`): gps_pose - The pose in the /map frame
+
+        Will return invalid poses (containing all zeroes) if search exit
+        location hasn't been set yet.
+
+        Use:
+            odom_pose, gps_pose = swarmie.get_search_exit_poses()
+            swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+            swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        '''
+        poses = rospy.get_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': 0, 'y': 0, 'theta': 0},
+             'gps': {'x': 0, 'y': 0, 'theta': 0}}
+        )
+        return ((Pose2D(**poses['odom']), Pose2D(**poses['gps'])))
+
+    def has_search_exit_poses(self):
+        '''Check to see if the search exit location parameter is set.
+
+        Returns:
+
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('/' + self.rover_name + '/search_exit_location')
+        return rospy.has_param('/' + self.rover_name + '/search_exit_poses')
     
 
     def sees_resource(self, required_matches,crop=True):
