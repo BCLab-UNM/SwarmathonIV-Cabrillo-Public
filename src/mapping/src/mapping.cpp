@@ -419,18 +419,10 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	// Update the timestamp in the target map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
 
-	if (message->detections.size() > 0) {
-		for (int i=0; i<message->detections.size(); i++) {
-
-			if (message->detections[i].id == 0) {
-				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
-			}
-			else if (message->detections[i].id == 256) {
-				next_status |= swarmie_msgs::Obstacle::TAG_HOME;
-			}
-		}
-	}
-
+	/*
+	 * Clear the polygon that the camera sees. This is necessary to erase
+	 * grid cells where blocks have disappeared.
+	 */
 	grid_map::Position pos (currentLocation.x, currentLocation.y);
 	grid_map::Index map_index;
 	rover_map.getIndex(pos, map_index);
@@ -456,41 +448,66 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			));
 
 
+	grid_map::Matrix& home_layer = rover_map["home"];
+	grid_map::Matrix& target_layer = rover_map["target"];
+
 	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
 	      !iterator.isPastEnd(); ++iterator) {
+	    const grid_map::Index index(*iterator);
+	    home_layer(index(0), index(1)) = 0;
+	    target_layer(index(0), index(1)) = 0;
+	}
 
-		double home_val = rover_map.at("home", *iterator);
-		if (isnan(home_val)) {
-			home_val = 0;
-		}
-		if (next_status & swarmie_msgs::Obstacle::TAG_HOME) {
-			home_val += 1;
-			if (home_val > 1)
-				home_val = 1;
-		}
-		else {
-			home_val -= 1;
-			if (home_val < 0)
-				home_val = 0;
-		}
-		rover_map.at("home", *iterator) = home_val;
+	// Handle target detections
 
-		double target_val = rover_map.at("target", *iterator);
-		if (isnan(target_val)) {
-			target_val = 0;
-		}
-		if (next_status & swarmie_msgs::Obstacle::TAG_TARGET) {
-			target_val += 1;
-			if (target_val > 1)
-				target_val = 1;
-		}
-		else {
-			target_val -= 1;
-			if (target_val < 0)
-				target_val = 0;
-		}
-		rover_map.at("target", *iterator) = target_val;
+	if (message->detections.size() > 0) {
 
+		try {
+			// The Apriltags package can detect the pose of the tag. The pose
+			// in the detections array is relative to the camera. This transform
+			// lets us translate the camera coordinates into a world-referenced
+			// frame so we can place them on the map.
+			//
+			// This ensures that the transform is ready to be used below.
+			//
+			cameraTF->waitForTransform(
+					rover + "/odom",   // Target frame
+					message->detections[0].pose.header.frame_id, // Source frame
+					message->detections[0].pose.header.stamp,    // Time
+					ros::Duration(0.1) // How long to wait for the tf.
+			);
+
+			for (int i=0; i<message->detections.size(); i++) {
+
+				geometry_msgs::PoseStamped tagpose;
+				cameraTF->transformPose(rover + "/odom",
+						message->detections[i].pose, tagpose);
+
+				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
+				grid_map::Index ind;
+				rover_map.getIndex(pos, ind);
+
+				if (message->detections[i].id == 0) {
+					next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
+					rover_map.at("target", ind) = 1;
+				}
+				else if (message->detections[i].id == 256) {
+					next_status |= swarmie_msgs::Obstacle::TAG_HOME;
+					rover_map.at("home", ind) = 1;
+				}
+			}
+		} catch (tf::TransformException &e) {
+			ROS_ERROR("%s", e.what());
+		}
+
+		for (int i=0; i<message->detections.size(); i++) {
+			if (message->detections[i].id == 0) {
+				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
+			}
+			else if (message->detections[i].id == 256) {
+				next_status |= swarmie_msgs::Obstacle::TAG_HOME;
+			}
+		}
 	}
 
 	if (next_status != prev_status) {
