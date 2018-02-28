@@ -833,7 +833,7 @@ class Swarmie:
         np_arr = np.fromstring(test.data, np.uint8)
         img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
         #rosparam set 'april_tag_resource' '/home/carter/Robotics/Swarmathon-Cabrillo/src/mobility/resources/atag-0.jpg'
-        img2 = cv2.imread(rospy.get_param('/april_tag_resource'),0) 
+        img2 = cv2.imread(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource'),0) 
         if(crop):       #(y1:y2, x1:x2)
             img1 = img1[60:220, 50:220]
         ''' #for testing1
