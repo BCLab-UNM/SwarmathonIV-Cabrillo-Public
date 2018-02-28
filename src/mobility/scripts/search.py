@@ -47,9 +47,9 @@ def avoid(head):
     nrpath = True
     driveS = 0
     while nrpath :
-        rospy.sleep(0.1)
+        rospy.sleep(0.2)
         print("Sonar conditions in avoid:",sonar_left, sonar_center, sonar_right, Obstacle.IS_SONAR)
-        while sonar_right < sRPer - sVar or sonar_center < sCPer - sVar :
+        while sonar_right < sRPer + sVar or sonar_center < sCPer + sVar :
             swarmie.set_heading(anglei + math.pi/12, ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             
         try:
@@ -288,8 +288,8 @@ def main():
     global sonVar
     
     sVar = 0.5
-    sRPer = 0.77
-    sCPer = 1.4
+    sRPer = .73
+    sCPer = 1.5
     pVar =  0.5
     sonVar = 0.5
     
@@ -335,9 +335,9 @@ def main():
             
             except HomeException : 
                 print ("I saw home!")
-                odom_location = swarmie.get_odom_location().get_pose()
-                swarmie.set_home_odom_location(odom_location)
-                #turnaround()
+                swarmie.set_home_odom_location(swarmie.get_odom_location())
+                swarmie.set_home_gps_location(swarmie.get_gps_location())
+                turnaround()
                 
     except TagException : 
         print("I found a tag!")

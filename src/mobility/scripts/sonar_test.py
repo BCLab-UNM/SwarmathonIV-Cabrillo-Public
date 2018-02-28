@@ -200,14 +200,14 @@ def main():
     rospy.Subscriber(rovername + '/sonarLeft', Range, get_sonar_left)
     rospy.Subscriber(rovername + '/sonarRight', Range, get_sonar_right)
     rospy.Subscriber(rovername + '/sonarCenter', Range, get_sonar_center)
-     
+    rospy.sleep(1)
             
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
         
     #for do in range(20) :
-    detectm()
+    detect()
         
     print ("End of sensing")
     exit(1)
