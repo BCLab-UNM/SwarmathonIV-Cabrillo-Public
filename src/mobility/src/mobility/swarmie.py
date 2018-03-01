@@ -463,7 +463,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return False
+        return(self.sees_resource(6))
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -825,4 +825,86 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/search_exit_poses')
     
-    
+
+    def sees_resource(self, required_matches,crop=True):
+        '''Check to see if a resource can be seen between the grippers
+        Args:
+        * (`int`): the minimum number of matches required to return true
+        Returns:
+        * (`bool`): True if the number of required matches has been met, False otherwise.
+        '''
+        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
+        ### TODO crop the image on where the tag in the claws would be
+        from sensor_msgs.msg import CompressedImage
+        import numpy as np
+        import cv2
+        
+        try:
+            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=3)
+        except(rospy.ROSException), e:
+            print("Camera Broke?")
+            print("Error message: ", e)
+        np_arr = np.fromstring(test.data, np.uint8)
+        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
+        #img2 = cv2.imread(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource'),0) 
+        import pickle
+        img2 = pickle.load( open(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource_pickel'), "rb" ) ) #this 
+        if(crop):       #(y1:y2, x1:x2)
+            img1 = img1[60:220, 50:220]
+        ''' #for testing1
+        cv2.imshow("cropped", img1)
+        cv2.waitKey(0)        
+        ''' #end for testing1
+        
+        # Initiate SIFT detector
+        #sift = cv2.SIFT() #for opencv2
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(img1,None)
+        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
+        '''
+        Throws
+        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
+        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
+        '''
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks = 50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1,des2,k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        good = []
+        for m,n in matches:
+            if m.distance < 0.7*n.distance:
+                good.append(m)
+                
+        '''#for testing2 ###############################################
+        from matplotlib import pyplot as plt
+        # Need to draw only good matches, so create a mask
+        matchesMask = [[0,0] for i in xrange(len(matches))]
+
+        # ratio test as per Lowe's paper
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.7*n.distance:
+                matchesMask[i]=[1,0]
+
+        draw_params = dict(matchColor = (0,255,0),
+                           singlePointColor = (255,0,0),
+                           matchesMask = matchesMask,
+                           flags = 0)
+        img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,matches,None,**draw_params)
+        plt.imshow(img3,),plt.show()
+        '''#end for testing2   ###############################################
+        
+        print("Seen a resource with",len(good)*5,"% confidence")
+        
+        if len(good)>required_matches-1:
+            return(True)
+        else:
+            return(False)
+        

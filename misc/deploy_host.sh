@@ -44,6 +44,7 @@ cp -R deploy/install/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
 cp -R Swarmathon-Arduino/ $TEMPDIR
+cp -R src/mobility/resources $TEMPDIR/install/share/mobility/
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {
   cd ~
