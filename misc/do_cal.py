@@ -151,6 +151,8 @@ def deg(rad):
     return rad * 180 / math.pi
 
 def check_calibration() :
+    global calculating_data, roll, pitch, ROLL_PITCH_TOLERANCE
+
     try:
         print('Loading', CAL_DATA_FILE, 'for examination')
         data = np.loadtxt(CAL_DATA_FILE, delimiter=',')
