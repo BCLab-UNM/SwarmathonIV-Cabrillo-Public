@@ -25,8 +25,8 @@ import traceback
 import rospy
 from std_msgs.msg import Int32MultiArray
 
-CAL_MINMAX_FILE = os.environ['HOME'] + '/KSC_extended_calibration.csv'
-CAL_DATA_FILE = os.environ['HOME'] + '/KSC.cal'
+CAL_MINMAX_FILE = os.environ['HOME'] + '/KSC.cal'
+CAL_DATA_FILE = os.environ['HOME'] + '/KSC_extended_calibration.csv'
 
 def ellipsoid_fit(x, y, z):
     """
