@@ -205,6 +205,13 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
+        self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+        #adding currently seen tags to the dict
+        self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+        #get the tags from the dict and saves them to Targets
+        self.Targets.detections = self.TargetsDict.values() 
+    
+    '''#old code using is moving
         if self._is_moving():
             self.Targets = msg
             #create a dict of tags as values and rounded coordinates as the key
@@ -217,7 +224,7 @@ class Swarmie:
             self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
             #get the tags from the dict and saves them to Targets
             self.Targets.detections = self.TargetsDict.values() 
-
+    '''
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
         if 'ignore' in kwargs :
