@@ -604,11 +604,11 @@ if __name__ == "__main__":
     )
     RAW_DATA_PATH = rospy.get_param(
         '~raw_data_path',
-        default='/home/robot/'
+        default='/home/swarmie/KSC_extended_calibration.csv'
     )
     CAL_FILE_PATH = rospy.get_param(
         '~calibration_file_path',
-        default='/home/robot/'
+        default='/home/swarmie/'
     )
     # Data is stored in a list of lists, which is converted to a numpy array
     # when needed.
@@ -619,7 +619,7 @@ if __name__ == "__main__":
     if LOAD_RAW_DATA:
         try:
             raw_data = numpy.loadtxt(
-                RAW_DATA_PATH + 'raw_cal.txt',
+                RAW_DATA_PATH,
                 delimiter=','
             )
             (cal['mag_offsets'], cal['mag_transform']) = ellipsoid_fit(
