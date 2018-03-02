@@ -53,6 +53,8 @@ def approach():
                 swarmie.set_wrist_angle(0.55)
                 rospy.sleep(1)
                 swarmie.fingers_open()
+                # Wait a moment for a block to fall out of claw
+                rospy.sleep(0.25)
         else:
             print("No legal blocks detected.")
             swarmie.wrist_up()
@@ -69,10 +71,12 @@ def approach():
 def recover():
     global swarmie 
     global claw_offset_distance
-    claw_offset_distance -= 0.01
+    claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
     try:
         swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        # Wait a moment to detect tags before possible backing up further
+        rospy.sleep(0.25)
         try:
             block = swarmie.get_nearest_block_location()
         except tf.Exception as e:
@@ -101,7 +105,9 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-    claw_offset_distance = 0.21      
+    claw_offset_distance = 0.22 
+    if(swarmie.simulator_running()):
+        claw_offset_distance -= 0.02
 
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))

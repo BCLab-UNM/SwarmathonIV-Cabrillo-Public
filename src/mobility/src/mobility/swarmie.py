@@ -435,23 +435,31 @@ class Swarmie:
     def has_block(self):
         '''Try to determine if a block is in our grasp. 
         
-        Uses the algorithm: 
-        
-        * Raise the wrist all the way up. 
+        Uses the algorithm:
+
+         * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position.
+        * Check if we can see a block that's close to the camera. If so, return `True`
+        * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
         * Return `False`
-        ''' 
+        '''
 
+        # First test: Can we see a bock that's close to the camera with the wrist middle.
+        self.set_wrist_angle(.55)
+        rospy.sleep(1)
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.18 :
+                return True 
+
+        # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
-        rospy.sleep(2)
-        
-        # First test: is something blocking the center sonar at a short range.
-        obstacles = self.get_obstacle_condition()        
-        if obstacles & Obstacle.SONAR_BLOCK :
-            return True
-
-        # Second test: Can we see a bock that's close to the camera.
+        rospy.sleep(1)
         blocks = self.get_latest_targets()
         blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) > 0 :
@@ -459,7 +467,12 @@ class Swarmie:
             z_dist = nearest.pose.pose.position.z 
             if abs(z_dist) < 0.15 :
                 return True 
-                
+
+        # Third test: is something blocking the center sonar at a short range.
+        obstacles = self.get_obstacle_condition()        
+        if obstacles & Obstacle.SONAR_BLOCK :
+            return True
+
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
