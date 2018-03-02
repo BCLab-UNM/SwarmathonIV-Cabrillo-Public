@@ -223,9 +223,8 @@
 
     <node name="$(arg name)_IMU" pkg="mobility" type="cal_imu.py"
           args="$(arg name)" respawn="true" >
-      <param name="raw_data_path" value="/home/robot/" />
       <param name="load_raw_data" value="true" />
-      <param name="calibration_file_path" value="/home/robot/"/>
+      <param name="raw_data_path" value="/home/swarmie/KSC_extended_calibration.csv"/>
       <param name="publish_debug_topic" value="false" />
     </node>
     
