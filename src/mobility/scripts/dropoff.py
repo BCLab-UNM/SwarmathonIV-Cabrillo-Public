@@ -23,6 +23,7 @@ def look_for_tags():
     turnTheta = math.pi/6
     targets = []
     #targets.append(get_center_pose_list(256))
+    
     swarmie.set_heading(swarmie.get_odom_location().get_pose().theta + turnTheta, ignore=-1)
     rospy.sleep(.3)
     #targets.append(get_center_pose_list(256))
@@ -92,7 +93,14 @@ def get_furthest_corner_hometags_location(tags):
         return(homeTag1,homeTag2)
         
 def get_furthest_side_hometags_location(tags):
-        sorted_home_tags = sorted(tags, key=lambda x : math.sqrt(x.x**2 + x.y**2))          #reverse=True
+        #seperate by the y value so left and right side 
+        homeTags1 = [t for t in tags if t.y > 0 ]
+        homeTags2 = [t for t in tags if t.y < 0 ]
+        
+        homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt(x.x**2 + x.y**2))[0]          #reverse=True
+        homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt(x.x**2 + x.y**2))[0]          #reverse=True
+        #list(filter((0).__lt__,l)) #seems to not work with the tags without making a lamda, lt or gt 
+        #sorted_home_tags = sorted(tags, key=lambda x : math.sqrt(x.x**2 + x.y**2))          #reverse=True
         return(sorted_home_tags[0],sorted_home_tags[-1])       
 
 def is_corner(tags):
@@ -116,13 +124,13 @@ def find_center(tags):
         #do a second check for the corner 
         rospy.sleep(.3)
         tags = get_center_pose_list(256) #just incase we now see a corner after squaring up
-        if is_corner(tags):
+        '''if is_corner(tags):
             print(rovername, "dropping off in Corner:", set(int(abs(t.theta)) for t in tags)) #need abs?
             return(mid_point(*get_furthest_corner_hometags_location(tags)))
-        
+        '''
         print(rovername, "dropping off on side:", tags[0].theta)
         rospy.sleep(5)
-        return(mid_point(*get_furthest_side_hometags_location(tags)))
+        return(mid_point(*get_furthest_side_hometags_location(tags))) #this will return the middle of the 2 furthest tags on one side
 
 def main():
     '''Dropoff throws IndexError when no tags near swarmie '''
@@ -141,10 +149,10 @@ def main():
     rospy.sleep(.5)
     
     try:
-        swarmie.targets_timeout = 10 # so they stay around for the decision making
+        swarmie.targets_timeout = 9 # so they stay around for the decision making
         tags = look_for_tags()
-        #find_center(tags) #for testing
-        swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        find_center(tags) #for testing
+        #swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
         swarmie.targets_timeout = 3 #put it back
     except:
         swarmie.targets_timeout = 3 #make sure it makes it back
@@ -154,10 +162,9 @@ def main():
     swarmie.set_home_odom_location(swarmie.get_odom_location())
     swarmie.set_home_gps_location(swarmie.get_gps_location())
 
-    
     swarmie.putdown() 
     
-    swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    #swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     '''swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     '''
