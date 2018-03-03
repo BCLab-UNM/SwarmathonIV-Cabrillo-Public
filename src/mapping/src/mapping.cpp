@@ -206,7 +206,11 @@ inline double heuristic(GridLocation a, GridLocation b) {
 	return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy);
 }
 
-void a_star_search(
+/*
+ * A* Search Algorithm
+ * Returns true if a path from start to goal is found. Otherwise, returns false.
+ */
+bool a_star_search(
 		grid_map::GridMap& map,
         GridLocation start,
         GridLocation goal,
@@ -223,7 +227,7 @@ void a_star_search(
 		GridLocation current = frontier.get();
 
 		if (current == goal) {
-			break;
+			return true;
 		}
 
 		for (GridLocation next : neighbors(map, current)) {
@@ -237,8 +241,15 @@ void a_star_search(
 			}
 		}
 	}
+	return false;
 }
 
+/*
+/*
+ * Rebuild the path from the map of came_from locations.
+ * came_from obviously needs to contain a path from goal back to start at this
+ * point.
+ */
 std::vector<GridLocation> reconstruct_path(
 		GridLocation start, GridLocation goal,
 		std::map<GridLocation, GridLocation> came_from) {
@@ -248,7 +259,8 @@ std::vector<GridLocation> reconstruct_path(
 		path.push_back(current);
 		current = came_from[current];
 	}
-	path.push_back(start); // optional
+    // Don't bother pushing the start location onto the path.
+	// path.push_back(start); // optional
 	reverse(path.begin(), path.end());
 	return path;
 }
@@ -581,7 +593,11 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 	std::map<GridLocation, GridLocation> came_from;
 	std::map<GridLocation, double> cost_so_far;
 
-	a_star_search(rover_map, start, goal, came_from, cost_so_far);
+	bool success = a_star_search(rover_map, start,
+								 goal, came_from, cost_so_far);
+	if (!success) {
+		return false;
+	}
 	std::vector<GridLocation> grid_path = reconstruct_path(start, goal, came_from);
 
 	grid_map::Index index;
