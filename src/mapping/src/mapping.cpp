@@ -707,7 +707,7 @@ int main(int argc, char **argv) {
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacle", "target", "home"});
     rover_map.setFrameId(rover + "/odom");
-    rover_map.setGeometry(grid_map::Length(25, 25), 0.5);
+    rover_map.setGeometry(grid_map::Length(25, 25), 0.25);
 
     ros::spin();
     return 0;
