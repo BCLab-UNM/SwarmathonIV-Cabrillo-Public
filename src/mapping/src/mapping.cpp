@@ -252,6 +252,64 @@ bool a_star_search(
 }
 
 /*
+ * Helper to straighten_path(). Returns true if end is in line of sight of
+ * start. Returns false otherwise.
+ *
+ * end is in line of sight if line iterator between the two indexes doesn't
+ * cross a cell with value above OBSTACLE_THRESHOLD
+ */
+bool in_line_of_sight(
+		grid_map::GridMap& map,
+		grid_map::Index start,
+		grid_map::Index end) {
+	const double OBSTACLE_THRESHOLD = 0.10;
+	for (grid_map::LineIterator iterator(map, start, end);
+		 !iterator.isPastEnd(); ++iterator) {
+        if (map.isValid(*iterator, "obstacle")
+            && map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
+            return false;
+        }
+	}
+	return true;
+}
+
+/*
+ * Straighten first part of the path by finding the furthest waypoint that's
+ * still in line-of-sight (not blocked by obstacles). Straightened path will
+ * begin with the furthest waypoint in line-of-sight, followed by the remaining
+ * original waypoints.
+ *
+ * Returns a vector containing the new, straightened path.
+ * Returns the original path if path has 1 or fewer waypoints.
+ */
+std::vector<GridLocation> straighten_path(
+		grid_map::GridMap& map,
+		std::vector<GridLocation> path) {
+	std::vector<GridLocation> result;
+
+	if (path.size() <= 1) {
+		return path;
+	}
+
+	grid_map::Index start(path[0].x, path[0].y);
+	unsigned int i = 1;
+    while (i < path.size()) {
+		grid_map::Index end(path[i].x, path[i].y);
+        if (!in_line_of_sight(map, start, end)) {
+			break;
+		}
+		i++;
+	}
+
+	result.push_back(path[i - 1]); // last in line-of-sight location
+	while (i < path.size()) {
+		result.push_back(path[i]);
+		i++;
+	}
+
+	return result;
+}
+
 /*
  * Rebuild the path from the map of came_from locations.
  * came_from obviously needs to contain a path from goal back to start at this
@@ -267,6 +325,7 @@ std::vector<GridLocation> reconstruct_path(
 		current = came_from[current];
 	}
     // Don't bother pushing the start location onto the path.
+	// todo: put this back now that path straightening is in?
 	// path.push_back(start); // optional
 	reverse(path.begin(), path.end());
 	return path;
@@ -591,7 +650,6 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
  * Python API
  *
  * get_plan() - get global plan from a start pose to a goal pose
- * todo: string pulling? use line grid_map iterator?
  * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
  * todo: include apriltag layers in path plan
  */
@@ -609,8 +667,14 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 //	goal.y = req.goal.pose.position.y;
 //	goal.theta = poseToYaw(req.goal.pose);
 
-	rover_map.getIndex(grid_map::Position(req.start.pose.position.x, req.start.pose.position.y), start_index);
-	rover_map.getIndex(grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y), goal_index);
+	rover_map.getIndex(
+			grid_map::Position(req.start.pose.position.x, req.start.pose.position.y),
+			start_index
+	);
+	rover_map.getIndex(
+			grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y),
+			goal_index
+	);
 
 	GridLocation start{start_index(0), start_index(1)};
 	GridLocation goal{goal_index(0), goal_index(1)};
@@ -622,7 +686,10 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 	if (!success) {
 		return false;
 	}
-	std::vector<GridLocation> grid_path = reconstruct_path(start, goal, came_from);
+	std::vector<GridLocation> grid_path = straighten_path(
+			rover_map,
+			reconstruct_path(start, goal, came_from)
+	);
 
 	grid_map::Index index;
 	grid_map::Position position;
