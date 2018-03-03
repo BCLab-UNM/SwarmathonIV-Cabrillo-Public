@@ -191,10 +191,14 @@ def find_area():
     d = math.hypot(local_map[unexplored][0].bl.x - l.x,local_map[unexplored][0].bl.y - l.y)
     return (l,r,d)
 
-def branch(tx,ty,delta,goal):
+def branch(tx,ty,delta,goals,goalp,mapt):
     global path
     unob = True
     atGoal = False
+    delta = tx / ty
+    add = int(math.fabs(ty) / ty)
+    tx = tx + 25
+    ty = ty + 25
     while (tx > 0 and tx < 50) and (ty > 0 and ty < 50) and unob and not atGoal:
         ty = ty + add
         tx = int(ty * delta)
@@ -202,8 +206,13 @@ def branch(tx,ty,delta,goal):
             unob = False
         elif numpy.isnan(mapt[ty][tx]) or numpy.isnan(mapt[ty + 1][tx]) or numpy.isnan(mapt[ty][tx + 1]) or numpy.isnan(mapt[ty - 1][tx]) or numpy.isnan(mapt[ty][tx - 1]):
             unob = False
-        elif math.fabs(ty / 2 - goal.y) < pVar or math.fabs(ty / 2 - goal.y) < pVar:
+        elif math.fabs(ty / 2 - goals.y) < pVar or math.fabs(ty / 2 - goals.y) < pVar:
             atGoal = true
+    if atGoal and unob:
+        return True
+    else:
+        
+        branch()
     
 def path_to(goal):
     global swarmie
@@ -212,12 +221,14 @@ def path_to(goal):
     curpos = swarmie.get_odom_location().get_pose()
     xl = goal.x - curpos.x
     yl = goal.y - curpos.y
-    delta = xl / yl
+    goalm = goal
+    goalm.x = int(goal.x * 2 + 0.45) + 25
+    goalm.y = int(goal.y * 2 + 0.45) + 25  
     add = int(math.fabs(yl) / yl)
     mapt = swarmie.get_obstacle_map()['obstacles']
-    tx = int(curpos.x * 2 + .45) + 25
-    ty = int(curpos.y * 2 + .45) + 25
-    branch(tx,ty,delta,goal)
+    tx = int(curpos.x * 2 + 0.45)
+    ty = int(curpos.y * 2 + 0.45)
+    branch(tx,ty,goalm,goalm,mapt)
             
     
     #placeholder 
