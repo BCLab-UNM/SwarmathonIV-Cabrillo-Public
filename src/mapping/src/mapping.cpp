@@ -53,6 +53,7 @@ geometry_msgs::Pose2D currentLocation;
 tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
+const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
 unsigned int obstacle_status;
 
 
@@ -297,11 +298,14 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
-    const double sonar_depth = 0.1;  // limit view_poly to 10cm past measured ranges
-    const double view_range = 2.5;  // don't mark obstacles past this range
-	double left = sonarLeft->range;
-	double center = sonarCenter->range;
-	double right = sonarRight->range;
+    // todo: what's a good number for SONAR_DEPTH?
+    const double SONAR_DEPTH = 0.5;  // limit mark_poly to 50cm past measured ranges
+    // todo: what's a good number for VIEW_RANGE?
+	// VIEW_RANGE can help avoid marking "fake" obstacles seen due to sonar
+	// noise at longer ranges. It limits the mark_poly to this range, but
+	// not clear_poly, so the map can still be cleared past this point.
+	// todo: limit clear_poly left and right ranges using VIEW_RANGE?
+    const double VIEW_RANGE = 1.5;  // don't mark obstacles past this range
 
 	// Update the timestamp in the Obstacle map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
@@ -320,52 +324,6 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 		next_status |= swarmie_msgs::Obstacle::SONAR_BLOCK;
 	}
 
-	grid_map::Polygon view_poly;
-	view_poly.setFrameId(rover_map.getFrameId());
-
-	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
-
-	if (sonarLeft->range >= view_range) {
-		left = view_range;
-	}
-	if (sonarCenter->range >= view_range) {
-		center = view_range;
-	}
-	if (sonarRight-> range >= view_range) {
-		right = view_range;
-	}
-
-	// Left sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (left + sonar_depth) * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + (left + sonar_depth) * sin(currentLocation.theta + M_PI_4)
-			));
-
-	// Center sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (center + sonar_depth) * cos(currentLocation.theta),
-					currentLocation.y + (center + sonar_depth) * sin(currentLocation.theta)
-			));
-
-	// Right sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + (right + sonar_depth) * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + (right + sonar_depth) * sin(currentLocation.theta - M_PI_4)
-			));
-
-	// Increase the "obstacleness" of the viewable area.
-	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
-	      !iterator.isPastEnd(); ++iterator) {
-		double val = rover_map.at("obstacle", *iterator);
-		if (isnan(val)) {
-			val = 0.5;
-		}
-		val += 0.01;
-		if (val > 1)
-			val = 1;
-	    rover_map.at("obstacle", *iterator) = val;
-	  }
-
 
 	grid_map::Polygon clear_poly;
 	clear_poly.setFrameId(rover_map.getFrameId());
@@ -374,8 +332,8 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Left sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + M_PI_4)
+			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
 			));
 
 	// Center sonar
@@ -386,21 +344,81 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Right sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + sonarRight->range * sin(currentLocation.theta - M_PI_4)
+			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
+					currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
 			));
 
 	// Clear the area that's clear in sonar.
 	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
 		double val = rover_map.at("obstacle", *iterator);
-		if (!isnan(val)) {
-			val -= 0.05;
-			if (val < 0)
-				val = 0;
+		if (isnan(val)) {
+			val = 0;
 		}
+        val -= 0.05;
+        if (val < 0)
+            val = 0;
 	    rover_map.at("obstacle", *iterator) = val;
 	  }
+
+	grid_map::Polygon mark_poly;
+	mark_poly.setFrameId(rover_map.getFrameId());
+	bool do_marking = false;
+
+	if (sonarLeft->range < VIEW_RANGE) {
+		do_marking = true;
+		// Left sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarLeft->range + SONAR_DEPTH) * cos(currentLocation.theta + SONAR_ANGLE),
+                    currentLocation.y + (sonarLeft->range + SONAR_DEPTH) * sin(currentLocation.theta + SONAR_ANGLE)
+				));
+	}
+
+	if (sonarCenter->range < VIEW_RANGE) {
+		do_marking = true;
+		// Center sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarCenter->range * cos(currentLocation.theta),
+					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarCenter->range + SONAR_DEPTH) * cos(currentLocation.theta),
+                    currentLocation.y + (sonarCenter->range + SONAR_DEPTH) * sin(currentLocation.theta)
+				));
+	}
+
+	if (sonarRight->range < VIEW_RANGE) {
+        do_marking = true;
+		// Right sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
+                    currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarRight->range + SONAR_DEPTH) * cos(currentLocation.theta - SONAR_ANGLE),
+                    currentLocation.y + (sonarRight->range + SONAR_DEPTH) * sin(currentLocation.theta - SONAR_ANGLE)
+				));
+	}
+
+	if (do_marking) {
+		// Mark the area that's blocked in sonar.
+		double avg_range = (sonarLeft->range + sonarCenter->range + sonarRight->range) / 3.0;
+		for (grid_map::PolygonIterator iterator(rover_map, mark_poly);
+			 !iterator.isPastEnd(); ++iterator) {
+			double val = rover_map.at("obstacle", *iterator);
+			if (isnan(val)) {
+				val = 0.1;
+			}
+			val += 0.01 * (3.0 / avg_range); // mark nearer obstacles faster
+			if (val > 1)
+				val = 1;
+			rover_map.at("obstacle", *iterator) = val;
+		  }
+	}
 
 	// Publish the obstacle message if there's an update to it.
 	if (next_status != prev_status) {
