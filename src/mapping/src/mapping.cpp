@@ -107,23 +107,23 @@ const std::array<GridLocation, 8> DIRECTIONS =
 
 // Check if location and it's neighbors obstacle values are all below threshold.
 bool passable(grid_map::GridMap& map, GridLocation location) {
-	const double OBSTACLE_THRESHOLD = 0.25;
+	const double OBSTACLE_THRESHOLD = 0.10;
     grid_map::Index index;
     index(0) = location.x;
 	index(1) = location.y;
 	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
-	for (GridLocation direction : DIRECTIONS) {
-		GridLocation next{location.x + direction.x, location.y + direction.y};
-		if (in_bounds(map, next)) {
-			index(0) = next.x;
-			index(1) = next.y;
-			if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
-				return false;
-			}
-		}
-	}
+//	for (GridLocation direction : DIRECTIONS) {
+//		GridLocation next{location.x + direction.x, location.y + direction.y};
+//		if (in_bounds(map, next)) {
+//			index(0) = next.x;
+//			index(1) = next.y;
+//			if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+//				return false;
+//			}
+//		}
+//	}
 	return true;
 }
 
@@ -149,24 +149,30 @@ std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation locatio
 // value, though.
 double cost(grid_map::GridMap& map, GridLocation to_node) {
 	// Inflate cost of cells which are neighboring an obstacle
-//	const double INFLATION_PCT = 0.7;
-	double cost = 1.0; // not yet mapped cells will take this value
-	// I think these are the correct indexes for x, y coords
+	const double INFLATION_PCT = 0.7;
+	const double LETHAL_COST = 255;
+	double cost = 50; // not yet mapped cells will take this value
+
 	grid_map::Index index;
 	index(0) = to_node.x;
 	index(1) = to_node.y;
 
 	if (map.isValid(index, "obstacle")) {
-		cost = 1.0 + (map.at("obstacle", index) * 5.0);
+//		cost = 1.0 + (map.at("obstacle", index) * 5.0);
+        cost = LETHAL_COST * map.at("obstacle", index);
 	}
 
-//	for (GridLocation neighbor : neighbors(map, to_node)) {
-//		index(0) = neighbor.x;
-//		index(1) = neighbor.y;
-//		if (in_bounds(map, neighbor) && map.isValid(index, "obstacle")) {
-//			cost += INFLATION_PCT * (map.at("obstacle", index) + 1) * 100;
-//		}
-//	}
+	for (GridLocation neighbor : neighbors(map, to_node)) {
+        for (GridLocation next_neighbor : neighbors(map, neighbor)) {
+			index(0) = next_neighbor.x;
+			index(1) = next_neighbor.y;
+			if (in_bounds(map, next_neighbor)
+                && map.isValid(index, "obstacle")) {
+				cost += INFLATION_PCT * LETHAL_COST *
+						map.at("obstacle", index);
+			}
+		}
+	}
 
     return cost;
 }
