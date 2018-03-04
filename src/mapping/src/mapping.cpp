@@ -55,6 +55,7 @@ tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
 const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
+const double MAP_RESOLUTION = 0.25; // map resolution, meters per cell
 unsigned int obstacle_status;
 
 
@@ -199,13 +200,17 @@ struct PriorityQueue {
 	}
 };
 
-// manhattan distance, for 4-connected grid
-//inline double heuristic(GridLocation a, GridLocation b) {
-//	return abs(a.x - b.x) + abs(a.y - b.y);
-//}
 
-// Octile distance, for 8-connected grid
-// http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
+
+/*
+ * Helper to a_star_search() and at_goal()
+ *
+ * The hueristic for A* approximates the minimum distance between location
+ * a and location b, if the route between them was free of any obstacles.
+ *
+ * Octile distance, for 8-connected grid
+ * http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
+ */
 inline double heuristic(GridLocation a, GridLocation b) {
     const double D = 1;
 	const double D2 = 1.41421356237; // sqrt(2)
@@ -215,13 +220,33 @@ inline double heuristic(GridLocation a, GridLocation b) {
 }
 
 /*
+ * Helper to a_star_search()
+ *
+ * Returns true if distance from current location to goal location is
+ * within the acceptable tolerance.
+ */
+inline bool at_goal(GridLocation current, GridLocation goal, int tolerance) {
+	return heuristic(current, goal) <= tolerance;
+}
+
+/*
  * A* Search Algorithm
- * Returns true if a path from start to goal is found. Otherwise, returns false.
+ *
+ * Returns true if a path from start to goal is found.
+ * Otherwise, returns false.
+ *
+ * Looks for the shortest path in map from start to goal. Stops when current
+ * cell is within tolerance distance of goal cell.
+ *
+ * If using tolerance > 0 and the search completes successfully, the goal
+ * location will be modified here to be the location where the search ended.
+ * This way, reconstruct path will still function normally.
  */
 bool a_star_search(
 		grid_map::GridMap& map,
         GridLocation start,
-        GridLocation goal,
+        GridLocation& goal,
+		int tolerance,
         std::map<GridLocation, GridLocation>& came_from,
         std::map<GridLocation, double>& cost_so_far) {
 
@@ -234,7 +259,8 @@ bool a_star_search(
 	while (!frontier.empty()) {
 		GridLocation current = frontier.get();
 
-		if (current == goal) {
+		if (at_goal(current, goal, tolerance)) {
+			goal = current; // modify goal location so path rebuilding works
 			return true;
 		}
 
@@ -327,7 +353,7 @@ std::vector<GridLocation> reconstruct_path(
 	}
     // Don't bother pushing the start location onto the path.
 	// todo: put this back now that path straightening is in?
-	// path.push_back(start); // optional
+	path.push_back(start); // optional
 	reverse(path.begin(), path.end());
 	return path;
 }
@@ -724,11 +750,17 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 
 	GridLocation start{start_index(0), start_index(1)};
 	GridLocation goal{goal_index(0), goal_index(1)};
+
+	int tolerance = 0; // default tolerance for search, must reach goal exactly
+	if (req.tolerance > 0) {
+		tolerance = int(req.tolerance / MAP_RESOLUTION);
+	}
+
 	std::map<GridLocation, GridLocation> came_from;
 	std::map<GridLocation, double> cost_so_far;
 
-	bool success = a_star_search(rover_map, start,
-								 goal, came_from, cost_so_far);
+	bool success = a_star_search(rover_map, start, goal, tolerance,
+								 came_from, cost_so_far);
 	if (!success) {
 		return false;
 	}
@@ -826,7 +858,7 @@ int main(int argc, char **argv) {
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacle", "target", "home"});
     rover_map.setFrameId(rover + "/odom");
-    rover_map.setGeometry(grid_map::Length(25, 25), 0.25);
+    rover_map.setGeometry(grid_map::Length(25, 25), MAP_RESOLUTION);
 
     ros::spin();
     return 0;
