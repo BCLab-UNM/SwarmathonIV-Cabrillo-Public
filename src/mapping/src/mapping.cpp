@@ -96,16 +96,21 @@ bool in_bounds(grid_map::GridMap& map, GridLocation location) {
 			   && 0 <= location.y && location.y < height;
 }
 
-// For 4-connected grid
-//const std::array<GridLocation, 4> DIRECTIONS =
-//		{GridLocation{1, 0}, GridLocation{0, -1}, GridLocation{-1, 0}, GridLocation{0, 1}};
-
-// For 8-connected grid
+// Neighbors for 8-connected grid
 const std::array<GridLocation, 8> DIRECTIONS =
 		{GridLocation{-1, 0}, GridLocation{-1, 1},
 		 GridLocation{0, 1}, GridLocation{1, 1},
 		 GridLocation{1, 0}, GridLocation{1, -1},
 		 GridLocation{0, -1}, GridLocation{-1, -1}};
+
+// 2-step away neighbors for an 8-connected grid
+const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
+		{GridLocation{-2, 0}, GridLocation{-2, 1}, GridLocation{-2, 2},
+		 GridLocation{-1, 2}, GridLocation{0, 2}, GridLocation{1, 2},
+		 GridLocation{2, 2}, GridLocation{2, 1}, GridLocation{2, 0},
+		 GridLocation{2, -1}, GridLocation{2, -2}, GridLocation{1, -2},
+		 GridLocation{0, -2}, GridLocation{-1, -2}, GridLocation{-2, -2},
+		 GridLocation{-2, -1}};
 
 // Check if location and it's neighbors obstacle values are all below threshold.
 bool passable(grid_map::GridMap& map, GridLocation location) {
@@ -114,6 +119,9 @@ bool passable(grid_map::GridMap& map, GridLocation location) {
     index(0) = location.x;
 	index(1) = location.y;
 	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+		return false;
+	}
+    if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
 //	for (GridLocation direction : DIRECTIONS) {
@@ -153,27 +161,60 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 	// Inflate cost of cells which are neighboring an obstacle
 	const double INFLATION_PCT = 0.7;
 	const double LETHAL_COST = 255;
-	double cost = 50; // not yet mapped cells will take this value
+	const double NEUTRAL_COST = 50; // not yet mapped cells will take this value
+	double cost = 0;
 
 	grid_map::Index index;
 	index(0) = to_node.x;
 	index(1) = to_node.y;
 
 	if (map.isValid(index, "obstacle")) {
-//		cost = 1.0 + (map.at("obstacle", index) * 5.0);
-        cost = LETHAL_COST * map.at("obstacle", index);
+//		cost += 1.0 + (map.at("obstacle", index) * 5.0);
+        cost += LETHAL_COST * map.at("obstacle", index);
+	}
+	if (map.isValid(index, "target")) {
+		cost += LETHAL_COST * map.at("target", index);
 	}
 
-	for (GridLocation neighbor : neighbors(map, to_node)) {
-        for (GridLocation next_neighbor : neighbors(map, neighbor)) {
-			index(0) = next_neighbor.x;
-			index(1) = next_neighbor.y;
-			if (in_bounds(map, next_neighbor)
-                && map.isValid(index, "obstacle")) {
-				cost += INFLATION_PCT * LETHAL_COST *
-						map.at("obstacle", index);
-			}
-		}
+	if (cost > LETHAL_COST) { // skip 2-layer neighbors check if possible
+		cost = LETHAL_COST;
+		return cost;
+	}
+
+    for (GridLocation direction : DIRECTIONS) {
+        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+		index(0) = next.x;
+		index(1) = next.y;
+        if (in_bounds(map, next)) {
+            if (map.isValid(index, "obstacle")) {
+                cost += INFLATION_PCT * LETHAL_COST *
+                        map.at("obstacle", index);
+            }
+            if (map.isValid(index, "target")) {
+                cost += INFLATION_PCT * LETHAL_COST *
+                        map.at("target", index);
+            }
+        }
+    }
+
+    for (GridLocation direction : TWO_STEP_DIRECTIONS) {
+        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+		index(0) = next.x;
+		index(1) = next.y;
+        if (in_bounds(map, next)) {
+            if (map.isValid(index, "obstacle")) {
+                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+                        map.at("obstacle", index);
+            }
+            if (map.isValid(index, "target")) {
+                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+                        map.at("target", index);
+            }
+        }
+    }
+
+	if (cost > LETHAL_COST) {
+		cost = LETHAL_COST;
 	}
 
     return cost;
@@ -292,9 +333,13 @@ bool in_line_of_sight(
 	const double OBSTACLE_THRESHOLD = 0.10;
 	for (grid_map::LineIterator iterator(map, start, end);
 		 !iterator.isPastEnd(); ++iterator) {
-        if (map.isValid(*iterator, "obstacle")
-            && map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
-            return false;
+        if (map.isValid(*iterator, "obstacle")) {
+            if (map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
+				return false;
+			}
+			if (map.at("target", *iterator) > OBSTACLE_THRESHOLD) {
+                return false;
+            }
         }
 	}
 	return true;
