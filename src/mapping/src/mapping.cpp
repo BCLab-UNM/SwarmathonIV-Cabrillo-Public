@@ -50,6 +50,7 @@ ros::Publisher rover_map_publisher;
 ros::Publisher path_publisher;
 
 geometry_msgs::Pose2D currentLocation;
+bool isMoving = false;
 tf::TransformListener *cameraTF;
 
 double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
@@ -349,6 +350,21 @@ void publishRoverMap() {
 	}
 }
 
+/*
+ * Helper to sonarHandler() and targetHandler()
+ * Returns val decreased by rate, with minimum val zero.
+ * Returns zero if val is not a number (isnan(val)) or if decreasing val by
+ * rate would reduce val to < 0.
+ */
+double decreaseVal(double val, double rate) {
+	if (isnan(val))
+		val = 0;
+	val -= rate;
+	if (val < 0)
+		val = 0;
+	return val;
+}
+
 /* sonarHandler() - Called when there's new data from the sonar array.
  *
  * This does two things:
@@ -363,6 +379,10 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
+
+	// Minimum distance sonar center obstacles will be marked at. Anything
+	// inside this distance should be a block in the claw.
+    const double MIN_CENTER_DIST = 0.15;
     // todo: what's a good number for SONAR_DEPTH?
     const double SONAR_DEPTH = 0.5;  // limit mark_poly to 50cm past measured ranges
     // todo: what's a good number for VIEW_RANGE?
@@ -402,10 +422,15 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 			));
 
 	// Center sonar
-	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarCenter->range * cos(currentLocation.theta),
-					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
-			));
+	// Only use if its range is far enough away to definitely not be a block
+	// in the claw.
+	if (sonarCenter->range > MIN_CENTER_DIST) {
+		clear_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarCenter->range *
+				cos(currentLocation.theta),
+						currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
+				));
+	}
 
 	// Right sonar
 	clear_poly.addVertex(
@@ -417,13 +442,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
 		double val = rover_map.at("obstacle", *iterator);
-		if (isnan(val)) {
-			val = 0;
-		}
-        val -= 0.05;
-        if (val < 0)
-            val = 0;
-	    rover_map.at("obstacle", *iterator) = val;
+	    rover_map.at("obstacle", *iterator) = decreaseVal(val, 0.05);
 	  }
 
 	grid_map::Polygon mark_poly;
@@ -443,7 +462,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 				));
 	}
 
-	if (sonarCenter->range < VIEW_RANGE) {
+	if (sonarCenter->range > MIN_CENTER_DIST && sonarCenter->range < VIEW_RANGE) {
 		do_marking = true;
 		// Center sonar
 		mark_poly.addVertex(
@@ -498,16 +517,32 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	publishRoverMap();
 }
 
-/* sonarHandler() - Called when there's new Apriltag detection data.
+/* targetHandler() - Called when there's new Apriltag detection data.
  *
  * This does two things:
  *
- * 1. Send and obstacle message if there's a visible tag.
+ * 1. Send and obstacle message if there's a visible tag. TAG_TARGET's are only
+ *    considered obstacles if they are far enough from the camera to definitely
+ *    not be a block in the claw.
  *
  * 2. Update the target maps based on current detections.
  *
  */
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	// Measurements defining camera field of view for polygon iterator
+	const double CAMERA_NEAR_ANGLE = 0.28; // radians
+	const double CAMERA_FAR_ANGLE = 0.34;
+	const double CAMERA_NEAR_DIST = 0.29; // meters
+	const double CAMERA_FAR_DIST = 0.74;
+
+	// TAG_TARGET detections closer than this won't be marked as obstacles
+	const double TAG_IN_CLAW_DIST = 0.18; // meters
+
+	// Clear camera field of view at different rates if moving or stopped
+	// todo: are these rates good?
+	const double MOVING_CLEAR_RATE = 0.03;
+	const double STOPPED_CLEAR_RATE = 0.3;
+
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
@@ -527,21 +562,34 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
 	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
+	// Near left corner
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + 1 * sin(currentLocation.theta + M_PI_4)
+			grid_map::Position(currentLocation.x + CAMERA_NEAR_DIST * cos(currentLocation.theta + CAMERA_NEAR_ANGLE),
+					currentLocation.y + CAMERA_NEAR_DIST * sin(currentLocation.theta + CAMERA_NEAR_ANGLE)
 			));
 
+	// Far left corner
 	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta),
-					currentLocation.y + 1 * sin(currentLocation.theta)
+			grid_map::Position(currentLocation.x + CAMERA_FAR_DIST * cos(currentLocation.theta + CAMERA_FAR_ANGLE),
+					currentLocation.y + CAMERA_FAR_DIST * sin(currentLocation.theta + CAMERA_FAR_ANGLE)
 			));
 
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 1 * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + 1 * sin(currentLocation.theta - M_PI_4)
+	// Far right corner
+    view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_FAR_DIST * cos(currentLocation.theta - CAMERA_FAR_ANGLE),
+					currentLocation.y + CAMERA_FAR_DIST * sin(currentLocation.theta - CAMERA_FAR_ANGLE)
 			));
 
+	// Near right corner
+    view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_NEAR_DIST * cos(currentLocation.theta - CAMERA_NEAR_ANGLE),
+					currentLocation.y + CAMERA_NEAR_DIST * sin(currentLocation.theta - CAMERA_NEAR_ANGLE)
+			));
+
+	double rate = STOPPED_CLEAR_RATE;
+	if (isMoving) {
+		rate = MOVING_CLEAR_RATE;
+	}
 
 	grid_map::Matrix& home_layer = rover_map["home"];
 	grid_map::Matrix& target_layer = rover_map["target"];
@@ -549,8 +597,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
 	      !iterator.isPastEnd(); ++iterator) {
 	    const grid_map::Index index(*iterator);
-	    home_layer(index(0), index(1)) = 0;
-	    target_layer(index(0), index(1)) = 0;
+		double val = home_layer(index(0), index(1));
+        home_layer(index(0), index(1)) = decreaseVal(val, rate);
+
+        val = target_layer(index(0), index(1));
+		target_layer(index(0), index(1)) = decreaseVal(val, rate);
 	}
 
 	// Handle target detections
@@ -573,23 +624,26 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			);
 
 			for (int i=0; i<message->detections.size(); i++) {
+                geometry_msgs::PoseStamped tagpose;
+                cameraTF->transformPose(rover + "/odom",
+                                        message->detections[i].pose,
+                                        tagpose);
 
-				geometry_msgs::PoseStamped tagpose;
-				cameraTF->transformPose(rover + "/odom",
-						message->detections[i].pose, tagpose);
+                grid_map::Position pos(tagpose.pose.position.x,
+                                       tagpose.pose.position.y);
+                grid_map::Index ind;
+                rover_map.getIndex(pos, ind);
 
-				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
-				grid_map::Index ind;
-				rover_map.getIndex(pos, ind);
-
-				if (message->detections[i].id == 0) {
-					next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
-					rover_map.at("target", ind) = 1;
-				}
-				else if (message->detections[i].id == 256) {
-					next_status |= swarmie_msgs::Obstacle::TAG_HOME;
-					rover_map.at("home", ind) = 1;
-				}
+                // Only consider TAG_TARGET's far enough away from camera
+                // to avoid marking block in claw as an obstacle.
+                if (message->detections[i].id == 0 &&
+                    message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+                    next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
+                    rover_map.at("target", ind) = 1;
+                } else if (message->detections[i].id == 256) {
+                    next_status |= swarmie_msgs::Obstacle::TAG_HOME;
+                    rover_map.at("home", ind) = 1;
+                }
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
@@ -619,9 +673,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
 /* odometryHandler() - Called when new odometry data is available.
  *
- * The target map is high resolution and doesn't cover the whole arena.
- * Use odometry data to recenter the map on top of the rover. Data that
- * "falls off" is forgotten.
+ * Store current 2D Pose and see if we're moving.
  */
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double x = message->pose.pose.position.x;
@@ -631,6 +683,9 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     currentLocation.x = x;
     currentLocation.y = y;
     currentLocation.theta = poseToYaw(message->pose.pose);
+
+	isMoving = (abs(message->twist.twist.linear.x) > 0.1
+				|| abs(message->twist.twist.angular.z > 0.2));
 }
 
 /* Python API
@@ -654,18 +709,9 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
  * todo: include apriltag layers in path plan
  */
 bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
-	geometry_msgs::Pose2D start_pose;
-	geometry_msgs::Pose2D goal_pose;
     grid_map::Index start_index;
 	grid_map::Index goal_index;
 	nav_msgs::Path pose_path;
-
-//	start.x = req.start.pose.position.x;
-//	start.y = req.start.pose.position.y;
-// 	start.theta = poseToYaw(req.start.pose);
-//	goal.x = req.goal.pose.position.x;
-//	goal.y = req.goal.pose.position.y;
-//	goal.theta = poseToYaw(req.goal.pose);
 
 	rover_map.getIndex(
 			grid_map::Position(req.start.pose.position.x, req.start.pose.position.y),
