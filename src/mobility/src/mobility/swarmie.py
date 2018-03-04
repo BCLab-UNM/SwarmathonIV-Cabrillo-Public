@@ -528,14 +528,37 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
 
-    def get_plan(self, goal):
-        '''Get plan from current location to goal location.'''
+    def get_plan(self, goal, tolerance=0.0):
+        '''Get plan from current location to goal location.
+
+        Args:
+
+        * `goal` (`geometry_msgs/Point`) or ('geometery_msgs/Pose2D`) - The \
+         goal location in the /odom frame.
+        * `tolerance` (`float`) - The acceptable distance to the goal you \
+         are willing to have the path return.
+
+        Returns:
+
+        * `plan` (`nav_msgs/GetPlanResponse`) - contains a `nav_msgs/Path` \
+         with an array of `geometry_msgs/PoseStamped` poses to navigate to.
+
+        Raises:
+
+        * (`rospy.ServiceException`) - if no path to the goal can be found. \
+         This can happen if you requested an impossible goal to navigate to \
+         given the current map and obstacle layers.
+        '''
         request = GetPlanRequest()
         cur_loc = self.get_odom_location().get_pose()
         request.start.pose.position.x = cur_loc.x
         request.start.pose.position.y = cur_loc.y
         request.goal.pose.position.x = goal.x
         request.goal.pose.position.y = goal.y
+        if tolerance > 0:
+            request.tolerance = tolerance
+        else:
+            request.tolerance = 0.0
 
         return self._get_plan(request)
     
