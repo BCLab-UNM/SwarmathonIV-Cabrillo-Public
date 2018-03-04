@@ -45,6 +45,20 @@ def drive_straight_home_odom() :
     home = swarmie.get_home_odom_location() 
     swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
 
+def divide_field_of_view(detections):
+    global swarmie
+
+    left = []
+    right = []
+
+    for detection in detections:
+        if detection.pose.pose.position.x <= 0:
+            left.append(detection)
+        else:
+            right.append(detection)
+
+    return left, right
+
 def clear(angle):
     global swarmie
 
@@ -58,7 +72,7 @@ def go_around(angle, dist):
     cur_heading = swarmie.get_odom_location().get_pose().theta
     swarmie.set_heading(
         cur_heading + angle,
-        ignore=Obstacle.IS_SONAR,
+        ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
         throw=False
     )
     swarmie.drive(dist, throw=False)
@@ -67,8 +81,9 @@ def rviz_nav_goal_cb(msg):
     global swarmie
     print('Request received')
     DISTANCE_OK = 0.5
-    FAIL_COUNT_LIMIT = 3
+    FAIL_COUNT_LIMIT = 10
     fail_count = 0
+    tolerance = 0.0
 
     goal = Pose2D()
     goal.x = msg.pose.position.x
@@ -79,7 +94,14 @@ def rviz_nav_goal_cb(msg):
     while (not cur_loc.at_goal(goal, DISTANCE_OK)
            and fail_count < FAIL_COUNT_LIMIT):
         print('Getting new nav plan.')
-        plan = swarmie.get_plan(goal)
+        for i in range(3):
+            try:
+                plan = swarmie.get_plan(goal, tolerance=tolerance)
+                break
+            except rospy.ServiceException:
+                print('ServiceException. Expanding tolerance.')
+                tolerance += 1
+
         print('Received nav plan.')
 
         # drive to 1st-3rd pts in plan, then get new plan
@@ -105,7 +127,22 @@ def rviz_nav_goal_cb(msg):
                 return
             elif result == MoveResult.OBSTACLE_TAG:
                 print('Obstacle: Found a Tag.')
-                return
+                left, right = divide_field_of_view(
+                    swarmie.get_latest_targets().detections
+                )
+                if len(left) == 0:
+                    print('Left looks empty, turning a little left.')
+                    go_around(math.pi/6, 0.75)
+                elif len(right) == 0:
+                    print('Right looks empty, turning a little right.')
+                    go_around(-math.pi/6, 0.75)
+                elif (len(right) > len(left)):
+                    print('Left looks clear, turning left.')
+                    go_around(math.pi/4, 0.75)
+                else:
+                    print('Right looks clear, turning right.')
+                    go_around(-math.pi/4, 0.75)
+
             elif result == MoveResult.OBSTACLE_SONAR:
                 print('Obstacle: Sonar.')
                 obstacle = swarmie.get_obstacle_condition()
