@@ -202,36 +202,19 @@ class Planner:
         angle_2 = math.atan2(point_2.y, point_2.x)
         return angles.shortest_angular_distance(angle_1, angle_2)
 
-
-    def _divide_field_of_view(self, detections):
-        """Assume for now that camera is essentially centered on the rover.
+    def _sort_left_to_right(self, detections):
+        """Sort tags in view from left to right (by their x position in the
+        camera frame).
 
         Args:
         * detections - apriltags_ros/AprilTagDetectionArray the list
           of detections.
 
         Returns:
-        * left - list of AprilTagDetections in the left side of the field of
-          view, sorted by abs(position.x), (detections nearest the center will
-          be in front of the list). Will be empty if no tags are on the left
-          side.
-        * right - sorted list of AprilTagDetections in the right side of
-          the field of view, sorted by abs(position.x). Will be empty if no
-          tags are on the right side.
+        * sorted_detections - sorted list of AprilTagDetections in view. Will
+          be empty if no tags are in view.
         """
-        left = []
-        right = []
-
-        for detection in detections:
-            if detection.pose.pose.position.x <= 0:
-                left.append(detection)
-            else:
-                right.append(detection)
-
-        left = sorted(left, key=lambda x : abs(x.pose.pose.position.x))
-        right = sorted(right, key=lambda x : abs(x.pose.pose.position.x))
-
-        return left, right
+        return sorted(detections, key=lambda x : x.pose.pose.position.x)
 
     def _clear(self, angle, ignore=Obstacle.IS_SONAR):
         """Turn right, then left, then back to start heading.
@@ -375,11 +358,11 @@ class Planner:
 
                     print('\nObstacle: Found a Tag.')
 
-                    left, right = self._divide_field_of_view(
+                    sorted_detections = self._sort_left_to_right(
                         self.swarmie.get_latest_targets().detections
                     )
 
-                    if len(left) == 0 and len(right) == 0:
+                    if len(sorted_detections) == 0:
                         # no tags in view anymore
                         print("I can't see anymore tags, I'll try creeping",
                               "and clearing.")
@@ -390,51 +373,17 @@ class Planner:
                         )
                         self._clear(math.pi/8, ignore=Obstacle.TAG_TARGET)
 
-                    elif len(left) == 0:  # no tags in left view
-                        if self.current_state == Planner.STATE_AVOID_RIGHT:
-                            print("Left looks empty, but I was turning right",
-                                  "last time. I'll turn right again.")
-                            angle, dist = self._get_angle_and_dist_to_avoid(
-                                right[-1],
-                                direction='right'
-                            )
-
-                        else:
-                            print('Left looks empty, turning a little left.')
-                            self.current_state = Planner.STATE_AVOID_LEFT
-                            angle, dist = self._get_angle_and_dist_to_avoid(
-                                right[0],
-                                direction='left'
-                            )
-
-                    elif len(right) == 0:  # no tags in right view
-                        if self.current_state == Planner.STATE_AVOID_LEFT:
-                             print("Right looks empty, but I was turning left",
-                                   "last time. I'll turn left again.")
-                             angle, dist = self._get_angle_and_dist_to_avoid(
-                                 left[-1],
-                                 direction='left'
-                             )
-
-                        else:
-                            print('Right looks empty, turning a little right.')
-                            self.current_state = Planner.STATE_AVOID_RIGHT
-                            angle, dist = self._get_angle_and_dist_to_avoid(
-                                left[0],
-                                direction='right'
-                            )
-
-                    else:  # tags are in both left and right fields of view
+                    else:
                         left_angle, left_dist = \
                             self._get_angle_and_dist_to_avoid(
-                            left[-1],
-                            direction='left'
-                        )
+                                sorted_detections[0],
+                                direction='left'
+                            )
                         right_angle, right_dist = \
                             self._get_angle_and_dist_to_avoid(
-                            right[-1],
-                            direction='right'
-                        )
+                                sorted_detections[-1],
+                                direction='right'
+                            )
                         angle = left_angle
                         dist = left_dist
 
