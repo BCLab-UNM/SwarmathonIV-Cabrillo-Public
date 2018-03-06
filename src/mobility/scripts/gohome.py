@@ -393,6 +393,20 @@ class Planner:
                         self.swarmie.get_latest_targets().detections
                     )
 
+                    # if count == 3:  # last resort
+                    #     self.current_state = Planner.STATE_DRIVE
+                    #     angle = self._get_angle_to_face(point)
+                    #     self.swarmie.turn(
+                    #         angle,
+                    #         ignore=Obstacle.TAG_TARGET,
+                    #         throw=False
+                    #     )
+                    #     self.result = self.swarmie.drive(
+                    #         .75,
+                    #         ignore=Obstacle.TAG_TARGET,
+                    #         throw=False
+                    #     )
+
                     if len(sorted_detections) == 0:
                         # no tags in view anymore
                         print("I can't see anymore tags, I'll try creeping",
@@ -461,17 +475,33 @@ class Planner:
                 print('\nObstacle: Sonar.')
                 obstacle = self.swarmie.get_obstacle_condition()
 
-                if obstacle & Obstacle.SONAR_LEFT == 0:
+                if (obstacle & Obstacle.IS_SONAR ==
+                    Obstacle.SONAR_RIGHT|Obstacle.SONAR_CENTER):
                     print('Left looks clear, turning left.')
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(math.pi/4, 0.75)
-                    self.swarmie.drive_to(point, throw=False)
+                    self._go_around(math.pi/4, 0.7)
+                    # self.swarmie.drive_to(point, throw=False)
 
-                elif obstacle & Obstacle.SONAR_RIGHT == 0:
+                elif (obstacle & Obstacle.IS_SONAR ==
+                      Obstacle.SONAR_LEFT|Obstacle.SONAR_CENTER):
                     print('Right looks clear, turning right.')
+                    self.current_state = Planner.STATE_AVOID_RIGHT
+                    self._go_around(-math.pi/4, 0.7)
+                    # self.swarmie.drive_to(point, throw=False)
+
+                elif (obstacle & Obstacle.IS_SONAR ==
+                      Obstacle.SONAR_LEFT):
+                    print('Only left blocked, turning a little right.')
+                    self.current_state = Planner.STATE_AVOID_RIGHT
+                    self._go_around(-math.pi/6, 0.6)
+                    # self.swarmie.drive_to(point, throw=False)
+
+                elif (obstacle & Obstacle.IS_SONAR ==
+                      Obstacle.SONAR_RIGHT):
+                    print('Only right blocked, turning a little left.')
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(-math.pi/4, 0.75)
-                    self.swarmie.drive_to(point, throw=False)
+                    self._go_around(math.pi/6, 0.6)
+                    # self.swarmie.drive_to(point, throw=False)
 
                 else:
                     print('Neither left or right look clear, backing up')
@@ -495,7 +525,6 @@ class Planner:
                     ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION,
                     throw=False
                 )
-            # break  # get new plan now, current one isn't working
 
             self.cur_loc = self.swarmie.get_odom_location()
 
@@ -506,6 +535,7 @@ class Planner:
             return
 
         print('Successfully executed nav plan.')
+        return
 
     def drive(self, distance, tolerance=0.0, tolerance_step=0.5):
         """Convenience wrapper to drive_to(). Drive the given distance, while
