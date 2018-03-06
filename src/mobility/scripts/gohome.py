@@ -96,7 +96,7 @@ class Planner:
         if use_rviz_nav_goal:
             print ('Using RViz 2D Nav Goals')
             self._nav_goal_sub = rospy.Subscriber(
-                rovername + '/goal',
+                self.rovername + '/goal',
                 PoseStamped,
                 self._rviz_nav_goal_cb,
                 queue_size=1
@@ -167,7 +167,7 @@ class Planner:
         * angle - the angle in radians to turn.
         * distance - the distance in meters to drive.
         """
-        OVERSHOOT_DIST = 0.25  # meters, distance to overshoot target by
+        OVERSHOOT_DIST = 0.20  # meters, distance to overshoot target by
         base_link_pose = self._transform_to_base_link(detection)
         radius = math.sqrt(base_link_pose.pose.position.x**2
                            + base_link_pose.pose.position.y**2)
@@ -204,7 +204,8 @@ class Planner:
 
     def _sort_left_to_right(self, detections):
         """Sort tags in view from left to right (by their x position in the
-        camera frame).
+        camera frame). Removes/ignores tags close enough in the camera to
+        likely be a block in the claw.
 
         Args:
         * detections - apriltags_ros/AprilTagDetectionArray the list
@@ -214,7 +215,14 @@ class Planner:
         * sorted_detections - sorted list of AprilTagDetections in view. Will
           be empty if no tags are in view.
         """
-        return sorted(detections, key=lambda x : x.pose.pose.position.x)
+        BLOCK_IN_CLAW_DIST = 0.18
+        sorted_detections = []
+
+        for detection in detections:
+            if detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST:
+                sorted_detections.append(detection)
+
+        return sorted(sorted_detections, key=lambda x : x.pose.pose.position.x)
 
     def _clear(self, angle, ignore=Obstacle.IS_SONAR):
         """Turn right, then left, then back to start heading.
@@ -344,8 +352,6 @@ class Planner:
             elif self.result == MoveResult.OBSTACLE_TAG:
                 # get around the tag obstacle
                 count = 0
-                angle = 0  # argument to _go_around() below
-                dist = 0  # argument to _go_around() below
 
                 # Give the rover 3 tries to avoid any tags nearby before
                 # getting a new nav plan. MoveResult.OBSTACLE_SONAR takes
@@ -371,7 +377,10 @@ class Planner:
                             0.1,
                             throw=False
                         )
-                        self._clear(math.pi/8, ignore=Obstacle.TAG_TARGET)
+                        self._clear(
+                            math.pi/8,
+                            ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET
+                        )
 
                     else:
                         left_angle, left_dist = \
@@ -406,17 +415,19 @@ class Planner:
                             # pick whichever angle is shortest
                             if abs(right_angle) < abs(left_angle):
                                 print('Right looks most clear, turning right.')
+                                # print('Right turn makes most sense, turning right.')
                                 self.current_state = Planner.STATE_AVOID_RIGHT
                                 angle = right_angle
                                 dist = right_dist
                             else:
                                 print('Left looks most clear, turning left.')
+                                # print('Left turn makes most sense, turning left')
                                 self.current_state = Planner.STATE_AVOID_LEFT
 
-                    _turn_result, self.result = self._go_around(
-                        angle,
-                        dist
-                    )
+                        _turn_result, self.result = self._go_around(
+                            angle,
+                            dist
+                        )
 
             elif self.result == MoveResult.OBSTACLE_SONAR:
                 # get around the sonar obstacle
