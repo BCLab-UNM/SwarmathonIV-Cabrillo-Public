@@ -10,6 +10,7 @@ import random
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from matplotlib.pyplot import step
 
 '''Searcher node.''' 
 def fib(n):
@@ -75,28 +76,36 @@ def randomWalk(num_steps):
     '''
     global swarmie
     # step for randim walk
-    step_sizes = [1.0,1.5,2.0,2.5,3] #possible step sizes
-    step_size = random.choice(step_sizes) #choose one of the step size        # Size of step, arbitrary value
+    prob_levy = 0.05  # 5% chancce of a levy leap
+    levy_size = random.choice([8,10,12,15])
+    step_size = random.choice([2.0,2.5,3]) #choose one of the step size        # Size of step, arbitrary value
    
+    prev = step_size # save current size
     # eight possible directions
+    '''
     moves =[(0,step_size),        ##
             (math.pi/2,step_size), #
             (math.pi,step_size),
             (-math.pi/2,step_size),
             ]
-        
+    '''    
     for i in range(num_steps):
         try :
+            l = random.random()
+            if l <= prob_levy:
+                step_size = levy_size
+            else:
+                step_size = prev
             rospy.loginfo("Random walk...")
-            direction,distance = moves[random.randint(0,3)]  
-            swarmie.turn(direction)
-            swarmie.drive(distance)
+              
+            swarmie.turn(random.uniform(0.0,2*math.pi))
+            swarmie.drive(step_size)
             
         except ObstacleException :
             print ("I saw an obstacle!")
-            distance = step_size       # bounced back the way we came.
-            swarmie.turn(math.pi,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-            swarmie.drive(distance,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.drive(-0.5,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)    # bounced back the way we came.
+            swarmie.turn(random.uniform(3*math.pi/4,5*math.pi/4),ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.drive(step_size,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
 
 def main():
     global swarmie 
