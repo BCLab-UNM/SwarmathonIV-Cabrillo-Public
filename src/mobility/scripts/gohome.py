@@ -258,6 +258,54 @@ class Planner:
 
         return turn_result, drive_result
 
+    def _get_angle_to_face(self, point):
+        """Returns the angle you should turn in order to face a point.
+
+        Args:
+        * point - geometry_msgs/Point the point to face
+
+        Returns:
+        * angle - the angle you need to turn, in radians
+        """
+        start = self.cur_loc.get_pose()
+        return angles.shortest_angular_distance(
+            start.theta,
+            math.atan2(point.y - start.y, point.x - start.x)
+        )
+
+    def _get_next_waypoint(self, tolerance_step):
+        """Get another nav plan and return the first waypoint. Try three
+        times, incrementing self.tolerance by tolerance_step after a failure.
+
+        Args:
+        * tolerance_step - amount to increment tolerance by if nav_plan
+          service fails
+
+        Returns:
+        * point - geometry_msgs/Point - the next point to drive to
+        """
+        print('\nGetting new nav plan.')
+
+        for i in range(4):
+            try:
+                self.plan = self.swarmie.get_plan(
+                    self.goal,
+                    tolerance=self.tolerance
+                )
+                break  # plan received
+            except rospy.ServiceException:
+                print('ServiceException.')
+                if i < 3:
+                    print('Expanding tolerance.')
+                    self.tolerance += tolerance_step
+                else:
+                    raise  # tried 3 times, we give up
+
+        print('Received nav plan.')
+        pose = self.plan.plan.poses[0]
+
+        return Point(x=pose.pose.position.x, y=pose.pose.position.y)
+
     def _rviz_nav_goal_cb(self, msg):
         """Subscriber to help with testing. Responds to RViz nav_goals
         published with a mouse click.
@@ -297,41 +345,18 @@ class Planner:
         self.cur_loc = self.swarmie.get_odom_location()
         self.current_state = Planner.STATE_IDLE
 
-        while (not self.cur_loc.at_goal(self.goal, Planner.DISTANCE_OK)
+        while (not self.cur_loc.at_goal(self.goal,
+                                        Planner.DISTANCE_OK+self.tolerance)
                and self.fail_count < Planner.FAIL_COUNT_LIMIT):
 
             # get new plan and try to drive to first point in it
-            print('\nGetting new nav plan.')
-
-            for i in range(4):
-                try:
-                    self.plan = self.swarmie.get_plan(
-                        goal,
-                        tolerance=self.tolerance
-                    )
-                    break  # plan received
-                except rospy.ServiceException:
-                    print('ServiceException.')
-                    if i < 3:
-                        print('Expanding tolerance.')
-                        self.tolerance += tolerance_step
-                    else:
-                        raise  # tried 3 times, we give up
-
-            print('Received nav plan.')
-
-            pose = self.plan.plan.poses[0]
-            point = Point(x=pose.pose.position.x, y=pose.pose.position.y)
-            start = self.cur_loc.get_pose()
+            point = self._get_next_waypoint(tolerance_step)
 
             self.current_state = Planner.STATE_DRIVE
-            turn_angle = angles.shortest_angular_distance(
-                start.theta,
-                math.atan2(point.y - start.y, point.x - start.x)
-            )
             # Turn to approximate goal heading while ignoring sonar and tags
             # helps to prevent rover from trying to jump around obstacles
             # before it even starts along its new path
+            turn_angle = self._get_angle_to_face(point)
             self.swarmie.turn(turn_angle,
                               ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET)
             self.result = self.swarmie.drive_to(point, throw=False)
