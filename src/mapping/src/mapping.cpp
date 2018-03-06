@@ -53,7 +53,8 @@ geometry_msgs::Pose2D currentLocation;
 bool isMoving = false;
 tf::TransformListener *cameraTF;
 
-double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
+double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
+double doubleSensorCollisionDist = 0.5; //meters the two sensors will flag obstacles
 const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
 const double MAP_RESOLUTION = 0.25; // map resolution, meters per cell
 unsigned int obstacle_status;
@@ -467,14 +468,30 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	rover_map.setTimestamp(ros::Time::now().toNSec());
 
 	// Calculate the obstacle status.
-	if (sonarLeft->range < collisionDistance && sonarCenter->range < collisionDistance) {
+	// Single sensor ranges below single sensor threshold can trigger an
+	// obstacle message.
+	if (sonarLeft->range < singleSensorCollisionDist) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
+	}
+    if (sonarCenter->range < singleSensorCollisionDist &&
+        sonarCenter->range > 0.12) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
+	}
+    if (sonarRight->range < singleSensorCollisionDist) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
+	}
+
+	// Two adjacent sensors both below double sensor threshold can also trigger
+	// an obstacle message.
+	if (sonarLeft->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
-	if (sonarRight->range < collisionDistance && sonarCenter->range < collisionDistance) {
+	if (sonarRight->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
+
 	if (sonarCenter->range < 0.12) {
 		//block in front of center ultrasound.
 		next_status |= swarmie_msgs::Obstacle::SONAR_BLOCK;
@@ -607,7 +624,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	const double CAMERA_FAR_DIST = 0.74;
 
 	// TAG_TARGET detections closer than this won't be marked as obstacles
-	const double TAG_IN_CLAW_DIST = 0.18; // meters
+	const double TAG_IN_CLAW_DIST = 0.20; // meters
 
 	// Clear camera field of view at different rates if moving or stopped
 	// todo: are these rates good?
@@ -694,7 +711,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 					ros::Duration(0.1) // How long to wait for the tf.
 			);
 
-			for (int i=0; i<message->detections.size(); i++) {
+            for (int i=0; i<message->detections.size(); i++) {
                 geometry_msgs::PoseStamped tagpose;
                 cameraTF->transformPose(rover + "/odom",
                                         message->detections[i].pose,
@@ -709,10 +726,8 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                 // to avoid marking block in claw as an obstacle.
                 if (message->detections[i].id == 0 &&
                     message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
-                    next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
                     rover_map.at("target", ind) = 1;
                 } else if (message->detections[i].id == 256) {
-                    next_status |= swarmie_msgs::Obstacle::TAG_HOME;
                     rover_map.at("home", ind) = 1;
                 }
 			}
@@ -720,8 +735,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			ROS_ERROR("%s", e.what());
 		}
 
+        // Make sure Obstacle messages get published, so do this here, outside
+		// the try/catch block for transforms
 		for (int i=0; i<message->detections.size(); i++) {
-			if (message->detections[i].id == 0) {
+			if (message->detections[i].id == 0 &&
+				message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
 				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
 			}
 			else if (message->detections[i].id == 256) {
