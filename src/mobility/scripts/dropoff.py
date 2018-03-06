@@ -13,9 +13,6 @@ from swarmie_msgs.msg import Obstacle
 from mobility.swarmie import Swarmie
 
 ## TODO for corner make a offset to move the block further inside, and/or change to rovername/camera_link from rovername/odom, and/or turn to be pi/4 from the seen tags
-## TODO test timeings of turning waiting after a turn if that will give significate more tag detections
-## TODO general improvement of location of resource placement
-
 
 def look_for_tags():
     '''Looks pi/6 in either direction, then oreient to corner if it exisits or to area with the most amount of home tags '''
@@ -24,9 +21,9 @@ def look_for_tags():
     turnTheta = math.pi/6
     targets = []
     swarmie.set_heading(start_heading + turnTheta, ignore=-1)
-    rospy.sleep(.3)
-    swarmie.set_heading(start_heading + (turnTheta*-2), ignore=-1)
-    rospy.sleep(.3)
+    rospy.sleep(.4)
+    swarmie.set_heading(start_heading - turnTheta, ignore=-1)
+    rospy.sleep(.4)
     targets = get_center_pose_list(256) # this should be everything seen in the sweep
     if (len(targets) == 0):
         raise IndexError("There are no home tags seen!") 
@@ -66,88 +63,119 @@ def convert_to_Pose2D(t):
     pose.x = odom_pose.pose.position.x
     pose.y = odom_pose.pose.position.y
     pose.theta = y
-    #convert Pose2D to PoseStamped and publish topic
+    
+    '''
+    global hometag_pose_from_swarmie
+    swarmie_pose = swarmie.get_odom_location().get_pose()
+    hometag_pose_from_swarmie = Pose2D()
+    hometag_pose_from_swarmie.theta = y - swarmie_pose.theta
+    hometag_pose_from_swarmie.x = odom_pose.pose.position.x - swarmie_pose.x
+    hometag_pose_from_swarmie.y = odom_pose.pose.position.y - swarmie_pose.y
+    print("pose:\n", pose)
+    print("hometag_pose_from_swarmie:\n",hometag_pose_from_swarmie)
+    '''
+    #convert Pose2D to PoseStamped and publish topic for rviz
     ''' Notes
     From Darren
-        If you pick a Point or a Pose2D, I don't know whether RViz will handle them properly or not, because they don't have a header where you put the frame_id, which is the frame of reference the message data is in
-        So if it seems strange, you may have to use a PoseStamped
-        and set the frame_id to rovername + '/odom'
-        Pose2D and find out how promote it to a PoseStamped.
-        If you don't need orientation, you only have to set x and y, which would skip the conversion back from Euler to quaternion
-    
+        set the frame_id to rovername + '/odom'
     Current searches
         https://answers.ros.org/question/231941/how-to-create-orientation-in-geometry_msgsposestamped-from-angle/
         https://answers.ros.org/question/41233/how-to-understand-robot-orientation-from-quaternion-yaw-angle/
     '''
-    
     return(pose)
 
 def get_center_pose_list(id):
     return [convert_to_Pose2D(tag) for tag in swarmie.get_latest_targets().detections if tag.id is id ]
 
-
 def get_furthest_corner_hometags_location(tags):
         '''should only be called if 2 different orenations(thetas) of tags are seen '''
         global swarmie
         loc = swarmie.get_odom_location().get_pose()
-        tagThetasSeen = list(set(int(abs(t.theta)) for t in tags))
-        homeTags1 = [t for t in tags if int(abs(t.theta)) is tagThetasSeen[0] ]
-        homeTags2 = [t for t in tags if int(abs(t.theta)) is tagThetasSeen[1] ]
-        homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True 
-        homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
+        #tagThetasSeen = list(set(int(abs(t.theta)) for t in tags))
+        tagThetasSeen = list(set(theta_int(t.theta) for t in tags)) 
+        homeTags1 = [t for t in tags if theta_int(t.theta) is tagThetasSeen[0] ]
+        homeTags2 = [t for t in tags if theta_int(t.theta) is tagThetasSeen[1] ]
+        
+        if (len(homeTags1) == 0):
+            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            homeTag1 = l[0]
+            homeTag2 = l[-1]
+        elif (len(homeTags2) == 0):
+            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2)) #reverse=True
+            homeTag1 = l[0]
+            homeTag2 = l[-1]
+        else:
+            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
+            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
         return(homeTag1,homeTag2)
         
 def get_furthest_side_hometags_location(tags):
         #seperate by the y value so left and right side 
         loc = swarmie.get_odom_location().get_pose()
-        print([t.y for t in tags])
+        #print([t.y for t in tags])
         homeTags1 = [t for t in tags if t.y-loc.y > 0 ]
         homeTags2 = [t for t in tags if t.y-loc.y < 0 ]
-        homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
-        homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
-        #list(filter((0).__lt__,l)) #seems to not work with the tags without making a lamda, lt or gt 
-        #sorted_home_tags = sorted(tags, key=lambda x : math.sqrt(x.x**2 + x.y**2))          #reverse=True
+        if (len(homeTags1) == 0): #if there are no tags on the left? side
+            l = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            homeTag1 = l[0]
+            homeTag2 = l[-1]
+        elif (len(homeTags2) == 0): #if there are no tags on the right? side
+            l = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            homeTag1 = l[0]
+            homeTag2 = l[-1]
+        else:
+            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
+            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
         return(homeTag1,homeTag2)       
 
 def is_corner(tags):
-    return(len(set( int(abs(t.theta)) for t in tags)) > 1)
+    return (len(set(theta_int(t.theta) for t in tags)) > 1)
+
+def theta_int(theta):
+    ''' same math needed in multiple functions to clean up the theta to make it easier to compair '''
+    return(abs(round(theta/math.pi*2,0)))
 
 def mid_point(t1, t2):
     pose = Pose2D()
     pose.x = (t1.x + t2.x) /2 #right now just averaging the value
     pose.y = (t1.y + t2.y) /2
     pose.theta = (t1.theta + t2.theta) /2
-    
     return(pose)
 
 def find_center(tags):
     global swarmie
-    #if 2+ corner tags have been seen, theta values seen 0,1,3
+    #if 2+ corner tags have been seen, so differnt theta values
     if is_corner(tags):
-        print(swarmie.rover_name, "dropping off in Corner:", set(int(abs(t.theta)) for t in tags)) #need abs?
+        swarmie.print_infoLog(swarmie.rover_name + " dropping off in corner:" + str(set(theta_int(t.theta) for t in tags)))
+        print(swarmie.rover_name, "dropping off in corner:", set(theta_int(t.theta) for t in tags))
         return(mid_point(*get_furthest_corner_hometags_location(tags)))
-    else: #hopefuly pointing to the middle of home so just squareup? and drive in
-        swarmie.set_heading(tags[0].theta+math.pi/2, ignore=-1) #did this squaring up with the tag?
+    else: #only see one tag of given orntaion squareup with the tag 
+        swarmie.set_heading(tags[0].theta+math.pi/2, ignore=-1) 
         #do a second check for the corner 
         rospy.sleep(.3)
         tags = get_center_pose_list(256) #just incase we now see a corner after squaring up
-        '''if is_corner(tags):
-            print(rovername, "dropping off in Corner:", set(int(abs(t.theta)) for t in tags)) #need abs?
+        if (len(tags) == 0):
+            print("There was a home tag here, but now its gone")
+            raise IndexError("There are no home tags seen!") 
+        if is_corner(tags): #this is a second chance for a corner
+            swarmie.print_infoLog(swarmie.rover_name + " dropping off in corner:" + str(set(theta_int(t.theta) for t in tags)))
+            print(swarmie.rover_name, "dropping off in corner:", set(theta_int(t.theta) for t in tags))
             return(mid_point(*get_furthest_corner_hometags_location(tags)))
-        '''
-        print(swarmie.rover_name, "dropping off on side:", tags[0].theta)
-        rospy.sleep(5)
+        
+        #otherwise just drive into the side of home
+        swarmie.print_infoLog(swarmie.rover_name + "dropping off on side:" + str(theta_int(tags[0].theta)))
+        print(swarmie.rover_name, " dropping off on side:", theta_int(tags[0].theta))
         return(mid_point(*get_furthest_side_hometags_location(tags))) #this will return the middle of the 2 furthest tags on one side
 
 def main():
     '''Dropoff throws IndexError when no tags near swarmie '''
-    global swarmie
-
-    if len(sys.argv) < 2 :
+    global swarmie 
+    
+    if len(sys.argv) < 2:
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
-    swarmie = Swarmie(rovername)
+    swarmie = Swarmie(sys.argv[1])
     
     #move wrist down but not so down it hits the ground
     swarmie.set_wrist_angle(.3)
@@ -157,13 +185,13 @@ def main():
         swarmie.targets_timeout = 9 # so they stay around for the decision making
         tags = look_for_tags()
         
-        #print(find_center(tags)) #for testing
-        #from IPython import embed
-        #embed()
-        
-        swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        if(swarmie.simulator_running()):
+            swarmie.drive_to(find_center(tags), ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        else:
+            swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
         swarmie.targets_timeout = 3 #put it back
     except:
+        print("Somthing broke")
         swarmie.targets_timeout = 3 #make sure it makes it back
         raise
 
@@ -179,35 +207,4 @@ def main():
 
 if __name__ == '__main__' :
     main()
-'''
-        #old code from wait_for_tag_transform
-        seen_time = targets[0].pose.header.stamp
-        try:
-            swarmie.xform.waitForTransform(rovername + '/odom', rovername + '/camera_link', seen_time, rospy.Duration(1))
-            return
-        except Exception as e:
-            print ('Waiting for tf.')
-    # Uh-oh. No transform after 10 seconds. There must be a problem
-    # somewhere else in the rover.
-    raise(e)
 
-#notes https://plot.ly/python/linear-fits/ 
-import dropoff
-import matplotlib.pyplot as plt
-x = [ t.x for t in dropoff.get_center_pose_list(swarmie,swarmie.rover_name)]
-y = [ t.y for t in dropoff.get_center_pose_list(swarmie,swarmie.rover_name)]
-x,y,theta = zip(*list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name)))
-x,y,theta = zip(iter(list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name))))
-plt.scatter(x,y)
-plt.show()
-
-plt.scatter(zip(*list(dropoff.get_center_pose_list(swarmie,swarmie.rover_name))))
-#plt.show()
-
-import matplotlib.pyplot as plt
-xs = [1,2]
-ys = [2,1]
-sum(xs)/2
-plt.scatter(xs,yw)
-plt.show()
-'''
