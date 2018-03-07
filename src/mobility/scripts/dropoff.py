@@ -12,8 +12,6 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie
 
-## TODO for corner make a offset to move the block further inside, and/or change to rovername/camera_link from rovername/odom, and/or turn to be pi/4 from the seen tags
-
 def look_for_tags():
     '''Looks pi/6 in either direction, then oreient to corner if it exisits or to area with the most amount of home tags '''
     global swarmie
@@ -201,9 +199,9 @@ def main():
 
     swarmie.putdown() 
     
-    swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-    swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-    swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    swarmie.drive(-.25, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    #swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    #swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
 if __name__ == '__main__' :
     main()
