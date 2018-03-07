@@ -96,16 +96,13 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// Update the timestamp in the Obstacle map.
 	obstacle_map.setTimestamp(ros::Time::now().toNSec());
 
-	// TODO: Implement filtering for sonar.
-
 	// Calculate the obstacle status.
-	if (sonarLeft->range < collisionDistance) {
+	if (sonarLeft->range < collisionDistance && sonarCenter->range < collisionDistance) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
+		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
-	if (sonarRight->range < collisionDistance) {
+	if (sonarRight->range < collisionDistance && sonarCenter->range < collisionDistance) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
-	}
-	if (sonarCenter->range < collisionDistance) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
 	if (sonarCenter->range < 0.12) {

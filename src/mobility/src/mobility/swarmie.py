@@ -164,8 +164,11 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
         self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
-        self._start_magnetometer_calibration = rospy.ServiceProxy(rover + '/start_magnetometer_calibration', Empty)
-        self._store_magnetometer_calibration = rospy.ServiceProxy(rover + '/store_magnetometer_calibration', Empty)
+        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
 
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
@@ -432,38 +435,48 @@ class Swarmie:
     def has_block(self):
         '''Try to determine if a block is in our grasp. 
         
-        Uses the algorithm: 
-        
-        * Raise the wrist all the way up. 
+        Uses the algorithm:
+
+         * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position.
+        * Check if we can see a block that's close to the camera. If so, return `True`
+        * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
-        * Check if this is the simulator. If so, return `True`
         * Return `False`
-        ''' 
+        '''
 
+        # First test: Can we see a bock that's close to the camera with the wrist middle.
+        self.set_wrist_angle(.55)
+        rospy.sleep(1)
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.18 :
+                return True 
+
+        # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
-        rospy.sleep(2)
-        
-        # First test: is something blocking the center sonar at a short range.
+        rospy.sleep(1)
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.15 :
+                return True 
+
+        # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
         if obstacles & Obstacle.SONAR_BLOCK :
             return True
 
-        # Second test: Can we see a bock that's close to the camera.
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
-        if len(blocks) == 0 :
-            return False
-        
-        nearest = blocks[0]
-        x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
-            return True 
-            
-        # Third test: The block never seems to affect the sonar in the simulator. 
-        # Also, the grasped block rarely seems to be recognized in the simulator. 
-        # Which is whack. 
-        return(self.simulator_running())
+        # The block does not affect the sonar in the simulator. 
+        # Use the below check if having trouble with visual target check.
+        # return(self.simulator_running())
+        return(self.sees_resource(6))
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -515,13 +528,54 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
     
-    def start_magnetometer_calibration(self):
-        '''Start calibrating the magnetometer on a rover.'''
-        self._start_magnetometer_calibration()
-    
-    def store_magnetometer_calibration(self):
-        '''Finish calibrating the magnetometer on a rover.'''
-        self._store_magnetometer_calibration()
+    def start_imu_calibration(self):
+        '''Start calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed before the rover starts operating
+        in a new environment.
+
+        Raw accelerometer and magnetometer is collected during the
+        calibration process. During this time, the rover should perform six
+        full in-place rotations, one rotation with each of its body axes
+        up and down. These should be slow 2D rotations.
+
+        When the 2D rotations are complete, the rover should also perform
+        3D random rotations to put its IMU in as many additional orientations
+        as possible.'''
+        self._start_imu_calibration()
+
+    def start_misalignment_calibration(self):
+        '''Start calibration Step Two for the IMU's misalignment.
+
+        Raw magnetometer data is collected while the rover performs at least
+        one slow 2D rotation with its z axis up. This can be performed by
+        having the rover spin slowly in place on level ground using the teleop.
+
+        This is only one third of a typical misalignment calibration procedure,
+        but since the rover only operates in two dimensions on relatively level
+        ground, it should be ok to skip the x-down and y-down rotations that
+        are part of a complete misalignment calibration.'''
+        self._start_misalignment_calibration()
+
+    def start_gyro_bias_calibration(self):
+        '''Start calibration Step Three for the rover's IMU.
+
+        Calibrate gyroscope bias. Leave rover in place for a few seconds.'''
+        self._start_gyro_bias_calibration()
+
+    def start_gyro_scale_calibration(self):
+        '''Start calibration Step Four for the rover's IMU.
+
+        Calibrate gyroscope scale factor. Rover must rotate exactly 180 degrees
+        in one direction during first 10 seconds afer calling this function,
+        and rotate exactly 180 degrees in the opposite direction during the
+        second 10 seconds after calling this function. Progress can be
+        monitored in rdb.py or by echoing the /infoLog topic.'''
+        self._start_gyro_scale_calibration()
+
+    def store_imu_calibration(self):
+        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
+        self._store_imu_calibration()
         
     def get_odom_location(self):
         '''Returns a `mobility.swarmie.Location` according to Odometery. This location will not 
@@ -645,13 +699,13 @@ class Swarmie:
         '''
         return rospy.has_param('/' + self.rover_name + '/home_odom')
     
-    def drive_to(self, place, claw_offset = 0, **kwargs):
+    def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
         
         Arguments:
         
-        * `place`: (`geometry_msgs.msg.Point`): The place to drive.
+        * `place`: (`geometry_msgs.msg.Point` or `geometry_msgs.msg.Pose2D`): The place to drive.
 
         Keyword Arguments/Returns/Raises:
         
@@ -665,8 +719,12 @@ class Swarmie:
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
-        self.turn(angle, **kwargs)
-        self.drive(dist-claw_offset, **kwargs)
+
+        req = MoveRequest(
+            theta=angle, 
+            r=dist-claw_offset,
+        )        
+        return self.__drive(req, **kwargs)
     
     def set_heading(self, heading, **kwargs):
         '''Turn to face an absolute heading in radians. (zero is east)
@@ -701,28 +759,165 @@ class Swarmie:
         '''
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-
     def get_nearest_block_location(self):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
+
+        Nearest block will be the nearest to the camera, which should almost always be good enough.
+
         Returns:
 
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
         '''
         global rovername, swarmie
 
-        # Find the nearest block
-        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        # Finds all visable  apriltags
+        blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 
-        loc = self.get_odom_location().get_pose()
+        # Sort blocks by their distance from the camera_link frame
         blocks = sorted(blocks, key=lambda x :
-                        math.hypot(loc.y - x.pose.pose.position.y,
-                                  loc.x - x.pose.pose.position.x))
+                        math.sqrt(x.pose.pose.position.x**2
+                                  + x.pose.pose.position.y**2
+                                  + x.pose.pose.position.z**2))
 
         nearest = blocks[0]
+
+        # checks for hometag between rover and block.
+        if nearest.id==256:
+            return None
+
         self.xform.waitForTransform(self.rover_name + '/odom',
                         nearest.pose.header.frame_id, nearest.pose.header.stamp,
                         rospy.Duration(3.0))
-
+        
+        # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
+        
+    def set_search_exit_poses(self):
+        '''Remember the search exit location.'''
+        odom =  self.get_odom_location().get_pose()
+        gps = self.get_gps_location().get_pose()
+    
+        rospy.set_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},
+             'gps': {'x': gps.x, 'y': gps.y, 'theta': gps.theta}}
+        )
+
+    def get_search_exit_poses(self):
+        '''Get the odom and gps poses (location and heading) where search last
+        exited (saw a tag).
+
+        Returns:
+
+        * (`geometry_msgs.msg.Pose2D`): odom_pose - The pose in the /odom frame
+        * (`geometry_msgs.msg.Pose2D`): gps_pose - The pose in the /map frame
+
+        Will return invalid poses (containing all zeroes) if search exit
+        location hasn't been set yet.
+
+        Use:
+            odom_pose, gps_pose = swarmie.get_search_exit_poses()
+            swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+            swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        '''
+        poses = rospy.get_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': 0, 'y': 0, 'theta': 0},
+             'gps': {'x': 0, 'y': 0, 'theta': 0}}
+        )
+        return ((Pose2D(**poses['odom']), Pose2D(**poses['gps'])))
+
+    def has_search_exit_poses(self):
+        '''Check to see if the search exit location parameter is set.
+
+        Returns:
+
+        * (`bool`): True if the parameter exists, False otherwise.
+        '''
+        return rospy.has_param('/' + self.rover_name + '/search_exit_poses')
+    
+
+    def sees_resource(self, required_matches,crop=True):
+        '''Check to see if a resource can be seen between the grippers
+        Args:
+        * (`int`): the minimum number of matches required to return true
+        Returns:
+        * (`bool`): True if the number of required matches has been met, False otherwise.
+        '''
+        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
+        ### TODO crop the image on where the tag in the claws would be
+        from sensor_msgs.msg import CompressedImage
+        import numpy as np
+        import cv2
+        
+        try:
+            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=3)
+        except(rospy.ROSException), e:
+            print("Camera Broke?")
+            print("Error message: ", e)
+        np_arr = np.fromstring(test.data, np.uint8)
+        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
+        #img2 = cv2.imread(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource'),0) 
+        import pickle
+        img2 = pickle.load( open(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource_pickel'), "rb" ) ) #this 
+        if(crop):       #(y1:y2, x1:x2)
+            img1 = img1[60:220, 50:220]
+        ''' #for testing1
+        cv2.imshow("cropped", img1)
+        cv2.waitKey(0)        
+        ''' #end for testing1
+        
+        # Initiate SIFT detector
+        #sift = cv2.SIFT() #for opencv2
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(img1,None)
+        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
+        '''
+        Throws
+        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
+        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
+        '''
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks = 50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1,des2,k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        good = []
+        for m,n in matches:
+            if m.distance < 0.7*n.distance:
+                good.append(m)
+                
+        '''#for testing2 ###############################################
+        from matplotlib import pyplot as plt
+        # Need to draw only good matches, so create a mask
+        matchesMask = [[0,0] for i in xrange(len(matches))]
+
+        # ratio test as per Lowe's paper
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.7*n.distance:
+                matchesMask[i]=[1,0]
+
+        draw_params = dict(matchColor = (0,255,0),
+                           singlePointColor = (255,0,0),
+                           matchesMask = matchesMask,
+                           flags = 0)
+        img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,matches,None,**draw_params)
+        plt.imshow(img3,),plt.show()
+        '''#end for testing2   ###############################################
+        
+        print("Seen a resource with",len(good)*5,"% confidence")
+        
+        if len(good)>required_matches-1:
+            return(True)
+        else:
+            return(False)
+        

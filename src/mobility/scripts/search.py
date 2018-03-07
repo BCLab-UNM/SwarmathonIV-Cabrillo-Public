@@ -149,8 +149,8 @@ def main():
     except TagException : 
         print("I found a tag!")
         # Let's drive there to be helpful.
-        swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.3, ignore=Obstacle.IS_VISION)
-        #food_location.append(swarmie.get_nearest_block_location())#store latest food location
+        
+        swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
         exit(0)
         
     print ("I'm homesick!")
@@ -158,4 +158,3 @@ def main():
 
 if __name__ == '__main__' : 
     main()
-
