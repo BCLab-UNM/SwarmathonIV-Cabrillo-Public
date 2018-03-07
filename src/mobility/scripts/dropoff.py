@@ -95,16 +95,16 @@ def get_furthest_corner_hometags_location(tags):
         homeTags2 = [t for t in tags if theta_int(t.theta) is tagThetasSeen[1] ]
         
         if (len(homeTags1) == 0):
-            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))
             homeTag1 = l[0]
             homeTag2 = l[-1]
         elif (len(homeTags2) == 0):
-            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2)) #reverse=True
+            l = sorted(tags, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2)) #reverse=True
             homeTag1 = l[0]
             homeTag2 = l[-1]
         else:
-            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
-            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
+            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))[0]          #reverse=True
+            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))[0]          #reverse=True
         return(homeTag1,homeTag2)
         
 def get_furthest_side_hometags_location(tags):
@@ -114,16 +114,16 @@ def get_furthest_side_hometags_location(tags):
         homeTags1 = [t for t in tags if t.y-loc.y > 0 ]
         homeTags2 = [t for t in tags if t.y-loc.y < 0 ]
         if (len(homeTags1) == 0): #if there are no tags on the left? side
-            l = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            l = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))
             homeTag1 = l[0]
             homeTag2 = l[-1]
         elif (len(homeTags2) == 0): #if there are no tags on the right? side
-            l = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))
+            l = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))
             homeTag1 = l[0]
             homeTag2 = l[-1]
         else:
-            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
-            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.x)**2))[0]          #reverse=True
+            homeTag1 = sorted(homeTags1, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))[0]          #reverse=True
+            homeTag2 = sorted(homeTags2, key=lambda x : math.sqrt((x.x-loc.x)**2 + (x.y-loc.y)**2))[0]          #reverse=True
         return(homeTag1,homeTag2)       
 
 def is_corner(tags):
