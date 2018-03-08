@@ -58,6 +58,7 @@ def wander():
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround()
+        
 
 
 def randomWalk(num_steps):
