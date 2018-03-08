@@ -54,7 +54,7 @@ bool isMoving = false;
 tf::TransformListener *cameraTF;
 
 double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
-double doubleSensorCollisionDist = 0.5; //meters the two sensors will flag obstacles
+double doubleSensorCollisionDist = 0.6; //meters the two sensors will flag obstacles
 const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
 const double MAP_RESOLUTION = 0.25; // map resolution, meters per cell
 unsigned int obstacle_status;
@@ -163,15 +163,16 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 	const double INFLATION_PCT = 0.7;
 	const double LETHAL_COST = 255;
 	const double NEUTRAL_COST = 50; // not yet mapped cells will take this value
-	double cost = 0;
+	// minimum cost for a cell, must match the heuristic. This is slightly
+	// larger than sqrt(2), the heuristic value for a diagonal move
+	double cost = 1.5;
 
 	grid_map::Index index;
 	index(0) = to_node.x;
 	index(1) = to_node.y;
 
 	if (map.isValid(index, "obstacle")) {
-//		cost += 1.0 + (map.at("obstacle", index) * 5.0);
-        cost += LETHAL_COST * map.at("obstacle", index);
+        cost += 2 * LETHAL_COST * map.at("obstacle", index);
 	}
 	if (map.isValid(index, "target")) {
 		cost += LETHAL_COST * map.at("target", index);
@@ -188,7 +189,7 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 		index(1) = next.y;
         if (in_bounds(map, next)) {
             if (map.isValid(index, "obstacle")) {
-                cost += INFLATION_PCT * LETHAL_COST *
+                cost += INFLATION_PCT * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
             if (map.isValid(index, "target")) {
@@ -204,7 +205,7 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 		index(1) = next.y;
         if (in_bounds(map, next)) {
             if (map.isValid(index, "obstacle")) {
-                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+                cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
             if (map.isValid(index, "target")) {
