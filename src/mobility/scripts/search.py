@@ -11,6 +11,7 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 from matplotlib.pyplot import step
+from numpy import angle
 
 '''Searcher node.''' 
 def fib(n):
@@ -24,6 +25,9 @@ def fib(n):
     return a
 
 def fib_move(n):
+    '''
+    moves rover using a fibonacii pattern
+    '''
     global swarmie
     try:
         rospy.loginfo("fibonanci pattern")
@@ -36,18 +40,7 @@ def fib_move(n):
         loc = self.get_odom_location().get_pose()
         angle = angles.shortest_angular_distance(loc.theta, -math.pi/4)
         swarmie.turn(angle,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        '''
-        swarmie.turn(math.pi/2,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
-        swarmie.drive(2)
-        
-        swarmie.turn(math.pi/2)
-        swarmie.drive(1)
-        swarmie.turn(-math.pi/2)
-        swarmie.drive(1)
-        swarmie.turn(-math.pi/2)
-        swarmie.drive(1)
-        swarmie.turn(math.pi/2)
-        '''
+       
 def turnaround(): 
     global swarmie
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
@@ -65,10 +58,14 @@ def wander():
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround()
+        
 
 
 def randomWalk(num_steps):
     '''
+    The levy random calk will nomrally go a short distance and change directions looking for food.
+    Occassionaly determined by the variable prob_levy, it will take a huge step to a new area to continue
+    to search for food. This script uses various parameters to control this search
     does a 2 dementional random walk in 4 directionsw
     arguments:
        num_steps - number of random steps
@@ -76,10 +73,21 @@ def randomWalk(num_steps):
     '''
     global swarmie
     # step for randim walk
+    '''
+    Seting the parameers of this random walk
+       prob_levy - the preentage of the time to look for new feeding grounds
+       levy-size - size of the jump to the new region  curently it will randomly select between 6 and 10
+       step_size - zize of the step before going in a new direction rorignally it si an random length (0.5,1,1.5)
+       num_directions - number of directions to go. intially it is set ot 4 directions
+       
+    '''
     prob_levy = 0.05  # 5% chancce of a levy leap
-    levy_size = random.choice([8,10,12,15])
-    step_size = random.choice([2.0,2.5,3]) #choose one of the step size        # Size of step, arbitrary value
-   
+    levy_size = random.choice([6,10])
+    step_size = random.choice([0.5,1,1.5]) #choose one of the step size        # Size of step, arbitrary value
+    num_directions = random.choice([4])
+    
+    
+    angle_turn = 2 * math.pi / num_directions
     prev = step_size # save current size
     # eight possible directions
     '''
@@ -98,13 +106,15 @@ def randomWalk(num_steps):
                 step_size = prev
             rospy.loginfo("Random walk...")
               
-            swarmie.turn(random.uniform(0.0,2*math.pi))
+            #swarmie.turn(random.uniform(0.0,2*math.pi))
+            direction = random.randint(0,num_directions-1)*angle_turn    
+            swarmie.turn(direction)        
             swarmie.drive(step_size)
             
         except ObstacleException :
             print ("I saw an obstacle!")
             swarmie.drive(-0.5,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)    # bounced back the way we came.
-            swarmie.turn(random.uniform(3*math.pi/4,5*math.pi/4),ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+            swarmie.turn(math.pi,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
             swarmie.drive(step_size,ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
 
 def main():
@@ -139,7 +149,7 @@ def main():
                 
                 #if len(food_location) > 1: #if if found a foud go to last food location
                  #   swarmie.drive_to(food_location.pop())
-                randomWalk(20)
+                randomWalk(40)
             except HomeException : 
                 print ("I saw home!")
                 odom_location = swarmie.get_odom_location()
