@@ -1,5 +1,11 @@
 #! /usr/bin/env python
-
+"""gohome.py
+Tries to get the rover back to the home nest, while avoiding sonar and cube
+obstacles, and hopefully not dropping the cube in its claw.
+todo: raise HomeExceptions from Planner.drive_to()?
+todo: is reusing PathException in Planner.drive_to() ok?
+todo: is using swarmie.drive(), turn, etc with throw=False and just geting the MoveResult ok?
+"""
 from __future__ import print_function
 
 import argparse
@@ -14,36 +20,7 @@ from nav_msgs.srv import GetPlanResponse
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, HomeException, Location
-
-def drive_straight_home_gps() :
-    global swarmie 
-    
-    # Use GPS to figure out about where we are. 
-    # FIXME: We need to hanlde poor GPS fix. 
-    loc = swarmie.wait_for_fix(distance=4, time=60).get_pose()
-    home = swarmie.get_home_gps_location()
-
-    
-    dist = math.hypot(loc.y - home.y, 
-                      loc.x - home.x)
-    
-    angle = angles.shortest_angular_distance(loc.theta, 
-                                             math.atan2(home.y - loc.y,
-                                                        home.y - loc.x))
-    
-    swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-
-def drive_straight_home_odom() :
-    global swarmie 
-
-    # We remember home in the Odom frame when we see it. Unlike GPS
-    # there's no need to translate the location into r and theta. The
-    # swarmie's drive_to function takes a point in odometry space. 
-    
-    home = swarmie.get_home_odom_location() 
-    swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+from mobility.swarmie import Swarmie, Location, HomeException, PathException
 
 
 class Planner:
@@ -176,13 +153,45 @@ class Planner:
 
         path_edge_point = Point()
         # solve for x given the radius and y-coord of a point on a circle
-        path_edge_point.x = math.sqrt(radius**2 - tag_point.y**2)
+        # Just set x to zero if radius is too small (if tag is too close to
+        # the rover. Protects math.sqrt() from evaluating a negative number.
+        if radius > Planner.PATHWAY_EDGE_DIST:
+            path_edge_point.x = math.sqrt(radius**2
+                                          - Planner.PATHWAY_EDGE_DIST**2)
+        else:
+            path_edge_point.x = 0
         path_edge_point.y = Planner.PATHWAY_EDGE_DIST
         if direction == 'left':
             path_edge_point.y *= -1
 
         return (-self._angle_between(tag_point, path_edge_point),
                 path_edge_point.x + OVERSHOOT_DIST)
+
+    def get_angle_to_face(self, detection):
+        """Get the angle required to turn and face a detection to put it in
+        the center of the camera's field of view.
+
+        Args:
+        * detection - the PoseStamped detection in the /camera_link frame.
+          This detection should be the detection whose position it makes the
+          most sense to make a turn decision relative to.
+
+        Returns:
+        * angle - the angle in radians to turn.
+        """
+        base_link_pose = self._transform_to_base_link(detection)
+        radius = math.sqrt(base_link_pose.pose.position.x**2
+                           + base_link_pose.pose.position.y**2)
+        tag_point = Point(x=base_link_pose.pose.position.x,
+                          y=base_link_pose.pose.position.y)
+
+        center_of_view_point = Point()
+        # solve for x given the radius and y-coord of a point on a circle
+        # y-coord is zero in this special case
+        center_of_view_point.x = math.sqrt(radius**2)
+        center_of_view_point.y = 0
+
+        return -self._angle_between(tag_point, center_of_view_point)
 
     def _angle_between(self, point_1, point_2):
         """Returns the angle from point_1 on a circle to point_2 on a circle.
@@ -202,6 +211,27 @@ class Planner:
         angle_2 = math.atan2(point_2.y, point_2.x)
         return angles.shortest_angular_distance(angle_1, angle_2)
 
+    def _sort_nearest_center(self, detections):
+        """Sort tags in view by their distance from the center of the
+        camera's field of view.
+
+        Args:
+        * detections - apriltags_ros/AprilTagDetectionArray the list
+          of detections.
+
+        Returns:
+        * sorted_detections - sorted list of AprilTagDetections in view. Will
+          be empty if no tags are in view.
+        """
+        sorted_detections = []
+
+        for detection in detections:
+            if detection.id == 256:
+                sorted_detections.append(detection)
+
+        return sorted(sorted_detections,
+                      key=lambda x : abs(x.pose.pose.position.x))
+
     def _sort_left_to_right(self, detections):
         """Sort tags in view from left to right (by their x position in the
         camera frame). Removes/ignores tags close enough in the camera to
@@ -219,7 +249,8 @@ class Planner:
         sorted_detections = []
 
         for detection in detections:
-            if detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST:
+            if (detection.id == 0 and
+                    detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
                 sorted_detections.append(detection)
 
         return sorted(sorted_detections, key=lambda x : x.pose.pose.position.x)
@@ -262,7 +293,7 @@ class Planner:
         """Returns the angle you should turn in order to face a point.
 
         Args:
-        * point - geometry_msgs/Point the point to face
+        * point - geometry_msgs/Point the point to face in the /odom frame
 
         Returns:
         * angle - the angle you need to turn, in radians
@@ -330,7 +361,15 @@ class Planner:
         * tolerance_step - how much to increment tolerance by if map/get_plan
           fails to find a path.
 
+        Returns:
+        * drive_result - mobility.msg.MoveResult the result of the drive
+        command. drive_result == MoveResult.SUCCESS if we reached the goal.
+        drive_result == MoveResult.OBSTACLE_HOME if we found a home tag.
+
         Raises:
+        * mobility.Swarmie.PathException - if the rover fails more than
+          Planner.FAIL_COUNT_LIMIT times to reach a single waypoint in the
+          its current navigation plan.
         * rospy.ServiceException - if a path can't be found in 3
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
@@ -357,8 +396,16 @@ class Planner:
             # helps to prevent rover from trying to jump around obstacles
             # before it even starts along its new path
             turn_angle = self._get_angle_to_face(point)
-            self.swarmie.turn(turn_angle,
-                              ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET)
+            self.result = self.swarmie.turn(
+                turn_angle,
+                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
+                throw=False
+            )
+
+            if self.result == MoveResult.OBSTACLE_HOME:
+                print('Obstacle: Found Home.')
+                return self.result
+
             self.result = self.swarmie.drive_to(point, throw=False)
 
             if self.result == MoveResult.SUCCESS:
@@ -372,7 +419,7 @@ class Planner:
             # otherwise, something went wrong or we found home
             elif self.result == MoveResult.OBSTACLE_HOME:
                 print('Obstacle: Found Home.')
-                return
+                return self.result
 
             elif self.result == MoveResult.OBSTACLE_TAG:
                 # get around the tag obstacle
@@ -511,8 +558,10 @@ class Planner:
                         ignore=Obstacle.IS_SONAR,
                         throw=False
                     )
-                    self._clear(math.pi/8,
+                    self._clear(math.pi/6,
                                 ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET)
+                    # just go left
+                    self._go_around(math.pi/2, 0.75)
 
             elif self.result == MoveResult.PATH_FAIL:
                 # shit, hope we can back up if this ever happens
@@ -528,14 +577,14 @@ class Planner:
 
             self.cur_loc = self.swarmie.get_odom_location()
 
-        if self.fail_count >= Planner.FAIL_COUNT_LIMIT:
-            print('Failed to drive to goal {} times.'.format(
-                Planner.FAIL_COUNT_LIMIT)
-            )
-            return
+            if self.fail_count >= Planner.FAIL_COUNT_LIMIT:
+                print('Failed to drive to goal {} times.'.format(
+                    Planner.FAIL_COUNT_LIMIT)
+                )
+                raise PathException(MoveResult.PATH_FAIL)
 
         print('Successfully executed nav plan.')
-        return
+        return MoveResult.SUCCESS
 
     def drive(self, distance, tolerance=0.0, tolerance_step=0.5):
         """Convenience wrapper to drive_to(). Drive the given distance, while
@@ -558,7 +607,141 @@ class Planner:
         goal.x = start.x + distance * math.cos(start.theta)
         goal.y = start.y + distance * math.sin(start.theta)
 
-        self.drive_to(goal, tolerance=tolerance, tolerance_step=tolerance_step)
+        return self.drive_to(
+            goal,
+            tolerance=tolerance,
+            tolerance_step=tolerance_step
+        )
+
+    def _get_next_two_spiral_points(self, distance):
+        """Helper to Planner.spiral_home_search(). Get the next two points
+        in the spiral search pattern.
+
+        Args:
+        * distance - the distance each point should be from each other
+
+        Returns:
+        * point_1 - geometry_msgs.msg.Point the first point
+        * point_2 - geometry_msgs.msg.Point the second point
+        """
+        cur_loc = self.swarmie.get_odom_location().get_pose()
+
+        point_1 = Point()
+        point_1.x = cur_loc.x + distance * math.cos(cur_loc.theta)
+        point_1.y = cur_loc.y + distance * math.sin(cur_loc.theta)
+
+        point_2 = Point()
+        point_2.x = cur_loc.x + distance * math.cos(cur_loc.theta + math.pi/2)
+        point_2.y = cur_loc.y + distance * math.sin(cur_loc.theta + math.pi/2)
+
+        return point_1, point_2
+
+    def _get_spiral_points(self, start_distance, distance_step):
+        start_loc = self.swarmie.get_odom_location().get_pose()
+        points = []
+        distance = start_distance
+        angle = math.pi/2
+
+        prev_point = Point()
+        prev_point.x = start_loc.x + distance * math.cos(start_loc.theta)
+        prev_point.y = start_loc.y + distance * math.sin(start_loc.theta)
+        points.append(prev_point)
+
+        # todo: is this big enough, or too big?
+        for i in range(1, 50):
+            if i % 2 == 0:
+                distance += distance_step
+
+            point = Point()
+            point.x = prev_point.x + distance * math.cos(start_loc.theta
+                                                         + angle)
+            point.y = prev_point.y + distance * math.sin(start_loc.theta
+                                                         + angle)
+            points.append(point)
+            prev_point = point
+            angle += math.pi/2
+
+        return points
+
+    def spiral_home_search(self, start_distance, distance_step=0.5,
+                           tolerance=0.0, tolerance_step=0.5):
+        """Search for home in a square spiral pattern.
+
+        Args:
+        * start_distance - the distance of the first two legs of the spiral.
+        * distance_step - how much to increment the leg length by after driving
+          two legs.
+        * tolerance - the tolerance for the nav plans, see drive_to() for
+          more information.
+        * tolerance_step - how much to increment the tolerance by if a nav plan
+          can't be found.
+
+        Returns:
+        * Nothing - just returns from the function call when finally found a
+          home tag.
+
+        Raises:
+        * mobility.Swarmie.PathException - if the rover fails more than
+          Planner.FAIL_COUNT_LIMIT times to reach a single waypoint in the
+          its current navigation plan.
+        * rospy.ServiceException - if a path can't be found in 3
+          attempts, beginning with initial tolerance and incrementing by
+          tolerance_step on each subsequent attempt.
+        """
+        drive_result = None
+        points = self._get_spiral_points(start_distance, distance_step)
+
+        for point in points:
+            drive_result = self.drive_to(
+                point,
+                tolerance=tolerance,
+                tolerance_step=tolerance_step
+            )
+            if drive_result == MoveResult.OBSTACLE_HOME:
+                return
+
+
+def drive_straight_home_gps() :
+    global swarmie
+
+    # Use GPS to figure out about where we are.
+    # FIXME: We need to hanlde poor GPS fix.
+    loc = swarmie.wait_for_fix(distance=4, time=60).get_pose()
+    home = swarmie.get_home_gps_location()
+
+
+    dist = math.hypot(loc.y - home.y,
+                      loc.x - home.x)
+
+    angle = angles.shortest_angular_distance(loc.theta,
+                                             math.atan2(home.y - loc.y,
+                                                        home.y - loc.x))
+
+    swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+
+
+def drive_straight_home_odom() :
+    global swarmie
+
+    # We remember home in the Odom frame when we see it. Unlike GPS
+    # there's no need to translate the location into r and theta. The
+    # swarmie's drive_to function takes a point in odometry space.
+
+    home = swarmie.get_home_odom_location()
+    swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+
+
+def sees_home_tag():
+    global swarmie
+
+    detections = swarmie.get_latest_targets().detections
+
+    for detection in detections:
+        if detection.id == 256:
+            return True
+
+    return False
 
 
 def main():
@@ -589,22 +772,60 @@ def main():
 
     if args.use_rviz:
         planner = Planner(swarmie, use_rviz_nav_goal=True)
-        # nav_goal_sub = rospy.Subscriber(
-        #     rovername + '/goal',
-        #     PoseStamped,
-        #     rviz_nav_goal_cb,
-        #     queue_size=1
-        # )
         rospy.spin()
-    else:
-        try :
-            # Try driving home with odometry before GPS
-            drive_straight_home_odom()
-            while not rospy.is_shutdown() :
-                drive_straight_home_gps()
-        except HomeException as e:
-            # Found home!
-            exit(0)
-    
+
+    planner = Planner(swarmie)
+    swarmie.fingers_close()  # make sure we keep a firm grip
+    swarmie.wrist_middle()  # get block mostly out of camera view
+    home = swarmie.get_home_odom_location()
+    drive_result = None
+    counter = 0
+
+    while (counter < 2 and
+           drive_result != MoveResult.SUCCESS and
+           drive_result != MoveResult.OBSTACLE_HOME):
+        try:
+            drive_result = planner.drive_to(
+                home,
+                tolerance=0.5+counter,
+                tolerance_step=0.5+counter
+            )
+        except PathException as e:
+            if counter < 2:
+                pass
+            else:
+                exit(1)
+
+    # todo: is it necessary to check that we can still see a home tag? or does dropoff handle it ok?
+    rospy.sleep(0.25)  # improve target detection chances?
+    if sees_home_tag():
+        # victory!
+        home_detections = planner._sort_nearest_center(
+        swarmie.get_latest_targets().detections
+        )
+        if len(home_detections) > 0:
+            angle = planner.get_angle_to_face(home_detections[0])
+            current_heading = swarmie.get_odom_location().get_pose().theta
+            swarmie.set_heading(current_heading + angle,
+                                ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION)
+        exit(0)
+
+    print('Starting spiral search')
+    planner.spiral_home_search(0.5, 0.75, tolerance=0.0, tolerance_step=0.5)
+    rospy.sleep(0.25)  # improve target detection chances?
+    if sees_home_tag():
+    home_detections = planner._sort_nearest_center(
+        swarmie.get_latest_targets().detections
+    )
+
+    if len(home_detections) > 0:
+        angle = planner.get_angle_to_face(home_detections[0])
+        current_heading = swarmie.get_odom_location().get_pose().theta
+        swarmie.set_heading(current_heading + angle,
+                            ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION)
+
+    exit(0)
+
+
 if __name__ == '__main__' : 
     main()
