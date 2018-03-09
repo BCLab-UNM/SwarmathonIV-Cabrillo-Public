@@ -193,6 +193,33 @@ class Planner:
 
         return -self._angle_between(tag_point, center_of_view_point)
 
+    def face_home_tag(self):
+        """Turn and face the home tag nearest the center of view if we
+        see one. Does nothing if no home tag is seen."""
+        home_detections = self._sort_home_tags_nearest_center(
+            self.swarmie.get_latest_targets().detections
+        )
+        if len(home_detections) > 0:
+            angle = self.get_angle_to_face(home_detections[0])
+            current_heading = self.swarmie.get_odom_location().get_pose().theta
+            self.swarmie.set_heading(
+                current_heading + angle,
+                ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION
+            )
+
+    def sees_home_tag(self):
+        """Returns true if the rover can see a home tag.
+        Returns false otherwise.
+        """
+        detections = self.swarmie.get_latest_targets().detections
+
+        for detection in detections:
+            if detection.id == 256:
+                return True
+
+        return False
+
+
     def _angle_between(self, point_1, point_2):
         """Returns the angle from point_1 on a circle to point_2 on a circle.
         Circle is centered at the origin.
@@ -211,9 +238,9 @@ class Planner:
         angle_2 = math.atan2(point_2.y, point_2.x)
         return angles.shortest_angular_distance(angle_1, angle_2)
 
-    def _sort_nearest_center(self, detections):
-        """Sort tags in view by their distance from the center of the
-        camera's field of view.
+    def _sort_home_tags_nearest_center(self, detections):
+        """Sort home tags (id == 256) in view by their distance from the center
+        of the camera's field of view.
 
         Args:
         * detections - apriltags_ros/AprilTagDetectionArray the list
@@ -232,10 +259,10 @@ class Planner:
         return sorted(sorted_detections,
                       key=lambda x : abs(x.pose.pose.position.x))
 
-    def _sort_left_to_right(self, detections):
-        """Sort tags in view from left to right (by their x position in the
-        camera frame). Removes/ignores tags close enough in the camera to
-        likely be a block in the claw.
+    def _sort_target_tags_left_to_right(self, detections):
+        """Sort target tags (id == 0) in view from left to right (by their x
+        position in the camera frame). Removes/ignores tags close enough in the
+        camera to likely be a block in the claw.
 
         Args:
         * detections - apriltags_ros/AprilTagDetectionArray the list
@@ -255,18 +282,21 @@ class Planner:
 
         return sorted(sorted_detections, key=lambda x : x.pose.pose.position.x)
 
-    def _clear(self, angle, ignore=Obstacle.IS_SONAR):
+    def _clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True):
         """Turn right, then left, then back to start heading.
         Helps to clear and mark the map if in a difficult spot.
 
         Args:
         * angle - the angle to turn
         * ignore - the stuff to ignore. See Swarmie.drive()
+        * reset_heading - whether the rover should return to its start heading
+          after turning left and right
         """
         start_heading = self.swarmie.get_odom_location().get_pose().theta
         self.swarmie.set_heading(start_heading-angle, ignore=ignore)
         self.swarmie.set_heading(start_heading+angle, ignore=ignore)
-        self.swarmie.set_heading(start_heading, ignore=ignore)
+        if reset_heading:
+            self.swarmie.set_heading(start_heading, ignore=ignore)
 
     def _go_around(self, angle, dist):
         """Turn by 'angle' and then drive 'dist'.
@@ -436,7 +466,7 @@ class Planner:
 
                     print('\nObstacle: Found a Tag.')
 
-                    sorted_detections = self._sort_left_to_right(
+                    sorted_detections = self._sort_target_tags_left_to_right(
                         self.swarmie.get_latest_targets().detections
                     )
 
@@ -554,14 +584,15 @@ class Planner:
                     print('Neither left or right look clear, backing up')
                     self.current_state = Planner.STATE_AVOID_REVERSE
                     self.swarmie.drive(
-                        -0.2,
+                        -0.4,
                         ignore=Obstacle.IS_SONAR,
                         throw=False
                     )
-                    self._clear(math.pi/6,
-                                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET)
+                    self._clear(math.pi/4,
+                                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
+                                reset_heading=False)
                     # just go left
-                    self._go_around(math.pi/2, 0.75)
+                    self._go_around(math.pi/4, 0.75)
 
             elif self.result == MoveResult.PATH_FAIL:
                 # shit, hope we can back up if this ever happens
@@ -613,30 +644,18 @@ class Planner:
             tolerance_step=tolerance_step
         )
 
-    def _get_next_two_spiral_points(self, distance):
-        """Helper to Planner.spiral_home_search(). Get the next two points
-        in the spiral search pattern.
+    def _get_spiral_points(self, start_distance, distance_step):
+        """Get a list of waypoints for the spiral search pattern. Waypoints
+        will be used as goals to planner.drive_to()
 
         Args:
-        * distance - the distance each point should be from each other
+        * start_distance - the distance of the first two legs of the spiral.
+        * distance_step - how much to increment the leg length by after driving
+          two legs.
 
         Returns:
-        * point_1 - geometry_msgs.msg.Point the first point
-        * point_2 - geometry_msgs.msg.Point the second point
+        * points - the list of waypoints
         """
-        cur_loc = self.swarmie.get_odom_location().get_pose()
-
-        point_1 = Point()
-        point_1.x = cur_loc.x + distance * math.cos(cur_loc.theta)
-        point_1.y = cur_loc.y + distance * math.sin(cur_loc.theta)
-
-        point_2 = Point()
-        point_2.x = cur_loc.x + distance * math.cos(cur_loc.theta + math.pi/2)
-        point_2.y = cur_loc.y + distance * math.sin(cur_loc.theta + math.pi/2)
-
-        return point_1, point_2
-
-    def _get_spiral_points(self, start_distance, distance_step):
         start_loc = self.swarmie.get_odom_location().get_pose()
         points = []
         distance = start_distance
@@ -732,47 +751,41 @@ def drive_straight_home_odom() :
     swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
 
 
-def sees_home_tag():
-    global swarmie
-
-    detections = swarmie.get_latest_targets().detections
-
-    for detection in detections:
-        if detection.id == 256:
-            return True
-
-    return False
-
-
 def main():
     global swarmie 
     global rovername
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'rovername',
-        help='required, name of the rover to connect to',
-        nargs='?',
-        default=None
-    )
-    parser.add_argument(
-        '-r',
-        '--use_rviz',
-        action='store_true',
-        help='Use RViz 2D Nav Goal to request goals from path planner.'
-    )
-    args = parser.parse_args()
-    
-    if args.rovername is None:
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     'rovername',
+    #     help='required, name of the rover to connect to',
+    #     nargs='?',
+    #     default=None
+    # )
+    # parser.add_argument(
+    #     '-r',
+    #     '--use_rviz',
+    #     action='store_true',
+    #     help='Use RViz 2D Nav Goal to request goals from path planner.'
+    # )
+    # args = parser.parse_args()
+    #
+    # if args.rovername is None:
+    #     print ('usage:', sys.argv[0], '<rovername>')
+    #     exit (-1)
+
+    if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
 
-    rovername = args.rovername
+    # rovername = args.rovername
+    rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
+    swarmie.print_infoLog(rovername + ": gohome started.")
 
-    if args.use_rviz:
-        planner = Planner(swarmie, use_rviz_nav_goal=True)
-        rospy.spin()
+    # if args.use_rviz:
+    #     planner = Planner(swarmie, use_rviz_nav_goal=True)
+    #     rospy.spin()
 
     planner = Planner(swarmie)
     swarmie.fingers_close()  # make sure we keep a firm grip
@@ -798,31 +811,16 @@ def main():
 
     # todo: is it necessary to check that we can still see a home tag? or does dropoff handle it ok?
     rospy.sleep(0.25)  # improve target detection chances?
-    if sees_home_tag():
+    if planner.sees_home_tag():
         # victory!
-        home_detections = planner._sort_nearest_center(
-        swarmie.get_latest_targets().detections
-        )
-        if len(home_detections) > 0:
-            angle = planner.get_angle_to_face(home_detections[0])
-            current_heading = swarmie.get_odom_location().get_pose().theta
-            swarmie.set_heading(current_heading + angle,
-                                ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION)
+        planner.face_home_tag()
         exit(0)
 
     print('Starting spiral search')
     planner.spiral_home_search(0.5, 0.75, tolerance=0.0, tolerance_step=0.5)
     rospy.sleep(0.25)  # improve target detection chances?
-    if sees_home_tag():
-    home_detections = planner._sort_nearest_center(
-        swarmie.get_latest_targets().detections
-    )
-
-    if len(home_detections) > 0:
-        angle = planner.get_angle_to_face(home_detections[0])
-        current_heading = swarmie.get_odom_location().get_pose().theta
-        swarmie.set_heading(current_heading + angle,
-                            ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION)
+    if planner.sees_home_tag():
+       planner.face_home_tag()
 
     exit(0)
 
