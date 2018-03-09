@@ -26,7 +26,7 @@ def approach():
     try:
         swarmie.fingers_open()
         rospy.sleep(1)
-        swarmie.wrist_down()
+        swarmie.set_wrist_angle(1.15)
         
         try:
             block = swarmie.get_nearest_block_location()
