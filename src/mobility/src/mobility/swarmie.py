@@ -19,6 +19,7 @@ from swarmie_msgs.msg import Obstacle
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
+from nav_msgs.srv import GetPlan, GetPlanRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
 from rospy.numpy_msg import numpy_msg
@@ -152,9 +153,8 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service(rover + '/control')
-        rospy.wait_for_service(rover + '/map/find_nearest_target')
-        rospy.wait_for_service(rover + '/map/get_obstacle_map')
-        rospy.wait_for_service(rover + '/map/get_target_map')
+        rospy.wait_for_service(rover + '/map/get_map')
+        rospy.wait_for_service(rover + '/map/get_plan')
 
         # Numpy-ify the GridMap 
         GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
@@ -162,8 +162,8 @@ class Swarmie:
         # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
-        self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
-        self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
+        self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
+        self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetPlan)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
         self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
@@ -538,6 +538,40 @@ class Swarmie:
         '''Return a `mapping.msg.RoverMap` that is the targets map.
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
+
+    def get_plan(self, goal, tolerance=0.0):
+        '''Get plan from current location to goal location.
+
+        Args:
+
+        * `goal` (`geometry_msgs/Point`) or ('geometery_msgs/Pose2D`) - The \
+         goal location in the /odom frame.
+        * `tolerance` (`float`) - The acceptable distance to the goal you \
+         are willing to have the path return.
+
+        Returns:
+
+        * `plan` (`nav_msgs/GetPlanResponse`) - contains a `nav_msgs/Path` \
+         with an array of `geometry_msgs/PoseStamped` poses to navigate to.
+
+        Raises:
+
+        * (`rospy.ServiceException`) - if no path to the goal can be found. \
+         This can happen if you requested an impossible goal to navigate to \
+         given the current map and obstacle layers.
+        '''
+        request = GetPlanRequest()
+        cur_loc = self.get_odom_location().get_pose()
+        request.start.pose.position.x = cur_loc.x
+        request.start.pose.position.y = cur_loc.y
+        request.goal.pose.position.x = goal.x
+        request.goal.pose.position.y = goal.y
+        if tolerance > 0:
+            request.tolerance = tolerance
+        else:
+            request.tolerance = 0.0
+
+        return self._get_plan(request)
     
     def start_imu_calibration(self):
         '''Start calibration Step One for the rover's IMU.
