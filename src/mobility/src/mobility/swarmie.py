@@ -134,6 +134,8 @@ class Swarmie:
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
         self.TargetsDict = {}
+        self.TargetsBuffer = AprilTagDetectionArray()
+        self.TargetsDictBuffer = {}
         self.targets_timeout = 3
         
         # Intialize this ROS node.
@@ -216,6 +218,12 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
+        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+        #adding currently seen tags to the dict
+        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+        #get the tags from the dict and saves them to Targets
+        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
+    
         if self._is_moving():
             self.Targets = msg
             #create a dict of tags as values and rounded coordinates as the key
@@ -228,6 +236,9 @@ class Swarmie:
             self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
             #get the tags from the dict and saves them to Targets
             self.Targets.detections = self.TargetsDict.values() 
+    
+    #self.TargetsBuffer = AprilTagDetectionArray()
+    #self.TargetsDictBuffer = {}
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -499,14 +510,16 @@ class Swarmie:
 
     def pickup(self):
         '''Picks up the block'''
-        finger_close_angle = .5
-        if self.simulator_running():
-            finger_close_angle = 0
-
+        #finger_close_angle = .5
+        #if self.simulator_running():
+        #    finger_close_angle = 0
+        finger_close_angle = 0
+        
         self.set_finger_angle(2) #open
         rospy.sleep(1)
         self.set_wrist_angle(1)
         rospy.sleep(.7)
+        
         self.set_finger_angle(finger_close_angle) #close
         rospy.sleep(1)
         self.wrist_up()
@@ -528,6 +541,10 @@ class Swarmie:
     def get_latest_targets(self) :
         '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
         return self.Targets
+    
+    def get_targets_buffer(self) :
+        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
+        return self.TargetsBuffer
     
     def get_obstacle_map(self):
         '''Return a `mapping.msg.RoverMap` that is the obstacle map.
@@ -792,7 +809,7 @@ class Swarmie:
         ''' calls _is_moving that uses OdomLocation angular.z & linear.x  
         Returns: 
 
-        * (`bool`) : True if swarmie is moving and False if stationary
+        * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
         return(self._is_moving())
         
@@ -800,8 +817,10 @@ class Swarmie:
         ''' uses OdomLocation angular.z & linear.x  
         Returns: 
 
-        * (`bool`) : True if swarmie is moving and False if stationary
+        * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
+        if (self.OdomLocation.Odometry is None):
+            return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
     def get_nearest_block_location(self):
