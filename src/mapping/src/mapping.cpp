@@ -128,19 +128,23 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
 	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
-    if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
-		return false;
-	}
+//    if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
+//		return false;
+//	}
 
 	if (direction.x != 0 || direction.y != 0) { // it's a diagonal direction
 		grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
 		grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
 
 		// not passable if both adjacent neighbors of diagonal are blocked
-		if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
-            map.at("target", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
-			&& (map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
-            map.at("target", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+//		if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+//            map.at("target", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
+//			&& (map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
+//            map.at("target", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+//			return false;
+//		}
+        if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+			map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
 			return false;
 		}
 	}
@@ -184,9 +188,9 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 	if (map.isValid(index, "obstacle")) {
         cost += 2 * LETHAL_COST * map.at("obstacle", index);
 	}
-	if (map.isValid(index, "target")) {
-		cost += LETHAL_COST * map.at("target", index);
-	}
+//	if (map.isValid(index, "target")) {
+//		cost += LETHAL_COST * map.at("target", index);
+//	}
 
 	if (cost > LETHAL_COST) { // skip 2-layer neighbors check if possible
 		cost = LETHAL_COST;
@@ -202,11 +206,11 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
                 cost += INFLATION_PCT * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
-            if (map.isValid(index, "target")) {
-                cost += INFLATION_PCT * LETHAL_COST *
-                        map.at("target", index);
-            }
-        }
+//            if (map.isValid(index, "target")) {
+//                cost += INFLATION_PCT * LETHAL_COST *
+//                        map.at("target", index);
+//            }
+//        }
     }
 
     for (GridLocation direction : TWO_STEP_DIRECTIONS) {
@@ -218,10 +222,10 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
                 cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
-            if (map.isValid(index, "target")) {
-                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
-                        map.at("target", index);
-            }
+//            if (map.isValid(index, "target")) {
+//                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+//                        map.at("target", index);
+//            }
         }
     }
 
@@ -349,9 +353,9 @@ bool in_line_of_sight(
             if (map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
 				return false;
 			}
-			if (map.at("target", *iterator) > OBSTACLE_THRESHOLD) {
-                return false;
-            }
+//			if (map.at("target", *iterator) > OBSTACLE_THRESHOLD) {
+//                return false;
+//            }
         }
 	}
 	return true;
