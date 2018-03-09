@@ -111,7 +111,7 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-    claw_offset_distance = 0.22 
+    claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
 
