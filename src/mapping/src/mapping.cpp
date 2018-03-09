@@ -56,7 +56,7 @@ tf::TransformListener *cameraTF;
 double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
 double doubleSensorCollisionDist = 0.6; //meters the two sensors will flag obstacles
 const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
-const double MAP_RESOLUTION = 0.25; // map resolution, meters per cell
+const double MAP_RESOLUTION = 0.5; // map resolution, meters per cell
 unsigned int obstacle_status;
 
 
@@ -113,29 +113,39 @@ const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
 		 GridLocation{0, -2}, GridLocation{-1, -2}, GridLocation{-2, -2},
 		 GridLocation{-2, -1}};
 
-// Check if location and it's neighbors obstacle values are all below threshold.
-bool passable(grid_map::GridMap& map, GridLocation location) {
+/*
+ * Check if location and it's neighbors obstacle values are all below threshold.
+ * location_from and location_to must be in_bounds
+ */
+bool passable(grid_map::GridMap& map, GridLocation location_from,
+			  GridLocation location_to) {
 	const double OBSTACLE_THRESHOLD = 0.10;
     grid_map::Index index;
-    index(0) = location.x;
-	index(1) = location.y;
+    index(0) = location_to.x;
+	index(1) = location_to.y;
+    GridLocation direction{location_to.x - location_from.x,
+						   location_to.y - location_from.y};
 	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
     if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
-//	for (GridLocation direction : DIRECTIONS) {
-//		GridLocation next{location.x + direction.x, location.y + direction.y};
-//		if (in_bounds(map, next)) {
-//			index(0) = next.x;
-//			index(1) = next.y;
-//			if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
-//				return false;
-//			}
-//		}
-//	}
-	return true;
+
+	if (direction.x != 0 || direction.y != 0) { // it's a diagonal direction
+		grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
+		grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
+
+		// not passable if both adjacent neighbors of diagonal are blocked
+		if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+            map.at("target", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
+			&& (map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
+            map.at("target", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+			return false;
+		}
+	}
+
+    return true;
 }
 
 std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
@@ -143,7 +153,7 @@ std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation locatio
 
     for (GridLocation direction : DIRECTIONS) {
         GridLocation next{location.x + direction.x, location.y + direction.y};
-        if (in_bounds(map, next) && passable(map, next)) {
+        if (in_bounds(map, next) && passable(map, location, next)) {
             results.push_back(next);
         }
     }
@@ -457,7 +467,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// inside this distance should be a block in the claw.
     const double MIN_CENTER_DIST = 0.15;
     // todo: what's a good number for SONAR_DEPTH?
-    const double SONAR_DEPTH = 0.5;  // limit mark_poly to 50cm past measured ranges
+    const double SONAR_DEPTH = 0.75;  // limit mark_poly to 75cm past measured ranges
     // todo: what's a good number for VIEW_RANGE?
 	// VIEW_RANGE can help avoid marking "fake" obstacles seen due to sonar
 	// noise at longer ranges. It limits the mark_poly to this range, but
@@ -796,7 +806,6 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
  *
  * get_plan() - get global plan from a start pose to a goal pose
  * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
- * todo: include apriltag layers in path plan
  */
 bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
     grid_map::Index start_index;
