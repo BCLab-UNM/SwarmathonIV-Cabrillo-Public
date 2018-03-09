@@ -173,7 +173,6 @@ class Swarmie:
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
         self.xform = tf.TransformListener()
-        rospy.sleep(1)
 
         # Subscribe to useful topics 
         # These topics only update data. The data is used in other places to initialize
@@ -181,12 +180,24 @@ class Swarmie:
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
-        rospy.sleep(0.5)
+
+        # Wait for Odometry messages to come in.
+        # Don't wait for messages on /obstacle because it's published infrequently
+        try:
+            rospy.wait_for_message(rover + '/odom/filtered', Odometry, 2)
+            rospy.wait_for_message(rover + '/odom/ekf', Odometry, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for filtered odometry data.')
 
         # The targets subscriber needs odom data since Carter's patch. Make sure odom data
         # exists before we get a target callback.
         rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
-        rospy.sleep(1)
+        try:
+            rospy.wait_for_message(rover + '/targets', AprilTagDetectionArray, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for /targets data.')
 
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
