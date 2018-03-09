@@ -127,7 +127,8 @@ def get_furthest_side_hometags_location(tags):
         return(homeTag1,homeTag2)       
 
 def is_corner(tags):
-    return (len(set(theta_int(t.theta) for t in tags)) > 1)
+    return(False)
+    #return (len(set(theta_int(t.theta) for t in tags)) > 1)
 
 def theta_int(theta):
     ''' same math needed in multiple functions to clean up the theta to make it easier to compair '''
