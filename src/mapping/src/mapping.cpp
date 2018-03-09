@@ -210,7 +210,7 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 //                cost += INFLATION_PCT * LETHAL_COST *
 //                        map.at("target", index);
 //            }
-//        }
+        }
     }
 
     for (GridLocation direction : TWO_STEP_DIRECTIONS) {
