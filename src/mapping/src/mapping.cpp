@@ -714,12 +714,13 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			// frame so we can place them on the map.
 			//
 			// This ensures that the transform is ready to be used below.
+			// Wait for 0.2 seconds to try to avoid transform exceptions
 			//
 			cameraTF->waitForTransform(
 					rover + "/odom",   // Target frame
 					message->detections[0].pose.header.frame_id, // Source frame
 					message->detections[0].pose.header.stamp,    // Time
-					ros::Duration(0.1) // How long to wait for the tf.
+					ros::Duration(0.2) // How long to wait for the tf.
 			);
 
             for (int i=0; i<message->detections.size(); i++) {
