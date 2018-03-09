@@ -83,7 +83,7 @@ def convert_to_Pose2D(t):
     return(pose)
 
 def get_center_pose_list(id):
-    return [convert_to_Pose2D(tag) for tag in swarmie.get_latest_targets().detections if tag.id is id ]
+    return [convert_to_Pose2D(tag) for tag in swarmie.get_targets_buffer().detections if tag.id is id ]
 
 def get_furthest_corner_hometags_location(tags):
         '''should only be called if 2 different orenations(thetas) of tags are seen '''
