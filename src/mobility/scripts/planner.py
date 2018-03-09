@@ -4,6 +4,8 @@ Local Planner
 todo: raise HomeExceptions from Planner.drive_to()?
 todo: is reusing PathException in Planner.drive_to() ok?
 todo: is using swarmie.drive(), turn, etc with throw=False and just geting the MoveResult ok?
+todo: refactor to make target avoidance optional?
+todo: is setting x pos = 0 good in _get_angle_and_dist_to_avoid() when radius is too small?
 """
 from __future__ import print_function
 
@@ -666,7 +668,7 @@ class Planner:
         points.append(prev_point)
 
         # todo: is this big enough, or too big?
-        for i in range(1, 50):
+        for i in range(1, 10):
             if i % 2 == 0:
                 distance += distance_step
 
@@ -695,8 +697,8 @@ class Planner:
           can't be found.
 
         Returns:
-        * Nothing - just returns from the function call when finally found a
-          home tag.
+        * result - MoveResult. MoveResult.OBSTACLE_HOME if home is found.
+          MoveResult.PATH_FAIL if home is not found.
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
@@ -716,7 +718,9 @@ class Planner:
                 tolerance_step=tolerance_step
             )
             if drive_result == MoveResult.OBSTACLE_HOME:
-                return
+                return drive_result
+
+        return MoveResult.PATH_FAIL
 
 
 def main():

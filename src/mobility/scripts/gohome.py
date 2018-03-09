@@ -17,7 +17,7 @@ from mobility.swarmie import Swarmie, PathException
 from planner import Planner
 
 
-def drive_straight_home_gps() :
+def get_gps_angle_and_dist():
     global swarmie
 
     # Use GPS to figure out about where we are.
@@ -33,8 +33,9 @@ def drive_straight_home_gps() :
                                              math.atan2(home.y - loc.y,
                                                         home.y - loc.x))
 
-    swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    # swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    # swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    return angle, dist
 
 
 def drive_straight_home_odom() :
@@ -90,11 +91,47 @@ def main():
         exit(0)
 
     print('Starting spiral search')
-    planner.spiral_home_search(0.5, 0.75, tolerance=0.0, tolerance_step=0.5)
-    rospy.sleep(0.25)  # improve target detection chances?
-    if planner.sees_home_tag():
-       planner.face_home_tag()
+    drive_result = planner.spiral_home_search(0.5, 0.75, tolerance=0.0, tolerance_step=0.5)
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        rospy.sleep(0.25)  # improve target detection chances?
+        if planner.sees_home_tag():
+            planner.face_home_tag()
+            exit(0)
 
+    # gps backup attempt
+    drive_result = None
+    current_loc = swarmie.get_odom_location().get_pose()
+    angle, dist = get_gps_angle_and_dist()
+
+    goal = Point()
+    goal.x = current_loc.x + dist * math.cos(current_loc.theta + angle)
+    goal.y = current_loc.y + dist * math.sin(current_loc.theta + angle)
+
+    while (counter < 2 and
+           drive_result != MoveResult.SUCCESS and
+           drive_result != MoveResult.OBSTACLE_HOME):
+        try:
+            drive_result = planner.drive_to(
+                goal,
+                tolerance=0.5+counter,
+                tolerance_step=0.5+counter
+            )
+        except PathException as e:
+            if counter < 2:
+                pass
+            else:
+                exit(1)
+
+    print('Starting spiral search')
+    drive_result = planner.spiral_home_search(0.5, 0.75, tolerance=0.0, tolerance_step=0.5)
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        rospy.sleep(0.25)  # improve target detection chances?
+        if planner.sees_home_tag():
+            planner.face_home_tag()
+            exit(0)
+
+    # didn't find anything
+    exit(1)
 
 if __name__ == '__main__' : 
     main()
