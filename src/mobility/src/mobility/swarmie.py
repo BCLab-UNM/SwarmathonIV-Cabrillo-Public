@@ -183,13 +183,21 @@ class Swarmie:
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
-        rospy.wait_for_message(rover + '/odom/filtered', Odometry, 2)
-        rospy.wait_for_message(rover + '/odom/ekf', Odometry, 2)
+        try:
+            rospy.wait_for_message(rover + '/odom/filtered', Odometry, 2)
+            rospy.wait_for_message(rover + '/odom/ekf', Odometry, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for filtered odometry data.')
 
         # The targets subscriber needs odom data since Carter's patch. Make sure odom data
         # exists before we get a target callback.
         rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
-        rospy.wait_for_message(rover + '/targets', AprilTagDetectionArray, 2)
+        try:
+            rospy.wait_for_message(rover + '/targets', AprilTagDetectionArray, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for /targets data.')
 
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
