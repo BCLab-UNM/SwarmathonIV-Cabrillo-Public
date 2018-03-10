@@ -26,7 +26,7 @@ def approach():
     try:
         swarmie.fingers_open()
         rospy.sleep(1)
-        swarmie.wrist_down()
+        swarmie.set_wrist_angle(1.15)
         
         try:
             block = swarmie.get_nearest_block_location()
@@ -37,11 +37,17 @@ def approach():
 
         if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
-            swarmie.drive_to(block, claw_offset = claw_offset_distance, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
-            # Grab - minimal pickup with sim_check.
-            finger_close_angle = 0.5
             if swarmie.simulator_running():
-                finger_close_angle = 0
+                swarmie.drive_to(block, claw_offset = 0.1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            else: 
+                swarmie.drive_to(block, claw_offset = claw_offset_distance, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+            # Grab - minimal pickup with sim_check.
+            
+            if swarmie.simulator_running():
+                finger_close_angle = 0.5
+            else:
+              finger_close_angle = 0
+              
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
             swarmie.wrist_up()
@@ -105,7 +111,7 @@ def main():
 
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
-    claw_offset_distance = 0.22 
+    claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
 
