@@ -69,10 +69,11 @@ class Planner:
         self.tolerance = 0.0
         self.result = MoveResult.SUCCESS
         self.fail_count = 0
+        self.avoid_targets = True
 
         # Subscribers
         if use_rviz_nav_goal:
-            print ('Using RViz 2D Nav Goals')
+            print('Using RViz 2D Nav Goals')
             self._nav_goal_sub = rospy.Subscriber(
                 self.rovername + '/goal',
                 PoseStamped,
@@ -147,8 +148,8 @@ class Planner:
         """
         OVERSHOOT_DIST = 0.20  # meters, distance to overshoot target by
         base_link_pose = self._transform_to_base_link(detection)
-        radius = math.sqrt(base_link_pose.pose.position.x**2
-                           + base_link_pose.pose.position.y**2)
+        radius = math.sqrt(base_link_pose.pose.position.x ** 2
+                           + base_link_pose.pose.position.y ** 2)
         tag_point = Point(x=base_link_pose.pose.position.x,
                           y=base_link_pose.pose.position.y)
 
@@ -157,8 +158,8 @@ class Planner:
         # Just set x to zero if radius is too small (if tag is too close to
         # the rover. Protects math.sqrt() from evaluating a negative number.
         if radius > Planner.PATHWAY_EDGE_DIST:
-            path_edge_point.x = math.sqrt(radius**2
-                                          - Planner.PATHWAY_EDGE_DIST**2)
+            path_edge_point.x = math.sqrt(radius ** 2
+                                          - Planner.PATHWAY_EDGE_DIST ** 2)
         else:
             path_edge_point.x = 0
         path_edge_point.y = Planner.PATHWAY_EDGE_DIST
@@ -181,15 +182,15 @@ class Planner:
         * angle - the angle in radians to turn.
         """
         base_link_pose = self._transform_to_base_link(detection)
-        radius = math.sqrt(base_link_pose.pose.position.x**2
-                           + base_link_pose.pose.position.y**2)
+        radius = math.sqrt(base_link_pose.pose.position.x ** 2
+                           + base_link_pose.pose.position.y ** 2)
         tag_point = Point(x=base_link_pose.pose.position.x,
                           y=base_link_pose.pose.position.y)
 
         center_of_view_point = Point()
         # solve for x given the radius and y-coord of a point on a circle
         # y-coord is zero in this special case
-        center_of_view_point.x = math.sqrt(radius**2)
+        center_of_view_point.x = math.sqrt(radius ** 2)
         center_of_view_point.y = 0
 
         return -self._angle_between(tag_point, center_of_view_point)
@@ -205,7 +206,7 @@ class Planner:
             current_heading = self.swarmie.get_odom_location().get_pose().theta
             self.swarmie.set_heading(
                 current_heading + angle,
-                ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION
+                ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
             )
 
     def sees_home_tag(self):
@@ -219,7 +220,6 @@ class Planner:
                 return True
 
         return False
-
 
     def _angle_between(self, point_1, point_2):
         """Returns the angle from point_1 on a circle to point_2 on a circle.
@@ -258,7 +258,7 @@ class Planner:
                 sorted_detections.append(detection)
 
         return sorted(sorted_detections,
-                      key=lambda x : abs(x.pose.pose.position.x))
+                      key=lambda x: abs(x.pose.pose.position.x))
 
     def _sort_target_tags_left_to_right(self, detections):
         """Sort target tags (id == 0) in view from left to right (by their x
@@ -281,7 +281,7 @@ class Planner:
                     detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
                 sorted_detections.append(detection)
 
-        return sorted(sorted_detections, key=lambda x : x.pose.pose.position.x)
+        return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
 
     def _clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True):
         """Turn right, then left, then back to start heading.
@@ -294,8 +294,8 @@ class Planner:
           after turning left and right
         """
         start_heading = self.swarmie.get_odom_location().get_pose().theta
-        self.swarmie.set_heading(start_heading-angle, ignore=ignore)
-        self.swarmie.set_heading(start_heading+angle, ignore=ignore)
+        self.swarmie.set_heading(start_heading - angle, ignore=ignore)
+        self.swarmie.set_heading(start_heading + angle, ignore=ignore)
         if reset_heading:
             self.swarmie.set_heading(start_heading, ignore=ignore)
 
@@ -310,13 +310,19 @@ class Planner:
         * turn_result - the MoveResult of the turn
         * drive_result - the MoveResult of the drive
         """
+        ignore = Obstacle.IS_SONAR
+        if self.avoid_targets is True:
+            ignore |= Obstacle.TAG_TARGET
+
         cur_heading = self.swarmie.get_odom_location().get_pose().theta
         turn_result = self.swarmie.set_heading(
             cur_heading + angle,
-            ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
+            ignore=ignore,
             throw=False
         )
-        drive_result = self.swarmie.drive(dist, throw=False)
+        drive_result = self.swarmie.drive(dist,
+                                          ignore=Obstacle.SONAR_BLOCK,
+                                          throw=False)
 
         return turn_result, drive_result
 
@@ -377,7 +383,47 @@ class Planner:
 
         self.drive_to(goal, tolerance)
 
-    def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5):
+    def _check_sonar_obstacles(self):
+        """Check sonar obstacles over a short period of time, hopefully to
+        weed out some of the noise and let us continue driving if we stopped
+        for a 'fake' obstacle.
+
+        Returns:
+        * left_blocked - bool, whether left sonar seems blocked
+        * center_blocked - bool, whether center sonar seems blocked
+        * right_blocked - bool, whether right sonar seems blocked
+        """
+        # TODO: what's a good number?
+        BLOCKED_THRESHOLD = 0.7
+
+        rate = rospy.Rate(10)  # 10 hz
+        count = 10
+        left = 0
+        center = 0
+        right = 0
+
+        for i in range(count):
+            obstacle = self.swarmie.get_obstacle_condition()
+
+            if obstacle & Obstacle.SONAR_LEFT == Obstacle.SONAR_LEFT:
+                left += 1
+            if (obstacle & Obstacle.SONAR_CENTER ==
+                    Obstacle.SONAR_CENTER):
+                center += 1
+            if obstacle & Obstacle.SONAR_RIGHT == Obstacle.SONAR_RIGHT:
+                right += 1
+
+            rate.sleep()
+
+        left_blocked = left / count > BLOCKED_THRESHOLD
+        center_blocked = center / count > BLOCKED_THRESHOLD
+        right_blocked = right / count > BLOCKED_THRESHOLD
+
+        return left_blocked, center_blocked, right_blocked
+
+
+    def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5,
+                 avoid_targets=True):
         """Try to get the rover to goal location. Returns when at goal
         or if home target is found.
 
@@ -391,11 +437,15 @@ class Planner:
           larger initial tolerance in that case.
         * tolerance_step - how much to increment tolerance by if map/get_plan
           fails to find a path.
+        * avoid_targets - whether the rover should avoid cubes while driving
+          to the goal
 
         Returns:
         * drive_result - mobility.msg.MoveResult the result of the drive
-        command. drive_result == MoveResult.SUCCESS if we reached the goal.
-        drive_result == MoveResult.OBSTACLE_HOME if we found a home tag.
+          command. drive_result == MoveResult.SUCCESS if we reached the goal.
+          drive_result == MoveResult.OBSTACLE_HOME if we found a home tag.
+          drive_result == MoveResult.OBSTACLE_TAG if we found a cube tag and
+          avoid_targets is False.
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
@@ -408,6 +458,11 @@ class Planner:
         print('\nRequest received')
         self.fail_count = 0
         self.tolerance = tolerance
+        self.avoid_targets = avoid_targets
+
+        swarmie_ignore = Obstacle.IS_SONAR
+        if self.avoid_targets is True:
+            swarmie_ignore |= Obstacle.TAG_TARGET
 
         self.goal.x = goal.x
         self.goal.y = goal.y
@@ -416,7 +471,7 @@ class Planner:
         self.current_state = Planner.STATE_IDLE
 
         while (not self.cur_loc.at_goal(self.goal,
-                                        Planner.DISTANCE_OK+self.tolerance)
+                                        Planner.DISTANCE_OK + self.tolerance)
                and self.fail_count < Planner.FAIL_COUNT_LIMIT):
 
             # get new plan and try to drive to first point in it
@@ -427,17 +482,21 @@ class Planner:
             # helps to prevent rover from trying to jump around obstacles
             # before it even starts along its new path
             turn_angle = self._get_angle_to_face(point)
+
             self.result = self.swarmie.turn(
                 turn_angle,
-                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
+                ignore=swarmie_ignore,
                 throw=False
             )
 
-            if self.result == MoveResult.OBSTACLE_HOME:
-                print('Obstacle: Found Home.')
+            if (self.result == MoveResult.OBSTACLE_HOME or
+                    self.result == MoveResult.OBSTACLE_TAG):
+                print('Obstacle.')
                 return self.result
 
-            self.result = self.swarmie.drive_to(point, throw=False)
+            self.result = self.swarmie.drive_to(point,
+                                                ignore=Obstacle.SONAR_BLOCK,
+                                                throw=False)
 
             if self.result == MoveResult.SUCCESS:
                 # Success, we got to our waypoint, or got ourselves out of
@@ -453,6 +512,10 @@ class Planner:
                 return self.result
 
             elif self.result == MoveResult.OBSTACLE_TAG:
+                if self.avoid_targets is False:
+                    print('Obstacle: Found a tag.')
+                    return self.result
+
                 # get around the tag obstacle
                 count = 0
 
@@ -492,11 +555,12 @@ class Planner:
                         self.current_state = Planner.STATE_DRIVE
                         self.result = self.swarmie.drive(
                             0.1,
+                            ignore=Obstacle.SONAR_BLOCK,
                             throw=False
                         )
                         self._clear(
-                            math.pi/8,
-                            ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET
+                            math.pi / 8,
+                            ignore=swarmie_ignore
                         )
 
                     else:
@@ -551,34 +615,35 @@ class Planner:
                 self.fail_count += 1
 
                 print('\nObstacle: Sonar.')
-                obstacle = self.swarmie.get_obstacle_condition()
+                left_blocked, center_blocked, right_blocked = \
+                    self._check_sonar_obstacles()
 
-                if (obstacle & Obstacle.IS_SONAR ==
-                    Obstacle.SONAR_RIGHT|Obstacle.SONAR_CENTER):
+                if (not left_blocked and
+                        not center_blocked and not right_blocked):
+                    pass  # 'fake' obstacle?
+
+                elif not left_blocked and center_blocked and right_blocked:
                     print('Left looks clear, turning left.')
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(math.pi/4, 0.7)
+                    self._go_around(math.pi / 4, 0.7)
                     # self.swarmie.drive_to(point, throw=False)
 
-                elif (obstacle & Obstacle.IS_SONAR ==
-                      Obstacle.SONAR_LEFT|Obstacle.SONAR_CENTER):
+                elif left_blocked and center_blocked and not right_blocked:
                     print('Right looks clear, turning right.')
                     self.current_state = Planner.STATE_AVOID_RIGHT
-                    self._go_around(-math.pi/4, 0.7)
+                    self._go_around(-math.pi / 4, 0.7)
                     # self.swarmie.drive_to(point, throw=False)
 
-                elif (obstacle & Obstacle.IS_SONAR ==
-                      Obstacle.SONAR_LEFT):
+                elif left_blocked and not center_blocked and not right_blocked:
                     print('Only left blocked, turning a little right.')
                     self.current_state = Planner.STATE_AVOID_RIGHT
-                    self._go_around(-math.pi/6, 0.6)
+                    self._go_around(-math.pi / 6, 0.6)
                     # self.swarmie.drive_to(point, throw=False)
 
-                elif (obstacle & Obstacle.IS_SONAR ==
-                      Obstacle.SONAR_RIGHT):
+                elif not left_blocked and not center_blocked and right_blocked:
                     print('Only right blocked, turning a little left.')
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(math.pi/6, 0.6)
+                    self._go_around(math.pi / 6, 0.6)
                     # self.swarmie.drive_to(point, throw=False)
 
                 else:
@@ -589,11 +654,11 @@ class Planner:
                         ignore=Obstacle.IS_SONAR,
                         throw=False
                     )
-                    self._clear(math.pi/4,
-                                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET,
+                    self._clear(math.pi / 4,
+                                ignore=swarmie_ignore,
                                 reset_heading=False)
                     # just go left
-                    self._go_around(math.pi/4, 0.75)
+                    self._go_around(math.pi / 4, 0.75)
 
             elif self.result == MoveResult.PATH_FAIL:
                 # shit, hope we can back up if this ever happens
@@ -603,7 +668,7 @@ class Planner:
                 self.current_state = Planner.STATE_AVOID_REVERSE
                 self.swarmie.drive(
                     -0.5,
-                    ignore=Obstacle.IS_SONAR|Obstacle.IS_VISION,
+                    ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION,
                     throw=False
                 )
 
@@ -618,7 +683,8 @@ class Planner:
         print('Successfully executed nav plan.')
         return MoveResult.SUCCESS
 
-    def drive(self, distance, tolerance=0.0, tolerance_step=0.5):
+    def drive(self, distance, tolerance=0.0, tolerance_step=0.5,
+              avoid_targets=True):
         """Convenience wrapper to drive_to(). Drive the given distance, while
         avoiding sonar and target obstacles.
 
@@ -627,6 +693,15 @@ class Planner:
         * tolerance - how close you'd like to get. See drive_to() for more
         * tolerance_step - how much tolerance is incremented if map/get_plan
           service fails.
+        * avoid_targets - whether the rover should avoid cubes while driving
+          to the goal
+
+        Returns:
+        * drive_result - mobility.msg.MoveResult the result of the drive
+          command. drive_result == MoveResult.SUCCESS if we reached the goal.
+          drive_result == MoveResult.OBSTACLE_HOME if we found a home tag.
+          drive_result == MoveResult.OBSTACLE_TAG if we found a cube tag and
+          avoid_targets is False.
 
         Raises:
         * rospy.ServiceException if /map/get_plan fails. See drive_to() for
@@ -642,7 +717,8 @@ class Planner:
         return self.drive_to(
             goal,
             tolerance=tolerance,
-            tolerance_step=tolerance_step
+            tolerance_step=tolerance_step,
+            avoid_targets=avoid_targets
         )
 
     def _get_spiral_points(self, start_distance, distance_step):
@@ -660,7 +736,7 @@ class Planner:
         start_loc = self.swarmie.get_odom_location().get_pose()
         points = []
         distance = start_distance
-        angle = math.pi/2
+        angle = math.pi / 2
 
         prev_point = Point()
         prev_point.x = start_loc.x + distance * math.cos(start_loc.theta)
@@ -679,12 +755,13 @@ class Planner:
                                                          + angle)
             points.append(point)
             prev_point = point
-            angle += math.pi/2
+            angle += math.pi / 2
 
         return points
 
     def spiral_home_search(self, start_distance, distance_step=0.5,
-                           tolerance=0.0, tolerance_step=0.5):
+                           tolerance=0.0, tolerance_step=0.5,
+                           avoid_targets=True):
         """Search for home in a square spiral pattern.
 
         Args:
@@ -697,8 +774,11 @@ class Planner:
           can't be found.
 
         Returns:
-        * result - MoveResult. MoveResult.OBSTACLE_HOME if home is found.
-          MoveResult.PATH_FAIL if home is not found.
+        * drive_result - mobility.msg.MoveResult the result of the drive
+          command. drive_result == MoveResult.OBSTACLE_HOME if we found home.
+          drive_result == MoveResult.PATH_FAIL if home is not found.
+          drive_result == MoveResult.OBSTACLE_TAG if we found a cube tag and
+          avoid_targets is False.
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
@@ -715,9 +795,11 @@ class Planner:
             drive_result = self.drive_to(
                 point,
                 tolerance=tolerance,
-                tolerance_step=tolerance_step
+                tolerance_step=tolerance_step,
+                avoid_targets=avoid_targets
             )
-            if drive_result == MoveResult.OBSTACLE_HOME:
+            if (drive_result == MoveResult.OBSTACLE_HOME
+                    or drive_result == MoveResult.OBSTACLE_TAG):
                 return drive_result
 
         return MoveResult.PATH_FAIL
@@ -735,8 +817,8 @@ def main():
     args = parser.parse_args()
 
     if args.rovername is None:
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
+        print('usage:', sys.argv[0], '<rovername>')
+        exit(-1)
 
     rovername = args.rovername
     swarmie = Swarmie(rovername)
