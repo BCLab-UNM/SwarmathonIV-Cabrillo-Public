@@ -19,6 +19,7 @@ from swarmie_msgs.msg import Obstacle
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
+from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from nav_msgs.srv import GetPlan, GetPlanRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
@@ -166,6 +167,8 @@ class Swarmie:
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
         self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetPlan)
+        self._imu_is_finished_validating = rospy.ServiceProxy(rover + '/imu/is_finished_validating', QueryCalibrationState)
+        self._imu_needs_calibration = rospy.ServiceProxy(rover + '/imu/needs_calibration', QueryCalibrationState)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
         self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
@@ -589,21 +592,45 @@ class Swarmie:
             request.tolerance = 0.0
 
         return self._get_plan(request)
-    
-    def start_imu_calibration(self):
-        '''Start calibration Step One for the rover's IMU.
 
-        This calibration should be perfomed before the rover starts operating
-        in a new environment.
+    def imu_is_finished_validating(self):
+        '''Query the IMU node to find out whether it's done validating the \
+        extended calibration file.
+
+        Returns:
+        * `is_finished` (`bool`) - True if the IMU node is finished, or if \
+        this is a simulated rover, in which case the IMU node isn't running. \
+        False otherwise.
+        '''
+        if self.simulator_running():
+            return True
+
+        return self._imu_is_finished_validating().is_calibrated
+
+    def imu_needs_calibration(self):
+        '''Query the IMU node to find out whether it needs to be calibrated \
+        using the fallback 2D method at the start of a round.
+
+        Returns:
+        * `needs_calibration` (`bool`) - True if the IMU still needs to be \
+        calibrated. This can happen if the extended calibration file is \
+        missing, invalid, or corrupted. False if this is a simulated rover or \
+        the IMU has been successfully calibrated.
+        '''
+        if self.simulator_running():
+            return False
+
+        return self._imu_needs_calibration().is_calibrated
+
+    def start_imu_calibration(self):
+        '''Start fallback calibration Step One for the rover's IMU.
+
+        This calibration should be perfomed if the extended calibration data
+        file is missing, corrupted, or invalid.
 
         Raw accelerometer and magnetometer is collected during the
-        calibration process. During this time, the rover should perform six
-        full in-place rotations, one rotation with each of its body axes
-        up and down. These should be slow 2D rotations.
-
-        When the 2D rotations are complete, the rover should also perform
-        3D random rotations to put its IMU in as many additional orientations
-        as possible.'''
+        calibration process. During this time, the rover should spin in place
+        on the ground.'''
         self._start_imu_calibration()
 
     def start_misalignment_calibration(self):
@@ -636,7 +663,8 @@ class Swarmie:
         self._start_gyro_scale_calibration()
 
     def store_imu_calibration(self):
-        '''Finish calibrating the IMU on a rover. Save calibration file to disk.'''
+        '''Finish calibrating the IMU on a rover. Save calibration matrices to \
+        the parameter server.'''
         self._store_imu_calibration()
         
     def get_odom_location(self):

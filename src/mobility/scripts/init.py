@@ -7,6 +7,7 @@ import math
 import rospy 
 
 from swarmie_msgs.msg import Obstacle
+from mobility.msg import MoveResult
 
 from mobility.swarmie import Swarmie, Location
 
@@ -30,6 +31,14 @@ def main():
         # Oops. This must be a restart. Don't assume we're near the 
         # nest. Just exit and hope... 
         exit(0)
+
+    while not swarmie.imu_is_finished_validating():
+        pass  # wait till extended cal file has been loaded in IMU node
+
+    if not swarmie.simulator_running():
+        swarmie.start_gyro_bias_calibration()
+        rospy.sleep(3)
+        swarmie.store_imu_calibration()
 
     # Assume the starting position is facing the center. 
     # This should be valid by contest rules. 
@@ -62,6 +71,25 @@ def main():
         swarmie.print_infoLog(rovername + ' failed to get a GPS fix!')        
     else:
         swarmie.set_home_gps_location(home)
+
+    if swarmie.imu_needs_calibration():
+        swarmie.drive(-0.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        start_heading = swarmie.get_odom_location().get_pose().theta
+
+        swarmie.start_imu_calibration()
+        drive_result = None
+        while drive_result != MoveResult.SUCCESS:
+            drive_result = swarmie.timed_drive(
+                25,
+                0,
+                0.6,
+                ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR,
+                throw=False
+            )
+        swarmie.store_imu_calibration()
+
+        swarmie.set_heading(start_heading,
+                            ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     
