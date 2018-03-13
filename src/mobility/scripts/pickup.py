@@ -54,6 +54,8 @@ def approach():
             # did we succesuflly grab a block?
             if swarmie.has_block():
                 swarmie.wrist_middle()
+                swarmie.drive(-0.3,
+                              ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
                 return True
             else:
                 swarmie.set_wrist_angle(0.55)
