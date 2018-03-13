@@ -134,7 +134,7 @@ def main():
     try:
         swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
     except HomeException:
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
+        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     except TagException:
         try:
             if swarmie.get_nearest_block_location() is not None:
