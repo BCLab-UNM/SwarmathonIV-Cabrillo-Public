@@ -136,6 +136,9 @@ def main():
     # the map service fails.
     use_waypoints = True
 
+    GOHOME_DRIVE_SPEED = 0.2
+    GOHOME_TURN_SPEED = 0.6
+
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
         exit (-1)
@@ -152,21 +155,21 @@ def main():
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    gohome_drive_speed = rospy.get_param(
+    drive_speed = rospy.get_param(
         '/' + rovername + '/gohome/drive_speed',
-        default=0.25
+        default=GOHOME_DRIVE_SPEED
     )
-    gohome_turn_speed = rospy.get_param(
+    turn_speed = rospy.get_param(
         '/' + rovername + '/gohome/turn_speed',
-        default=0.7
+        default=GOHOME_TURN_SPEED
     )
     param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
     initial_config = param_client.get_configuration()
     initial_drive_speed = initial_config['DRIVE_SPEED']
     initial_turn_speed = initial_config['TURN_SPEED']
     param_client.update_configuration(
-        {'DRIVE_SPEED': gohome_drive_speed,
-         'TURN_SPEED': gohome_turn_speed}
+        {'DRIVE_SPEED': drive_speed,
+         'TURN_SPEED': turn_speed}
     )
     rospy.on_shutdown(reset_speeds)
 

@@ -78,8 +78,8 @@ def main():
     global initial_drive_speed, initial_turn_speed, param_client
 
     found_tag = False
-    search_drive_speed = 0.25
-    search_turn_speed = 0.7
+    SEARCH_DRIVE_SPEED = 0.2
+    SEARCH_TURN_SPEED = 0.6
     
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
@@ -94,13 +94,21 @@ def main():
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
+    drive_speed = rospy.get_param(
+        '/' + rovername + '/search/drive_speed',
+        default=SEARCH_DRIVE_SPEED
+    )
+    turn_speed = rospy.get_param(
+        '/' + rovername + '/search/turn_speed',
+        default=SEARCH_TURN_SPEED
+    )
     param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
     initial_config = param_client.get_configuration()
     initial_drive_speed = initial_config['DRIVE_SPEED']
     initial_turn_speed = initial_config['TURN_SPEED']
     param_client.update_configuration(
-        {'DRIVE_SPEED': search_drive_speed,
-         'TURN_SPEED': search_turn_speed}
+        {'DRIVE_SPEED': drive_speed,
+         'TURN_SPEED': turn_speed}
     )
     rospy.on_shutdown(handle_exit)
 
