@@ -7,6 +7,7 @@ import rospy
 import math
 import random 
 
+import dynamic_reconfigure.client
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
@@ -32,9 +33,19 @@ def wander():
         turnaround()
 
 
+def reset_speeds():
+    global initial_drive_speed, initial_turn_speed, param_client
+    param_client.update_configuration(
+        {'DRIVE_SPEED': initial_drive_speed,
+         'TURN_SPEED': initial_turn_speed}
+    )
 def main():
     global swarmie 
-    global rovername 
+    global rovername
+    global initial_drive_speed, initial_turn_speed, param_client
+
+    search_drive_speed = 0.25
+    search_turn_speed = 0.7
     
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
@@ -62,6 +73,17 @@ def main():
         print("I found a tag!")
         # Let's drive there to be helpful.
         swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
+    # Change drive and turn speeds for this behavior, and register shutdown
+    # hook to reset them at exit.
+    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    initial_config = param_client.get_configuration()
+    initial_drive_speed = initial_config['DRIVE_SPEED']
+    initial_turn_speed = initial_config['TURN_SPEED']
+    param_client.update_configuration(
+        {'DRIVE_SPEED': search_drive_speed,
+         'TURN_SPEED': search_turn_speed}
+    )
+    rospy.on_shutdown(reset_speeds)
         exit(0)
         
     print ("I'm homesick!")

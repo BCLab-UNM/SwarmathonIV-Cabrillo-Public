@@ -10,6 +10,7 @@ import sys
 import math 
 import rospy 
 import angles
+import dynamic_reconfigure.client
 
 from geometry_msgs.msg import Point
 
@@ -94,14 +95,19 @@ def set_home_locations():
     )
     home_odom.Odometry.pose.pose.position.y = (
         current_pose.y + 0.5 * math.sin(current_pose.theta)
+def reset_speeds():
+    global initial_drive_speed, initial_turn_speed, param_client
+    param_client.update_configuration(
+        {'DRIVE_SPEED': initial_drive_speed,
+         'TURN_SPEED': initial_turn_speed}
     )
     swarmie.set_home_odom_location(home_odom)
 
 
 def main():
-    global planner
-    global swarmie 
-    global rovername
+    global planner, swarmie, rovername
+    global initial_drive_speed, initial_turn_speed, param_client
+
     has_block = False
 
     if len(sys.argv) < 2 :
@@ -117,6 +123,27 @@ def main():
                               ": I don't have a block. Not avoiding targets.")
 
     planner = Planner(swarmie)
+
+    # Change drive and turn speeds for this behavior, and register shutdown
+    # hook to reset them at exit.
+    gohome_drive_speed = rospy.get_param(
+        '/' + rovername + '/gohome/drive_speed',
+        default=0.25
+    )
+    gohome_turn_speed = rospy.get_param(
+        '/' + rovername + '/gohome/turn_speed',
+        default=0.7
+    )
+    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    initial_config = param_client.get_configuration()
+    initial_drive_speed = initial_config['DRIVE_SPEED']
+    initial_turn_speed = initial_config['TURN_SPEED']
+    param_client.update_configuration(
+        {'DRIVE_SPEED': gohome_drive_speed,
+         'TURN_SPEED': gohome_turn_speed}
+    )
+    rospy.on_shutdown(reset_speeds)
+
     swarmie.fingers_close()  # make sure we keep a firm grip
     swarmie.wrist_middle()  # get block mostly out of camera view
     home = swarmie.get_home_odom_location()
