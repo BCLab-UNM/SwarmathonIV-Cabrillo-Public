@@ -8,7 +8,8 @@ from __future__ import print_function
 
 import sys
 import math 
-import rospy 
+import rospy
+import tf
 import angles
 import dynamic_reconfigure.client
 
@@ -57,7 +58,7 @@ def drive_straight_home_odom() :
     swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
 
 def drive_home(has_block, home_loc):
-    global planner, GOHOME_FAIL
+    global planner, use_waypoints, GOHOME_FAIL
 
     drive_result = None
     counter = 0
@@ -71,8 +72,11 @@ def drive_home(has_block, home_loc):
                 home_loc,
                 tolerance=0.5+counter,
                 tolerance_step=0.5+counter,
-                avoid_targets=has_block
+                avoid_targets=has_block,
+                use_waypoints=use_waypoints
             )
+        except rospy.ServiceException:
+            use_waypoints = False  # fallback if map service fails
         except PathException as e:
             if counter < 2:
                 pass
@@ -80,35 +84,22 @@ def drive_home(has_block, home_loc):
                 exit(GOHOME_FAIL)
 
 
-def set_home_locations():
-    global swarmie
-
-    swarmie.set_home_gps_location(swarmie.get_gps_location())
-
-    current_location = swarmie.get_odom_location()
-    current_pose = current_location.get_pose()
-    home_odom = Location(current_location.Odometry)
-
-    # project home_odom location 50cm in front of rover's current location
-    home_odom.Odometry.pose.pose.position.x = (
-        current_pose.x + 0.5 * math.cos(current_pose.theta)
-    )
-    home_odom.Odometry.pose.pose.position.y = (
-        current_pose.y + 0.5 * math.sin(current_pose.theta)
 def reset_speeds():
     global initial_drive_speed, initial_turn_speed, param_client
     param_client.update_configuration(
         {'DRIVE_SPEED': initial_drive_speed,
          'TURN_SPEED': initial_turn_speed}
     )
-    swarmie.set_home_odom_location(home_odom)
 
 
 def main():
-    global planner, swarmie, rovername
+    global planner, swarmie, rovername, use_waypoints
     global initial_drive_speed, initial_turn_speed, param_client
 
     has_block = False
+    # Whether to use waypoints from searching the map. Can be set to False if
+    # the map service fails.
+    use_waypoints = True
 
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
@@ -158,19 +149,23 @@ def main():
         exit(0)
 
     print('Starting spiral search')
-    drive_result = planner.spiral_home_search(
+    drive_result = planner.spiral_search(
         0.5,
         0.75,
         tolerance=0.0,
         tolerance_step=0.5,
-        avoid_targets=has_block
+        avoid_targets=has_block,
+        avoid_home=False
     )
     if drive_result == MoveResult.OBSTACLE_HOME:
         rospy.sleep(0.25)  # improve target detection chances?
         if planner.sees_home_tag():
-            planner.face_home_tag()
+            try:
+                planner.face_home_tag()
+            except tf.Exception:
+                pass  # good enough
             if has_block is False:
-                set_home_locations()
+                planner.set_home_locations()
             exit(0)
     elif drive_result == MoveResult.OBSTACLE_TAG:
         exit(GOHOME_FOUND_TAG)
@@ -186,19 +181,23 @@ def main():
     drive_home(has_block, goal)
 
     print('Starting spiral search')
-    drive_result = planner.spiral_home_search(
+    drive_result = planner.spiral_search(
         0.5,
         0.75,
         tolerance=0.0,
         tolerance_step=0.5,
-        avoid_targets=has_block
+        avoid_targets=has_block,
+        avoid_home=False
     )
     if drive_result == MoveResult.OBSTACLE_HOME:
         rospy.sleep(0.25)  # improve target detection chances?
         if planner.sees_home_tag():
-            planner.face_home_tag()
+            try:
+                planner.face_home_tag()
+            except tf.Exception:
+                pass  # good enough
             if has_block is False:
-                set_home_locations()
+                planner.set_home_locations()
             exit(0)
     elif drive_result == MoveResult.OBSTACLE_TAG:
         exit(GOHOME_FOUND_TAG)
