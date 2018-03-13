@@ -84,6 +84,41 @@ def drive_home(has_block, home_loc):
                 exit(GOHOME_FAIL)
 
 
+def spiral_search(has_block):
+
+    # no map waypoints
+    try:
+        drive_result = planner.spiral_search(
+            0.5,
+            0.75,
+            tolerance=0.0,
+            tolerance_step=0.5,
+            avoid_targets=has_block,
+            avoid_home=False,
+            use_waypoints=False
+        )
+    except PathException:
+        raise
+
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        rospy.sleep(0.25)  # improve target detection chances?
+        if planner.sees_home_tag():
+            try:
+                planner.face_home_tag()
+            except tf.Exception:
+                pass  # good enough
+            if has_block is False:
+                planner.set_home_locations()
+
+    elif drive_result == MoveResult.OBSTACLE_TAG:
+        swarmie.drive_to(
+            swarmie.get_nearest_block_location(use_targets_buffer=True),
+            claw_offset=0.6,
+            ignore=Obstacle.IS_VISION
+        )
+
+    return drive_result
+
 def reset_speeds():
     global initial_drive_speed, initial_turn_speed, param_client
     param_client.update_configuration(
@@ -149,24 +184,13 @@ def main():
         exit(0)
 
     print('Starting spiral search')
-    drive_result = planner.spiral_search(
-        0.5,
-        0.75,
-        tolerance=0.0,
-        tolerance_step=0.5,
-        avoid_targets=has_block,
-        avoid_home=False
-    )
+    try:
+        drive_result = spiral_search(has_block)
+    except PathException:
+        pass  # try gps backup
+
     if drive_result == MoveResult.OBSTACLE_HOME:
-        rospy.sleep(0.25)  # improve target detection chances?
-        if planner.sees_home_tag():
-            try:
-                planner.face_home_tag()
-            except tf.Exception:
-                pass  # good enough
-            if has_block is False:
-                planner.set_home_locations()
-            exit(0)
+        exit(0)
     elif drive_result == MoveResult.OBSTACLE_TAG:
         exit(GOHOME_FOUND_TAG)
 
@@ -180,25 +204,14 @@ def main():
 
     drive_home(has_block, goal)
 
-    print('Starting spiral search')
-    drive_result = planner.spiral_search(
-        0.5,
-        0.75,
-        tolerance=0.0,
-        tolerance_step=0.5,
-        avoid_targets=has_block,
-        avoid_home=False
-    )
+    print('Starting spiral search with gps location')
+    try:
+        drive_result = spiral_search(has_block)
+    except PathException:
+        exit(GOHOME_FAIL)
+
     if drive_result == MoveResult.OBSTACLE_HOME:
-        rospy.sleep(0.25)  # improve target detection chances?
-        if planner.sees_home_tag():
-            try:
-                planner.face_home_tag()
-            except tf.Exception:
-                pass  # good enough
-            if has_block is False:
-                planner.set_home_locations()
-            exit(0)
+        exit(0)
     elif drive_result == MoveResult.OBSTACLE_TAG:
         exit(GOHOME_FOUND_TAG)
 

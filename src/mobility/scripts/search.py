@@ -3,7 +3,8 @@
 from __future__ import print_function
 
 import sys
-import rospy 
+import rospy
+import tf
 import math
 import random 
 
@@ -35,7 +36,25 @@ def wander():
 
 
 def handle_exit():
+    global swarmie, found_tag
+
     reset_speeds()
+
+    if found_tag:
+        print('Found a tag! Trying to get a little closer.')
+        try:
+            block = swarmie.get_nearest_block_location(
+                use_targets_buffer=True
+            )
+        except tf.Exception:
+            pass  # good enough
+        if block is not None:
+            swarmie.drive_to(
+                block,
+                claw_offset=0.5,
+                ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR
+            )
+
     set_search_exit_poses()
 
 
@@ -55,8 +74,10 @@ def set_search_exit_poses():
 def main():
     global swarmie 
     global rovername
+    global found_tag
     global initial_drive_speed, initial_turn_speed, param_client
 
+    found_tag = False
     search_drive_speed = 0.25
     search_turn_speed = 0.7
     
@@ -106,10 +127,17 @@ def main():
         swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
     except HomeException:
         swarmie.turn(math.pi, ignore=Obstacle.IS_VISION)
-
+    except TagException:
+        try:
+            if swarmie.get_nearest_block_location() is not None:
+                found_tag = True
+                exit(0)  # found a tag?
+        except tf.Exception:
+            pass
 
     # Return to our last search exit pose if possible
     if swarmie.has_search_exit_poses():
+        print('Driving to last search exit position.')
         last_pose, _gps = swarmie.get_search_exit_poses()
         try:
             planner.drive_to(last_pose,
@@ -126,11 +154,17 @@ def main():
                              avoid_home=True,
                              use_waypoints=False)
         except PathException:
+            print('PathException on our way to last search exit location.')
             # good enough
             pass
 
-        swarmie.set_heading(last_pose.theta,
-                            ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        try:
+            swarmie.set_heading(last_pose.theta,
+                                ignore=Obstacle.TAG_HOME | Obstacle.IS_SONAR)
+        except TagException:
+            # success!
+            found_tag = True
+            exit(0)
 
     # do search
     try:
@@ -144,6 +178,7 @@ def main():
             avoid_home=True
         )
     except rospy.ServiceException:
+        print('Nav plan ServiceException, trying search without waypoints.')
         # try again with no map waypoints
         drive_result = planner.spiral_search(
             0.5,
@@ -157,8 +192,7 @@ def main():
         )
 
     if drive_result == MoveResult.OBSTACLE_TAG:
-        swarmie.drive_to(swarmie.get_nearest_block_location(),
-                          claw_offset=0.6, ignore=Obstacle.IS_VISION)
+        found_tag = True
         exit(0)
 
     print ("I'm homesick!")

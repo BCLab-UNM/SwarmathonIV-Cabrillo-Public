@@ -144,6 +144,10 @@ class Swarmie:
         else:
             rospy.init_node(rover + '_CONTROLLER')
 
+        # Transform listener. Use this to transform between coordinate spaces.
+        # Transform messages must predate any sensor messages so initialize this first.
+        # self.xform = tf.TransformListener()
+
         # Create publishiers. 
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
@@ -823,10 +827,17 @@ class Swarmie:
             return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-    def get_nearest_block_location(self):
+    def get_nearest_block_location(self, use_targets_buffer=False):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
         Nearest block will be the nearest to the camera, which should almost always be good enough.
+
+        Args:
+
+        * `use_targets_buffer` (`bool`) - whether to use the rolling buffer
+        of AprilTagDetections. Default value of False uses
+        Swarmie.get_latest_targets(), which you can rely on to return only
+        targets currently in view.
 
         Returns:
 
@@ -834,8 +845,11 @@ class Swarmie:
         '''
         global rovername, swarmie
 
-        # Finds all visable  apriltags
-        blocks = self.get_latest_targets().detections
+        # Finds all visible apriltags
+        if use_targets_buffer is True:
+            blocks = self.get_targets_buffer().detections
+        else:
+            blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 

@@ -13,6 +13,7 @@ import argparse
 import sys
 import math
 import rospy
+import tf
 import angles
 
 from geometry_msgs.msg import PoseStamped, Pose2D, Point
@@ -50,7 +51,7 @@ class Planner:
     # across a scattering of cubes that it must spend some time avoiding.
     # During that time, it needs some leeway to drive slightly off course
     # as a part of its avoidance behavior. It seems to work for the most part.
-    FAIL_COUNT_LIMIT = 10
+    # FAIL_COUNT_LIMIT = 10
 
     def __init__(self, swarmie, use_rviz_nav_goal=False):
         """Create a new Planner.
@@ -520,7 +521,8 @@ class Planner:
 
 
     def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5,
-                 avoid_targets=True, avoid_home=False, use_waypoints=True):
+                 max_attempts=10, avoid_targets=True, avoid_home=False,
+                 use_waypoints=True):
         """Try to get the rover to goal location. Returns when at goal
         or if home target is found.
 
@@ -537,6 +539,16 @@ class Planner:
           larger initial tolerance in that case.
         * tolerance_step - how much to increment tolerance by if map/get_plan
           fails to find a path.
+        * max_attempts - Number of consecutive times the rover can drive or
+          turn and receive a MoveResult other than SUCCESS before giving up.
+          This is a relatively large number because the first waypoint in a nav
+          plan (or the goal itself if not using waypoints) can be 5 or 10
+          meters away, and any time the rover comes upon a sonar or tag
+          obstacle, its fail_count is incremented. It's not uncommon for the
+          rover to come across a scattering of cubes that it must spend some
+          time avoiding. During that time, it needs some leeway to drive
+          slightly off course as a part of its avoidance behavior. Default
+          value of 10 seems to work for the most part.
         * avoid_targets - whether the rover should avoid cubes while driving
           to the goal
         * avoid_home - whether the rover should drive around home tags while
@@ -553,8 +565,8 @@ class Planner:
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
-          Planner.FAIL_COUNT_LIMIT times to reach a single waypoint in the
-          its current navigation plan.
+          max_attempts times to reach a single waypoint in its current
+          navigation plan.
         * rospy.ServiceException - if a path can't be found in 3
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
@@ -568,6 +580,7 @@ class Planner:
             avoid_home = False
         self.avoid_home = avoid_home
 
+        self.ignore = Obstacle.IS_SONAR
         if self.avoid_targets is True:
             self.ignore |= Obstacle.TAG_TARGET
         elif self.avoid_home is True:
@@ -581,7 +594,7 @@ class Planner:
 
         while (not self.cur_loc.at_goal(self.goal,
                                         Planner.DISTANCE_OK + self.tolerance)
-               and self.fail_count < Planner.FAIL_COUNT_LIMIT):
+               and self.fail_count < max_attempts):
 
             if use_waypoints is True:
                 # get new plan and try to drive to first point in it
@@ -601,10 +614,18 @@ class Planner:
                 throw=False
             )
 
-            if (self.result == MoveResult.OBSTACLE_HOME or
-                    self.result == MoveResult.OBSTACLE_TAG):
-                print('Obstacle.')
+            if self.result == MoveResult.OBSTACLE_HOME:
+                print('Obstacle: Found Home.')
                 return self.result
+            elif self.result == MoveResult.OBSTACLE_TAG:
+                try:
+                    # is is a valid target (not already in the nest)?
+                    if self.swarmie.get_nearest_block_location() is not None:
+                        print('Obstacle: Found a tag.')
+                        return self.result
+                except tf.Exception:
+                    print('Obstacle: Found a tag.')
+                    return self.result
 
             self.result = self.swarmie.drive_to(point,
                                                 ignore=Obstacle.SONAR_BLOCK,
@@ -643,8 +664,15 @@ class Planner:
 
             elif self.result == MoveResult.OBSTACLE_TAG:
                 if self.avoid_targets is False:
-                    print('Obstacle: Found a tag.')
-                    return self.result
+                    try:
+                        # is is a valid target (not already in the nest)?
+                        if (self.swarmie.get_nearest_block_location()
+                                is not None):
+                            print('Obstacle: Found a tag.')
+                            return self.result
+                    except tf.Exception:
+                        print('Obstacle: Found a tag.')
+                        return self.result
 
                 # get around the tag obstacle
                 count = 0
@@ -738,9 +766,9 @@ class Planner:
 
             self.cur_loc = self.swarmie.get_odom_location()
 
-            if self.fail_count >= Planner.FAIL_COUNT_LIMIT:
+            if self.fail_count >= max_attempts:
                 print('Failed to drive to goal {} times.'.format(
-                    Planner.FAIL_COUNT_LIMIT)
+                    max_attempts)
                 )
                 raise PathException(MoveResult.PATH_FAIL)
 
@@ -748,7 +776,8 @@ class Planner:
         return MoveResult.SUCCESS
 
     def drive(self, distance, tolerance=0.0, tolerance_step=0.5,
-              avoid_targets=True, avoid_home=False, use_waypoints=True):
+              max_attempts=10, avoid_targets=True, avoid_home=False,
+              use_waypoints=True):
         """Convenience wrapper to drive_to(). Drive the given distance, while
         avoiding sonar and target obstacles.
 
@@ -760,6 +789,8 @@ class Planner:
         * tolerance - how close you'd like to get. See drive_to() for more
         * tolerance_step - how much tolerance is incremented if map/get_plan
           service fails.
+        * max_attempts - number of times the rover can try to reach a single
+          waypoint in the plan, or the goal itself if not using waypoints.
         * avoid_targets - whether the rover should avoid cubes while driving
           to the goal
         * avoid_home - whether the rover should drive around home tags while
@@ -776,8 +807,8 @@ class Planner:
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
-          Planner.FAIL_COUNT_LIMIT times to reach a single waypoint in the
-          its current navigation plan.
+          max_attempts times to reach a single waypoint in its current
+          navigation plan.
         * rospy.ServiceException if /map/get_plan fails. See drive_to() for
           more information.
         """
@@ -792,6 +823,7 @@ class Planner:
             goal,
             tolerance=tolerance,
             tolerance_step=tolerance_step,
+            max_attempts=max_attempts,
             avoid_targets=avoid_targets,
             avoid_home=avoid_home,
             use_waypoints=use_waypoints
@@ -855,7 +887,7 @@ class Planner:
         return points
 
     def spiral_search(self, start_distance, distance_step=0.5, num_legs=10,
-                      tolerance=0.0, tolerance_step=0.5,
+                      tolerance=0.0, tolerance_step=0.5, max_attempts=5,
                       avoid_targets=True, avoid_home=False,
                       use_waypoints=True):
         """Search in a square spiral pattern. Can be used to search for tags
@@ -869,6 +901,8 @@ class Planner:
           more information.
         * tolerance_step - how much to increment the tolerance by if a nav plan
           can't be found.
+        * max_attempts - number of times the rover can try to reach a single
+          waypoint in the plan, or the goal itself if not using waypoints.
         * avoid_targets - whether the rover should avoid cubes while driving
           to the goal
         * avoid_home - whether the rover should drive around home tags while
@@ -887,19 +921,21 @@ class Planner:
 
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
-          Planner.FAIL_COUNT_LIMIT times to reach a single waypoint in the
-          its current navigation plan.
+          max_attempts times to reach a single waypoint in its current
+          navigation plan.
         * rospy.ServiceException - if a path can't be found in 3
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
         """
-        points = self._get_spiral_points(start_distance, distance_step)
+        points = self._get_spiral_points(start_distance, distance_step,
+                                         num_legs=num_legs)
 
         for point in points:
             drive_result = self.drive_to(
                 point,
                 tolerance=tolerance,
                 tolerance_step=tolerance_step,
+                max_attempts=max_attempts,
                 avoid_targets=avoid_targets,
                 avoid_home=avoid_home,
                 use_waypoints=use_waypoints
