@@ -109,6 +109,8 @@ def main():
     rospy.sleep(.5)
     
     try:
+        swarmie.targets_timeout = 0.1
+        rospy.sleep(0.2)
         swarmie.targets_timeout = 9 # so they stay around for the decision making, should time it and reduce this
         tags = look_for_tags()
         
