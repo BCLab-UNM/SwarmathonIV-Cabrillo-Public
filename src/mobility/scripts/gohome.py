@@ -85,7 +85,6 @@ def drive_home(has_block, home_loc):
 
 
 def spiral_search(has_block):
-
     # no map waypoints
     try:
         drive_result = planner.spiral_search(
@@ -189,13 +188,12 @@ def main():
     print('Starting spiral search')
     try:
         drive_result = spiral_search(has_block)
+        if drive_result == MoveResult.OBSTACLE_HOME:
+            exit(0)
+        elif drive_result == MoveResult.OBSTACLE_TAG:
+            exit(GOHOME_FOUND_TAG)
     except PathException:
         pass  # try gps backup
-
-    if drive_result == MoveResult.OBSTACLE_HOME:
-        exit(0)
-    elif drive_result == MoveResult.OBSTACLE_TAG:
-        exit(GOHOME_FOUND_TAG)
 
     # gps backup attempt
     current_loc = swarmie.get_odom_location().get_pose()
@@ -210,13 +208,12 @@ def main():
     print('Starting spiral search with gps location')
     try:
         drive_result = spiral_search(has_block)
+        if drive_result == MoveResult.OBSTACLE_HOME:
+            exit(0)
+        elif drive_result == MoveResult.OBSTACLE_TAG:
+            exit(GOHOME_FOUND_TAG)
     except PathException:
         exit(GOHOME_FAIL)
-
-    if drive_result == MoveResult.OBSTACLE_HOME:
-        exit(0)
-    elif drive_result == MoveResult.OBSTACLE_TAG:
-        exit(GOHOME_FOUND_TAG)
 
     # didn't find anything
     exit(GOHOME_FAIL)

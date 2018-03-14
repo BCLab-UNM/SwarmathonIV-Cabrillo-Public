@@ -22,7 +22,7 @@ from nav_msgs.srv import GetPlanResponse
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, HomeException, PathException
+from mobility.swarmie import Swarmie, Location, HomeException, TagException, PathException
 
 
 class Planner:
@@ -64,6 +64,7 @@ class Planner:
         self.rovername = swarmie.rover_name
         self.swarmie = swarmie
         self.current_state = Planner.STATE_IDLE
+        self.prev_state = Planner.STATE_IDLE
         self.cur_loc = Location(None)
         self.goal = Pose2D()
         self.plan = GetPlanResponse()
@@ -72,7 +73,7 @@ class Planner:
         self.fail_count = 0
         self.avoid_targets = True
         self.avoid_home = False
-        self.ignore = Obstacle.IS_SONAR  # used for turns and _clear()
+        # self.ignore = Obstacle.IS_SONAR  # used for turns and _clear()
 
         # Subscribers
         if use_rviz_nav_goal:
@@ -107,6 +108,89 @@ class Planner:
 
         return self.swarmie.xform.transformPose(self.rovername + '/base_link',
                                                 detection.pose)
+
+    def is_inside_home_ring(self, detections):
+        """Returns True if it looks like the rover is inside the ring of
+        home tags and needs to get out!
+
+        Returns False if no home tags in view.
+
+        Args:
+        * detections - the AprilTagDetection array of tags currently in view.
+
+        Raises:
+        * tf.Exception if timeout is exceeded to transform the tag pose into
+          the /base_link frame
+        """
+        YAW_THRESHOLD = 1.3  # radians
+        see_home_tag = False
+        good_orientations = 0
+        bad_orientations = 0
+
+        for detection in detections:
+            if detection.id == 256:
+                see_home_tag = True
+                home_detection = self._transform_to_base_link(detection)
+
+                quat = [home_detection.pose.orientation.x,
+                        home_detection.pose.orientation.y,
+                        home_detection.pose.orientation.z,
+                        home_detection.pose.orientation.w]
+                _r, _p, y = tf.transformations.euler_from_quaternion(quat)
+                y -= math.pi / 2
+                y = angles.normalize_angle(y)
+
+                if abs(y) < YAW_THRESHOLD:
+                    bad_orientations += 1
+                else:
+                    good_orientations += 1
+
+        if not see_home_tag:
+            return False
+
+        return bad_orientations >= good_orientations
+
+    def get_angle_and_dist_to_escape_home(self, detections):
+        """Return the angle to turn and distance to drive in order to get
+        out of the home area if the rover is trapped in there. Should be
+        used in conjuction with Planner.is_inside_home_ring()
+
+        Returns:
+        * angle - the angle in radians to turn.
+        * distance - the distance in meters to drive.
+        """
+        OVERSHOOT_DIST = 0.4  # meters, distance to overshoot target by
+        result = {
+            'angle': sys.maxint,
+            'dist': None
+        }
+        see_home_tag = False
+
+        for detection in detections:
+            if detection.id == 256:
+                see_home_tag = True
+                home_detection = self._transform_to_base_link(detection)
+
+                quat = [home_detection.pose.orientation.x,
+                        home_detection.pose.orientation.y,
+                        home_detection.pose.orientation.z,
+                        home_detection.pose.orientation.w]
+                _r, _p, y = tf.transformations.euler_from_quaternion(quat)
+                y -= math.pi / 2
+                y = angles.normalize_angle(y)
+
+                if abs(y) < result['angle']:
+                    result['angle'] = y
+                    result['dist'] = \
+                        (math.sqrt(home_detection.pose.position.x ** 2
+                                   + home_detection.pose.position.y **2)
+                         + OVERSHOOT_DIST)
+
+        if not see_home_tag:
+            # doesn't make sense to turn or drive if no home tags were seen
+            return 0, 0
+
+        return result['angle'], result['dist']
 
     def _get_angle_and_dist_to_avoid(self, detection, direction='left'):
         """The safe driving pathway is defined to be the space between two
@@ -287,7 +371,7 @@ class Planner:
 
         return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
 
-    def _clear(self, angle, reset_heading=True):
+    def _clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True):
         """Turn right, then left, then back to start heading.
         Helps to clear and mark the map if in a difficult spot.
 
@@ -295,12 +379,18 @@ class Planner:
         * angle - the angle to turn
         * reset_heading - whether the rover should return to its start heading
           after turning left and right
+
+        Raises:
+        * mobility.Swarmie.HomeException if home tags aren't being ignored and
+          a home tag is seen.
+          mobility.Swarmie.TagException if targets aren't being ignored and a
+          target is seen.
         """
         start_heading = self.swarmie.get_odom_location().get_pose().theta
-        self.swarmie.set_heading(start_heading - angle, ignore=self.ignore)
-        self.swarmie.set_heading(start_heading + angle, ignore=self.ignore)
+        self.swarmie.set_heading(start_heading - angle, ignore=ignore)
+        self.swarmie.set_heading(start_heading + angle, ignore=ignore)
         if reset_heading:
-            self.swarmie.set_heading(start_heading, ignore=self.ignore)
+            self.swarmie.set_heading(start_heading, ignore=ignore)
 
     def _go_around(self, angle, dist):
         """Turn by 'angle' and then drive 'dist'.
@@ -428,12 +518,13 @@ class Planner:
 
         return left_blocked, center_blocked, right_blocked
 
-    def _avoid_tag(self, id=0):
+    def _avoid_tag(self, id=0, ignore=Obstacle.IS_SONAR):
         """Helper to Planner.drive_to(). Make one attempt to get around a
         home or target tag.
 
         Args:
         * id - the id of the tag to avoid (0 - target, 256 - home)
+        * ignore - the Obstacle's to ignore while clearing, if necessary.
 
         Returns:
         * drive_result - MoveResult of the avoidance attempt
@@ -461,13 +552,22 @@ class Planner:
             # no tags in view anymore
             print("I can't see anymore tags, I'll try creeping",
                   "and clearing.")
+            self.prev_state = self.current_state
             self.current_state = Planner.STATE_DRIVE
             drive_result = self.swarmie.drive(
                 0.1,
                 ignore=Obstacle.SONAR_BLOCK,
                 throw=False
             )
-            self._clear(math.pi / 8)
+            # Planner._clear() uses Swarmie.set_heading(), which doesn't have
+            # an option to return the MoveResult instead of raising an
+            # exception.
+            try:
+                self._clear(math.pi / 8, ignore=ignore)
+            except HomeException:
+                drive_result = MoveResult.OBSTACLE_HOME
+            except TagException:
+                drive_result = MoveResult.OBSTACLE_TAG
 
         else:
             left_angle, left_dist = \
@@ -483,18 +583,24 @@ class Planner:
             angle = left_angle
             dist = left_dist
 
-            if self.current_state == Planner.STATE_AVOID_LEFT:
+            if (self.current_state == Planner.STATE_AVOID_LEFT or
+                    self.prev_state == Planner.STATE_AVOID_LEFT):
                 # Keep going left. Should help avoid bouncing back
                 # and forth between tags just out of view.
                 print("I was turning left last time, so I'll keep",
                       "it that way.")
+                self.prev_state = self.current_state
+                self.current_state = Planner.STATE_AVOID_LEFT
                 angle = left_angle
                 dist = left_dist
 
-            elif self.current_state == Planner.STATE_AVOID_RIGHT:
+            elif (self.current_state == Planner.STATE_AVOID_RIGHT or
+                    self.prev_state == Planner.STATE_AVOID_RIGHT):
                 # Keep going right
                 print("I was turning right last time, so I'll",
                       "keep it that way.")
+                self.prev_state = self.current_state
+                self.current_state = Planner.STATE_AVOID_RIGHT
                 angle = right_angle
                 dist = right_dist
 
@@ -503,12 +609,14 @@ class Planner:
                 if abs(right_angle) < abs(left_angle):
                     print('Right looks most clear, turning right.')
                     # print('Right turn makes most sense, turning right.')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
                     angle = right_angle
                     dist = right_dist
                 else:
                     print('Left looks most clear, turning left.')
                     # print('Left turn makes most sense, turning left')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
 
             _turn_result, drive_result = self._go_around(
@@ -580,17 +688,18 @@ class Planner:
             avoid_home = False
         self.avoid_home = avoid_home
 
-        self.ignore = Obstacle.IS_SONAR
+        current_ignore = Obstacle.IS_SONAR
         if self.avoid_targets is True:
-            self.ignore |= Obstacle.TAG_TARGET
+            current_ignore |= Obstacle.TAG_TARGET
         elif self.avoid_home is True:
-            self.ignore |= Obstacle.TAG_HOME
+            current_ignore |= Obstacle.TAG_HOME
 
         self.goal.x = goal.x
         self.goal.y = goal.y
 
         self.cur_loc = self.swarmie.get_odom_location()
         self.current_state = Planner.STATE_IDLE
+        self.prev_state = Planner.STATE_IDLE
 
         while (not self.cur_loc.at_goal(self.goal,
                                         Planner.DISTANCE_OK + self.tolerance)
@@ -602,6 +711,7 @@ class Planner:
             else:
                 point = goal
 
+            self.prev_state = self.current_state
             self.current_state = Planner.STATE_DRIVE
             # Turn to approximate goal heading while ignoring sonar and tags
             # helps to prevent rover from trying to jump around obstacles
@@ -610,22 +720,44 @@ class Planner:
 
             self.result = self.swarmie.turn(
                 turn_angle,
-                ignore=self.ignore,
+                ignore=current_ignore,
                 throw=False
             )
 
-            if self.result == MoveResult.OBSTACLE_HOME:
-                print('Obstacle: Found Home.')
-                return self.result
-            elif self.result == MoveResult.OBSTACLE_TAG:
-                try:
-                    # is is a valid target (not already in the nest)?
-                    if self.swarmie.get_nearest_block_location() is not None:
-                        print('Obstacle: Found a tag.')
-                        return self.result
-                except tf.Exception:
-                    print('Obstacle: Found a tag.')
-                    return self.result
+            # if self.result == MoveResult.OBSTACLE_HOME:
+            #     self.set_home_locations()
+            #
+            #     detections = self.swarmie.get_latest_targets()
+            #     if self.is_inside_home_ring(detections):
+            #         angle, dist = self.get_angle_and_dist_to_escape_home(
+            #             detections
+            #         )
+            #         self.swarmie.turn(
+            #             angle,
+            #             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+            #         )
+            #         self.swarmie.drive(
+            #             dist,
+            #             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+            #         )
+            #     print('Obstacle: Found Home.')
+            #     return self.result
+
+            # elif self.result == MoveResult.OBSTACLE_TAG:
+            #     if not self.sees_home_tag():
+            #         print('Obstacle: Found a tag.')
+            #         return self.result
+                # try:
+                #     # is is a valid target (not already in the nest)?
+                #     block = self.swarmie.get_nearest_block_location(
+                #         use_targets_buffer=True
+                #     )
+                #     if block is not None:
+                #         print('Obstacle: Found a tag.')
+                #         return self.result
+                # except tf.Exception:
+                #     print('Obstacle: Found a tag.')
+                #     return self.result
 
             self.result = self.swarmie.drive_to(point,
                                                 ignore=Obstacle.SONAR_BLOCK,
@@ -636,6 +768,7 @@ class Planner:
                 # whatever pickle we were just in.
                 # Just get a new plan and drive to next point
                 self.fail_count = 0
+                self.prev_state = self.current_state
                 self.current_state = Planner.STATE_IDLE
                 print('Successfully drove to first point in nav plan.')
 
@@ -643,9 +776,6 @@ class Planner:
             elif self.result == MoveResult.OBSTACLE_HOME:
                 self.set_home_locations()
 
-                if self.avoid_home is False:
-                    print('Obstacle: Found Home.')
-                    return self.result
 
                 # get around the home tag obstacle
                 count = 0
@@ -656,24 +786,43 @@ class Planner:
                 # this loop if the MoveResult is just an OBSTACLE_HOME
                 # self.fail_count may exceed limit here, but I'll let it go
                 while count < 3 and self.result == MoveResult.OBSTACLE_HOME:
+                    print('\nObstacle: Found Home.')
                     count += 1
                     self.fail_count += 1
 
-                    print('\nObstacle: Found Home.')
-                    self.result = self._avoid_tag(id=256)
+                    detections = self.swarmie.get_latest_targets().detections
+                    inside_home = self.is_inside_home_ring(detections)
+                    if inside_home:
+                        print('\nGetting out of the home ring!!')
+                        angle, dist = self.get_angle_and_dist_to_escape_home(
+                            detections
+                        )
+                        self.swarmie.turn(
+                            angle,
+                            ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+                        )
+                        self.result = self.swarmie.drive(
+                            dist,
+                            ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+                        )
+
+                        if self.avoid_home is False:
+                            # turn back around
+                            self.swarmie.turn(
+                                math.pi,
+                                ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+                            )
+                            print('Obstacle: Found Home.')
+                            return MoveResult.OBSTACLE_HOME
+                    else:
+                        if self.avoid_home is False:
+                            print('Obstacle: Found Home.')
+                            return MoveResult.OBSTACLE_HOME
+
+                        self.result = self._avoid_tag(id=256,
+                                                  ignore=current_ignore)
 
             elif self.result == MoveResult.OBSTACLE_TAG:
-                if self.avoid_targets is False:
-                    try:
-                        # is is a valid target (not already in the nest)?
-                        if (self.swarmie.get_nearest_block_location()
-                                is not None):
-                            print('Obstacle: Found a tag.')
-                            return self.result
-                    except tf.Exception:
-                        print('Obstacle: Found a tag.')
-                        return self.result
-
                 # get around the tag obstacle
                 count = 0
 
@@ -683,11 +832,17 @@ class Planner:
                 # this loop if the MoveResult is just an OBSTACLE_TAG
                 # self.fail_count may exceed limit here, but I'll let it go
                 while count < 3 and self.result == MoveResult.OBSTACLE_TAG:
+                    print('\nObstacle: Found a Tag.')
+
+                    if self.avoid_targets is False:
+                        if not self.sees_home_tag():
+                            return self.result
+
                     count += 1
                     self.fail_count += 1
 
-                    print('\nObstacle: Found a Tag.')
-                    self.result = self._avoid_tag(id=0)
+                    self.result = self._avoid_tag(id=0,
+                                                  ignore=current_ignore)
 
 
             elif self.result == MoveResult.OBSTACLE_SONAR:
@@ -718,45 +873,61 @@ class Planner:
 
                 elif not left_blocked and center_blocked and right_blocked:
                     print('Left looks clear, turning left.')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
                     self._go_around(math.pi / 4, 0.7)
                     # self.swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and center_blocked and not right_blocked:
                     print('Right looks clear, turning right.')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
                     self._go_around(-math.pi / 4, 0.7)
                     # self.swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and not center_blocked and not right_blocked:
                     print('Only left blocked, turning a little right.')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
                     self._go_around(-math.pi / 6, 0.6)
                     # self.swarmie.drive_to(point, throw=False)
 
                 elif not left_blocked and not center_blocked and right_blocked:
                     print('Only right blocked, turning a little left.')
+                    self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
                     self._go_around(math.pi / 6, 0.6)
                     # self.swarmie.drive_to(point, throw=False)
 
                 else:
                     print('Neither left or right look clear, backing up')
-                    self.current_state = Planner.STATE_AVOID_REVERSE
                     self.swarmie.drive(
-                        -0.4,
+                        -0.3,
                         ignore=Obstacle.IS_SONAR,
                         throw=False
                     )
-                    self._clear(math.pi / 4, reset_heading=False)
-                    # just go left
-                    self._go_around(math.pi / 4, 0.75)
+
+                    if (self.current_state == Planner.STATE_AVOID_RIGHT or
+                            self.prev_state == Planner.STATE_AVOID_RIGHT):
+                        self.prev_state = self.current_state
+                        self.current_state = Planner.STATE_AVOID_RIGHT
+                        self._clear(-math.pi / 4, ignore=current_ignore,
+                                    reset_heading=False)
+                        self._go_around(-math.pi / 4, 0.75)
+
+                    else:
+                        self.prev_state = self.current_state
+                        self.current_state = Planner.STATE_AVOID_LEFT
+                        self._clear(math.pi / 4, ignore=current_ignore,
+                                    reset_heading=False)
+                        self._go_around(math.pi / 4, 0.75)
 
             elif self.result == MoveResult.PATH_FAIL:
                 # shit, hope we can back up if this ever happens
                 self.fail_count += 1
 
                 print('\nPath Failure. Backing up.')
+                self.prev_state = self.current_state
                 self.current_state = Planner.STATE_AVOID_REVERSE
                 self.swarmie.drive(
                     -0.5,
@@ -929,20 +1100,27 @@ class Planner:
         """
         points = self._get_spiral_points(start_distance, distance_step,
                                          num_legs=num_legs)
+        MAX_CONSECUTIVE_FAILURES = 3
+        fail_count = 0
 
         for point in points:
-            drive_result = self.drive_to(
-                point,
-                tolerance=tolerance,
-                tolerance_step=tolerance_step,
-                max_attempts=max_attempts,
-                avoid_targets=avoid_targets,
-                avoid_home=avoid_home,
-                use_waypoints=use_waypoints
-            )
-            if (drive_result == MoveResult.OBSTACLE_HOME
-                    or drive_result == MoveResult.OBSTACLE_TAG):
-                return drive_result
+            try:
+                drive_result = self.drive_to(
+                    point,
+                    tolerance=tolerance,
+                    tolerance_step=tolerance_step,
+                    max_attempts=max_attempts,
+                    avoid_targets=avoid_targets,
+                    avoid_home=avoid_home,
+                    use_waypoints=use_waypoints
+                )
+                if (drive_result == MoveResult.OBSTACLE_HOME
+                        or drive_result == MoveResult.OBSTACLE_TAG):
+                    return drive_result
+            except PathException:
+                fail_count += 1
+                if fail_count >= MAX_CONSECUTIVE_FAILURES:
+                    raise
 
         return MoveResult.SUCCESS
 
