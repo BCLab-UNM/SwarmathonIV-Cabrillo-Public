@@ -9,6 +9,7 @@ import math
 import random 
 
 import dynamic_reconfigure.client
+from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
 from planner import Planner
@@ -131,22 +132,33 @@ def main():
     #     swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
     #     exit(0)
 
-    try:
-        swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
-    except HomeException:
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-    except TagException:
+    if not planner.sees_home_tag():
         try:
-            if swarmie.get_nearest_block_location() is not None:
-                found_tag = True
-                exit(0)  # found a tag?
-        except tf.Exception:
-            pass
+            swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
+        except HomeException:
+            swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        except TagException:
+            rospy.sleep(0.3)  # build the buffer a little
+            try:
+                if swarmie.get_nearest_block_location() is not None:
+                    found_tag = True
+                    exit(0)  # found a tag?
+            except tf.Exception:
+                pass
+    else:
+        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     # Return to our last search exit pose if possible
+    dist = 0
+    cur_pose = swarmie.get_odom_location().get_pose()
+
     if swarmie.has_search_exit_poses():
-        print('Driving to last search exit position.')
         last_pose, _gps = swarmie.get_search_exit_poses()
+        dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
+                         + (last_pose.y - cur_pose.y) ** 2)
+
+    if dist > 1.5:  # only bother if it was reasonably far away
+        print('Driving to last search exit position.')
         try:
             planner.drive_to(last_pose,
                              tolerance=0.5,
@@ -167,12 +179,30 @@ def main():
             pass
 
         try:
-            swarmie.set_heading(last_pose.theta,
-                                ignore=Obstacle.TAG_HOME | Obstacle.IS_SONAR)
+            swarmie.set_heading(
+                last_pose.theta,
+                ignore=Obstacle.TAG_HOME | Obstacle.IS_SONAR
+            )
         except TagException:
-            # success!
-            found_tag = True
-            exit(0)
+            rospy.sleep(0.3)  # build buffer a little
+            # too risky to stop for targets if home is in view too
+            if not planner.sees_home_tag():
+                # success!
+                found_tag = True
+                exit(0)
+            pass
+
+    else:
+        # drive somewhere before starting spiral
+        print('Driving somewhere before starting search pattern.')
+        angle = random.gauss(0, math.pi/8)
+        point = Point()
+        point.x = cur_pose.x + 2 * math.cos(cur_pose.theta)
+        point.y = cur_pose.y + 2 * math.sin(cur_pose.theta)
+        try:
+            planner.drive_to(point, avoid_targets=False, avoid_home=True)
+        except rospy.ServiceException:
+            pass  # just start the search
 
     # do search
     try:
@@ -200,8 +230,10 @@ def main():
         )
 
     if drive_result == MoveResult.OBSTACLE_TAG:
-        found_tag = True
-        exit(0)
+        rospy.sleep(0.3)
+        if not planner.sees_home_tag():
+            found_tag = True
+            exit(0)
 
     print ("I'm homesick!")
     exit(1)
