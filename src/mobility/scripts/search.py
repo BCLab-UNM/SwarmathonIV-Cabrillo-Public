@@ -171,7 +171,7 @@ def main():
         try:
             # planner.clear(math.pi / 4, ignore=Obstacle.TAG_HOME, throw=True)
             # swarmie.drive(0.2, throw=False)
-            planner.sweep(ignore=Obstacle.TAG_HOME, throw=True)
+            planner.sweep(throw=True)
             swarmie.set_heading(
                 last_pose.theta,
                 ignore=Obstacle.TAG_HOME
@@ -185,6 +185,10 @@ def main():
                 # print('Found a tag! Turning to face.')
                 # planner.face_nearest_block()
                 exit(0)
+        except HomeException:
+            # Just move onto spiral search, but this shouldn't really happen
+            # either.
+            pass
         except ObstacleException:
             print('ObstacleException while finishing return to last search exit location.')
             pass # good enough

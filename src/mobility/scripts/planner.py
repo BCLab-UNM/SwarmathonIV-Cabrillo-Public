@@ -22,7 +22,7 @@ from nav_msgs.srv import GetPlanResponse
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, HomeException, TagException, PathException
+from mobility.swarmie import Swarmie, Location, HomeException, TagException, PathException, ObstacleException
 
 
 class Planner:
@@ -395,9 +395,12 @@ class Planner:
 
         return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
 
-    def sweep(self, time=2.5, linear=0.3, angular=0.75,
+    def sweep(self, angle=math.pi/4, dist=0.3,
               ignore=Obstacle.PATH_IS_CLEAR, throw=False):
         """Look for blocks in a sweeping right arc and a sweeping left arc.
+        Other version:
+        def sweep(self, time=2.5, linear=0.3, angular=0.75,
+                  ignore=Obstacle.PATH_IS_CLEAR, throw=False):
 
         Returns:
         * drive_result - MoveResult of the last executed call of
@@ -407,28 +410,38 @@ class Planner:
           ignored and a home tag is seen.
           drive_result == MoveResult.OBSTACLE_TAG if targets aren't being
           ignored and a target is seen.
+          drive_result == MoveResult.OBSTACLE_SONAR if sonar is blocked and
+          isn't being ignored.
 
         Raises:
         * mobility.Swarmie.HomeException - if home tags aren't being
           ignored, throw=True, and a home tag is seen.
         * mobility.Swarmie.TagException - if targets tags aren't being
           ignored, throw=True, and a target is seen.
+        * mobility.Swarmie.ObstacleException - if sonar is blocked, throw=True,
+          and sonar isn't being ignored.
         """
-        # start_heading = self.swarmie.get_odom_location().get_pose().theta
+        start_heading = self.swarmie.get_odom_location().get_pose().theta
         ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
 
         try:
-            # self.swarmie.set_heading(start_heading - angle, ignore=ignore)
-            # self.swarmie.drive(dist, ignore=ignore)
-            # self.swarmie.drive(-dist, ignore=ignore)
-            # self.swarmie.set_heading(start_heading + angle, ignore=ignore)
-            # self.swarmie.drive(dist, ignore=ignore)
-            # self.swarmie.drive(-dist, ignore=ignore)
-            # self.swarmie.set_heading(start_heading, ignore=ignore)
-            self.swarmie.timed_drive(time, linear, -angular, ignore=ignore)
-            self.swarmie.timed_drive(time, -linear, angular, ignore=ignore)
-            self.swarmie.timed_drive(time, linear, angular, ignore=ignore)
-            self.swarmie.timed_drive(time, -linear, -angular, ignore=ignore)
+            self.swarmie.set_heading(start_heading - angle, ignore=ignore)
+            self.swarmie.drive(dist, ignore=ignore)
+            self.swarmie.drive(-dist, ignore=ignore)
+            self.swarmie.set_heading(start_heading + angle, ignore=ignore)
+            self.swarmie.drive(dist, ignore=ignore)
+            self.swarmie.drive(-dist, ignore=ignore)
+            self.swarmie.set_heading(start_heading, ignore=ignore)
+            # self.swarmie.timed_drive(time, linear, -angular, ignore=ignore)
+            # self.swarmie.timed_drive(time, -linear, angular, ignore=ignore)
+
+            # physical rover doesn't go left as well
+            # if not self.swarmie.simulator_running():
+            #     angular *= 1.5
+            #     linear *= 1.2
+            # self.swarmie.timed_drive(time, linear, angular, ignore=ignore)
+            # self.swarmie.timed_drive(time, -linear, -angular, ignore=ignore)
+
         except HomeException:
             if throw:
                 raise
@@ -437,6 +450,10 @@ class Planner:
             if throw:
                 raise
             return MoveResult.OBSTACLE_TAG
+        except ObstacleException:
+            if throw:
+                raise
+            return MoveResult.OBSTACLE_SONAR
 
         return MoveResult.SUCCESS
 
