@@ -18,7 +18,7 @@ from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, PathException
+from mobility.swarmie import Swarmie, Location, PathException, HomeException, TagException, ObstacleException
 from planner import Planner
 
 
@@ -85,6 +85,8 @@ def drive_home(has_block, home_loc):
 
 
 def spiral_search(has_block):
+    global planner, swarmie
+
     # no map waypoints
     try:
         drive_result = planner.spiral_search(
@@ -110,13 +112,11 @@ def spiral_search(has_block):
                 planner.set_home_locations()
 
     elif drive_result == MoveResult.OBSTACLE_TAG:
-        swarmie.drive_to(
-            swarmie.get_nearest_block_location(use_targets_buffer=True),
-            claw_offset=0.6,
-            ignore=Obstacle.IS_VISION
-        )
+        # This can happen if we're going home without a block.
+        planner.face_nearest_block()
 
     return drive_result
+
 
 def reset_speeds():
     global initial_config, param_client
@@ -181,6 +181,23 @@ def main():
         # victory!
         planner.face_home_tag()
         exit(0)
+
+    # Look to the right and left before starting spiral search, which goes
+    # left:
+    ignore = Obstacle.PATH_IS_CLEAR
+    if has_block:
+        ignore |= Obstacle.TAG_TARGET
+    try:
+        planner.clear(math.pi / 4, ignore=ignore, throw=True)
+        swarmie.drive(0.2, ignore=ignore)
+        # planner.sweep(ignore=ignore, throw=True)
+    except HomeException:
+        planner.face_home_tag()
+        exit(0)
+    except TagException:
+        exit(GOHOME_FOUND_TAG)
+    except ObstacleException:
+        pass # do spiral search
 
     print('Starting spiral search')
     try:

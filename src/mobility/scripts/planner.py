@@ -109,6 +109,30 @@ class Planner:
         return self.swarmie.xform.transformPose(self.rovername + '/base_link',
                                                 detection.pose)
 
+    def _transform_to_odom(self, detection, timeout=3.0):
+        """Transform PoseStamped detection into /odom frame.
+        Returns PoseStamped in /odom frame.
+
+        Args:
+        * detection - PoseStamped the pose of the tag in the /camera_link frame
+        * timeout - float, the time to wait for the transform
+
+        Returns:
+        * pose - PoseStamped the pose of the tag in the /odom frame
+
+        Raises:
+        * tf.Exception if timeout is exceeded
+        """
+        self.swarmie.xform.waitForTransform(
+            self.rovername + '/odom',
+            detection.pose.header.frame_id,
+            detection.pose.header.stamp,
+            rospy.Duration(timeout)
+        )
+
+        return self.swarmie.xform.transformPose(self.rovername + '/odom',
+                                                detection.pose)
+
     def is_inside_home_ring(self, detections):
         """Returns True if it looks like the rover is inside the ring of
         home tags and needs to get out!
@@ -256,7 +280,7 @@ class Planner:
         return (-self._angle_between(tag_point, path_edge_point),
                 path_edge_point.x + OVERSHOOT_DIST)
 
-    def get_angle_to_face(self, detection):
+    def get_angle_to_face_detection(self, detection):
         """Get the angle required to turn and face a detection to put it in
         the center of the camera's field of view.
 
@@ -289,7 +313,7 @@ class Planner:
             self.swarmie.get_latest_targets().detections
         )
         if len(home_detections) > 0:
-            angle = self.get_angle_to_face(home_detections[0])
+            angle = self.get_angle_to_face_detection(home_detections[0])
             current_heading = self.swarmie.get_odom_location().get_pose().theta
             self.swarmie.set_heading(
                 current_heading + angle,
@@ -371,7 +395,53 @@ class Planner:
 
         return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
 
-    def _clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True):
+    def sweep(self, time=2.5, linear=0.3, angular=0.75,
+              ignore=Obstacle.PATH_IS_CLEAR, throw=False):
+        """Look for blocks in a sweeping right arc and a sweeping left arc.
+
+        Returns:
+        * drive_result - MoveResult of the last executed call of
+          Swarmie.set_heading().
+          drive_result == MoveResult.SUCCESS if all turns were successful.
+          drive_result == MoveResult.OBSTACLE_HOME if home tags aren't being
+          ignored and a home tag is seen.
+          drive_result == MoveResult.OBSTACLE_TAG if targets aren't being
+          ignored and a target is seen.
+
+        Raises:
+        * mobility.Swarmie.HomeException - if home tags aren't being
+          ignored, throw=True, and a home tag is seen.
+        * mobility.Swarmie.TagException - if targets tags aren't being
+          ignored, throw=True, and a target is seen.
+        """
+        # start_heading = self.swarmie.get_odom_location().get_pose().theta
+        ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
+
+        try:
+            # self.swarmie.set_heading(start_heading - angle, ignore=ignore)
+            # self.swarmie.drive(dist, ignore=ignore)
+            # self.swarmie.drive(-dist, ignore=ignore)
+            # self.swarmie.set_heading(start_heading + angle, ignore=ignore)
+            # self.swarmie.drive(dist, ignore=ignore)
+            # self.swarmie.drive(-dist, ignore=ignore)
+            # self.swarmie.set_heading(start_heading, ignore=ignore)
+            self.swarmie.timed_drive(time, linear, -angular, ignore=ignore)
+            self.swarmie.timed_drive(time, -linear, angular, ignore=ignore)
+            self.swarmie.timed_drive(time, linear, angular, ignore=ignore)
+            self.swarmie.timed_drive(time, -linear, -angular, ignore=ignore)
+        except HomeException:
+            if throw:
+                raise
+            return MoveResult.OBSTACLE_HOME
+        except TagException:
+            if throw:
+                raise
+            return MoveResult.OBSTACLE_TAG
+
+        return MoveResult.SUCCESS
+
+    def clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True,
+              throw=False):
         """Turn right, then left, then back to start heading.
         Helps to clear and mark the map if in a difficult spot.
 
@@ -379,18 +449,44 @@ class Planner:
         * angle - the angle to turn
         * reset_heading - whether the rover should return to its start heading
           after turning left and right
+        * throw - whether to raise exceptions, just like Swarmie.drive()
+
+        Returns:
+        * drive_result - MoveResult of the last executed call of
+          Swarmie.set_heading().
+          drive_result == MoveResult.SUCCESS if all turns were successful.
+          drive_result == MoveResult.OBSTACLE_HOME if home tags aren't being
+          ignored and a home tag is seen.
+          drive_result == MoveResult.OBSTACLE_TAG if targets aren't being
+          ignored and a target is seen.
 
         Raises:
-        * mobility.Swarmie.HomeException if home tags aren't being ignored and
-          a home tag is seen.
-          mobility.Swarmie.TagException if targets aren't being ignored and a
-          target is seen.
+        * mobility.Swarmie.HomeException - if home tags aren't being
+          ignored, throw=True, and a home tag is seen.
+        * mobility.Swarmie.TagException - if targets tags aren't being
+          ignored, throw=True, and a target is seen.
         """
         start_heading = self.swarmie.get_odom_location().get_pose().theta
-        self.swarmie.set_heading(start_heading - angle, ignore=ignore)
-        self.swarmie.set_heading(start_heading + angle, ignore=ignore)
-        if reset_heading:
-            self.swarmie.set_heading(start_heading, ignore=ignore)
+        ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
+
+        # Planner._clear() uses Swarmie.set_heading(), which doesn't have
+        # an option to return the MoveResult instead of raising an
+        # exception. So catch exceptions, and return appropriate result.
+        try:
+            self.swarmie.set_heading(start_heading - angle, ignore=ignore)
+            self.swarmie.set_heading(start_heading + angle, ignore=ignore)
+            if reset_heading:
+                self.swarmie.set_heading(start_heading, ignore=ignore)
+        except HomeException:
+            if throw:
+                raise
+            return MoveResult.OBSTACLE_HOME
+        except TagException:
+            if throw:
+                raise
+            return MoveResult.OBSTACLE_TAG
+
+        return MoveResult.SUCCESS
 
     def _go_around(self, angle, dist):
         """Turn by 'angle' and then drive 'dist'.
@@ -423,7 +519,7 @@ class Planner:
 
         return turn_result, drive_result
 
-    def _get_angle_to_face(self, point):
+    def get_angle_to_face_point(self, point):
         """Returns the angle you should turn in order to face a point.
 
         Args:
@@ -432,11 +528,37 @@ class Planner:
         Returns:
         * angle - the angle you need to turn, in radians
         """
-        start = self.cur_loc.get_pose()
+        start = self.swarmie.get_odom_location().get_pose()
         return angles.shortest_angular_distance(
             start.theta,
             math.atan2(point.y - start.y, point.x - start.x)
         )
+
+    def face_nearest_block(self):
+        """Have the rover turn to face the nearest block to it. Useful
+        when exiting gohome (when going home without a block) or search.
+
+        Does nothing if no blocks are seen, if there is a home tag closer
+        to the rover than the nearest block, or if a sonar obstacle prevents
+        the rover from making the turn.
+
+        Catches any transform exception raised by
+        Swarmie.get_nearest_block_location() and does nothing.
+        """
+        try:
+            block = self.swarmie.get_nearest_block_location(
+                use_targets_buffer=True
+            )
+        except tf.Exception:
+            # The caller should be about to exit with a normal exit code
+            # after this call anyway, so the pickup behavior is launched.
+            return
+
+        if block is not None:
+            angle = self.get_angle_to_face_point(block)
+            self.swarmie.turn(angle, ignore=Obstacle.IS_VISION, throw=False)
+
+        return
 
     def _get_next_waypoint(self, tolerance_step):
         """Get another nav plan and return the first waypoint. Try three
@@ -554,20 +676,12 @@ class Planner:
                   "and clearing.")
             self.prev_state = self.current_state
             self.current_state = Planner.STATE_DRIVE
-            drive_result = self.swarmie.drive(
+            self.swarmie.drive(
                 0.1,
                 ignore=Obstacle.SONAR_BLOCK,
                 throw=False
             )
-            # Planner._clear() uses Swarmie.set_heading(), which doesn't have
-            # an option to return the MoveResult instead of raising an
-            # exception.
-            try:
-                self._clear(math.pi / 8, ignore=ignore)
-            except HomeException:
-                drive_result = MoveResult.OBSTACLE_HOME
-            except TagException:
-                drive_result = MoveResult.OBSTACLE_TAG
+            drive_result = self.clear(math.pi / 8, ignore=ignore)
 
         else:
             left_angle, left_dist = \
@@ -716,7 +830,7 @@ class Planner:
             # Turn to approximate goal heading while ignoring sonar and tags
             # helps to prevent rover from trying to jump around obstacles
             # before it even starts along its new path
-            turn_angle = self._get_angle_to_face(point)
+            turn_angle = self.get_angle_to_face_point(point)
 
             self.result = self.swarmie.turn(
                 turn_angle,
@@ -900,26 +1014,35 @@ class Planner:
                     # self.swarmie.drive_to(point, throw=False)
 
                 else:
-                    print('Neither left or right look clear, backing up')
-                    self.swarmie.drive(
-                        -0.3,
-                        ignore=Obstacle.IS_SONAR,
-                        throw=False
-                    )
+                    print('Neither left or right look clear.')
+
+                    # Only back up if we're far enough away from home for it
+                    # to be safe. Don't want to back up into the nest!
+                    home_loc = self.swarmie.get_home_odom_location()
+                    current_loc = self.swarmie.get_odom_location().get_pose()
+                    dist = math.sqrt((home_loc.x - current_loc.x) ** 2
+                                     + (home_loc.y - current_loc.y) ** 2)
+                    if dist > 1.5:
+                        print('Backing up.')
+                        self.swarmie.drive(
+                            -0.3,
+                            ignore=Obstacle.IS_SONAR,
+                            throw=False
+                        )
 
                     if (self.current_state == Planner.STATE_AVOID_RIGHT or
                             self.prev_state == Planner.STATE_AVOID_RIGHT):
                         self.prev_state = self.current_state
                         self.current_state = Planner.STATE_AVOID_RIGHT
-                        self._clear(-math.pi / 4, ignore=current_ignore,
-                                    reset_heading=False)
+                        self.clear(-math.pi / 4, ignore=current_ignore,
+                                   reset_heading=False)
                         self._go_around(-math.pi / 4, 0.75)
 
                     else:
                         self.prev_state = self.current_state
                         self.current_state = Planner.STATE_AVOID_LEFT
-                        self._clear(math.pi / 4, ignore=current_ignore,
-                                    reset_heading=False)
+                        self.clear(math.pi / 4, ignore=current_ignore,
+                                   reset_heading=False)
                         self._go_around(math.pi / 4, 0.75)
 
             elif self.result == MoveResult.PATH_FAIL:
@@ -1010,6 +1133,34 @@ class Planner:
         current_pose = current_location.get_pose()
         home_odom = Location(current_location.Odometry)
 
+        detections = self.swarmie.get_latest_targets().detections
+        try:
+            for detection in detections:
+                if detection.id == 256:
+                    see_home_tag = True
+                    home_detection = self._transform_to_odom(detection)
+
+                    quat = [home_detection.pose.orientation.x,
+                            home_detection.pose.orientation.y,
+                            home_detection.pose.orientation.z,
+                            home_detection.pose.orientation.w]
+                    _r, _p, yaw = tf.transformations.euler_from_quaternion(
+                        quat
+                    )
+                    yaw += math.pi / 2
+
+                    home_odom.Odometry.pose.pose.position.x = float(
+                        home_detection.pose.position.x + 0.5 * math.cos(yaw)
+                    )
+                    home_odom.Odometry.pose.pose.position.y = float(
+                        home_detection.pose.position.y + 0.5 * math.sin(yaw)
+                    )
+                    self.swarmie.set_home_odom_location(home_odom)
+                    return
+
+        except tf.Exception:
+            pass  # use backup below
+
         # project home_odom location 50cm in front of rover's current location
         home_odom.Odometry.pose.pose.position.x = (
             current_pose.x + 0.5 * math.cos(current_pose.theta)
@@ -1018,6 +1169,7 @@ class Planner:
             current_pose.y + 0.5 * math.sin(current_pose.theta)
         )
         self.swarmie.set_home_odom_location(home_odom)
+        return
 
     def _get_spiral_points(self, start_distance, distance_step, num_legs=10):
         """Get a list of waypoints for the spiral search pattern. Waypoints

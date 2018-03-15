@@ -37,26 +37,17 @@ def wander():
 
 
 def handle_exit():
-    global swarmie, found_tag
+    global planner, swarmie, found_tag
 
     reset_speeds()
 
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
-        try:
-            block = swarmie.get_nearest_block_location(
-                use_targets_buffer=True
-            )
-        except tf.Exception:
-            pass  # good enough
-        if block is not None:
-            swarmie.drive_to(
-                block,
-                claw_offset=0.5,
-                ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR
-            )
+        planner.face_nearest_block()
 
+    swarmie.print_infoLog('Setting search exit poses.')
     set_search_exit_poses()
+
 
 
 def reset_speeds():
@@ -131,12 +122,15 @@ def main():
         try:
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
-            swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            swarmie.turn(math.pi,
+                         ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
                 if swarmie.get_nearest_block_location() is not None:
                     found_tag = True
+                    # print('Found a tag! Turning to face.')
+                    # planner.face_nearest_block()
                     exit(0)  # found a tag?
             except tf.Exception:
                 pass
@@ -154,6 +148,7 @@ def main():
 
     if dist > 1.5:  # only bother if it was reasonably far away
         print('Driving to last search exit position.')
+        swarmie.print_infoLog('Driving to last search exit position.')
         try:
             planner.drive_to(last_pose,
                              tolerance=0.5,
@@ -174,9 +169,12 @@ def main():
             pass
 
         try:
+            # planner.clear(math.pi / 4, ignore=Obstacle.TAG_HOME, throw=True)
+            # swarmie.drive(0.2, throw=False)
+            planner.sweep(ignore=Obstacle.TAG_HOME, throw=True)
             swarmie.set_heading(
                 last_pose.theta,
-                ignore=Obstacle.TAG_HOME | Obstacle.IS_SONAR
+                ignore=Obstacle.TAG_HOME
             )
         except TagException:
             rospy.sleep(0.3)  # build buffer a little
@@ -184,16 +182,21 @@ def main():
             if not planner.sees_home_tag():
                 # success!
                 found_tag = True
+                # print('Found a tag! Turning to face.')
+                # planner.face_nearest_block()
                 exit(0)
-            pass
+        except ObstacleException:
+            print('ObstacleException while finishing return to last search exit location.')
+            pass # good enough
 
     else:
         # drive somewhere before starting spiral
         print('Driving somewhere before starting search pattern.')
-        angle = random.gauss(0, math.pi/8)
+        angle = random.gauss(0, math.pi/4)
+        dist = random.gauss(2.5, 1)
         point = Point()
-        point.x = cur_pose.x + 2 * math.cos(cur_pose.theta)
-        point.y = cur_pose.y + 2 * math.sin(cur_pose.theta)
+        point.x = cur_pose.x + dist * math.cos(cur_pose.theta)
+        point.y = cur_pose.y + dist * math.sin(cur_pose.theta)
         try:
             planner.drive_to(point, avoid_targets=False, avoid_home=True)
         except rospy.ServiceException:
@@ -228,6 +231,8 @@ def main():
         rospy.sleep(0.3)
         if not planner.sees_home_tag():
             found_tag = True
+            # print('Found a tag! Turning to face.')
+            # planner.face_nearest_block()
             exit(0)
 
     print ("I'm homesick!")
