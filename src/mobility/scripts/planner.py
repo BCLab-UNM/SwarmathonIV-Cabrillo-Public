@@ -762,7 +762,8 @@ class Planner:
 
     def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5,
                  max_attempts=10, avoid_targets=True, avoid_home=False,
-                 use_waypoints=True):
+                 use_waypoints=True, start_location=None,
+                 distance_threshold=None):
         """Try to get the rover to goal location. Returns when at goal
         or if home target is found.
 
@@ -795,6 +796,13 @@ class Planner:
           driving to the goal. Can be used during a search behavior.
         * use_waypoints - whether to use waypoints from searching the map. Can
           be used from the start or as a fallback if the map search fails.
+        * start_location - geometry_msgs/Pose2D, the start location of the
+          rover. Used by Planner.spiral_search() along with distance_threshold.
+          to limit the rover's ability to get way off course while trying to
+          get around something like the arena boundary.
+        * distance_threshold - the maximum distance the rover's current
+          location can be from the start_location before a PathException is
+          raised.
 
         Returns:
         * drive_result - mobility.msg.MoveResult the result of the drive
@@ -806,7 +814,9 @@ class Planner:
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
           max_attempts times to reach a single waypoint in its current
-          navigation plan.
+          navigation plan. Or, if using start_location and distance_threshold,
+          if the rover's current location is further than distance_threshold
+          from the start_location.
         * rospy.ServiceException - if a path can't be found in 3
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
@@ -836,6 +846,7 @@ class Planner:
         while (not self.cur_loc.at_goal(self.goal,
                                         Planner.DISTANCE_OK + self.tolerance)
                and self.fail_count < max_attempts):
+
 
             if use_waypoints is True:
                 # get new plan and try to drive to first point in it
@@ -1084,6 +1095,13 @@ class Planner:
                 )
                 raise PathException(MoveResult.PATH_FAIL)
 
+            if start_location is not None:
+                current_loc = self.cur_loc.get_pose()
+                dist = math.sqrt((start_location.x - current_loc.x) ** 2
+                                 + (start_location.y - current_loc.y) ** 2)
+                if dist > distance_threshold:
+                    raise PathException(MoveResult.PATH_FAIL)
+
         print('Successfully executed nav plan.')
         return MoveResult.SUCCESS
 
@@ -1273,7 +1291,15 @@ class Planner:
         MAX_CONSECUTIVE_FAILURES = 3
         fail_count = 0
 
-        for point in points:
+        start_loc = self.swarmie.get_odom_location().get_pose()
+
+        for index, point in enumerate(points):
+            # Stop if rover gets further away than it should currently be
+            # from the center of the spiral. This can happen if the rover
+            # starts following arena boundary walls.
+            distance_threshold = (start_distance
+                                  + (index+1) / 2.0 * distance_step)
+
             try:
                 drive_result = self.drive_to(
                     point,
@@ -1282,7 +1308,9 @@ class Planner:
                     max_attempts=max_attempts,
                     avoid_targets=avoid_targets,
                     avoid_home=avoid_home,
-                    use_waypoints=use_waypoints
+                    use_waypoints=use_waypoints,
+                    start_location=start_loc,
+                    distance_threshold=distance_threshold
                 )
                 if (drive_result == MoveResult.OBSTACLE_HOME
                         or drive_result == MoveResult.OBSTACLE_TAG):

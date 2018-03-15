@@ -208,6 +208,10 @@ def main():
 
     # do search
     try:
+        # Planner.spiral_search() can generate a PathException if the rover
+        # gets too far off course or is having a difficult time navigating
+        # obstacles. Let it crash the node. Task manager will just launch
+        # gohome.
         drive_result = planner.spiral_search(
             0.5,
             0.75,

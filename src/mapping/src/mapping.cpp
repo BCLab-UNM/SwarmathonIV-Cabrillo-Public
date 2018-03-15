@@ -147,11 +147,11 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
 			}
 		} else if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
 				   map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
-                return false;
-        }
+			return false;
+		}
 	}
 
-    return true;
+	return true;
 }
 
 std::vector<GridLocation> neighbors(grid_map::GridMap& map,
