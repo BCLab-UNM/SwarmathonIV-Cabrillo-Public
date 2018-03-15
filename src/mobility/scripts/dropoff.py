@@ -176,14 +176,15 @@ def main():
 
     swarmie = Swarmie(sys.argv[1])
     
-    #move wrist down but not so down it hits the ground
-    swarmie.set_wrist_angle(.3)
+    #move wrist down but not so down that the resource hits the ground
+    swarmie.wrist_middle()
     rospy.sleep(.5)
     
     try:
         swarmie.targets_timeout = 9 # so they stay around for the decision making
         tags = look_for_tags()
-        
+        #move the wrist up so the resource wont hit the homebase
+        swarmie.set_wrist_angle(.3)
         if(swarmie.simulator_running()):
             swarmie.drive_to(find_center(tags), ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
         else:
