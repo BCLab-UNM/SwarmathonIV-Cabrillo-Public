@@ -17,7 +17,7 @@ import tf
 import angles
 
 from geometry_msgs.msg import PoseStamped, Pose2D, Point
-from nav_msgs.srv import GetPlanResponse
+from mapping.srv import GetNavPlanResponse
 
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
@@ -67,7 +67,7 @@ class Planner:
         self.prev_state = Planner.STATE_IDLE
         self.cur_loc = Location(None)
         self.goal = Pose2D()
-        self.plan = GetPlanResponse()
+        self.plan = GetNavPlanResponse()
         self.tolerance = 0.0
         self.result = MoveResult.SUCCESS
         self.fail_count = 0
@@ -594,7 +594,8 @@ class Planner:
             try:
                 self.plan = self.swarmie.get_plan(
                     self.goal,
-                    tolerance=self.tolerance
+                    tolerance=self.tolerance,
+                    use_home_layer=self.avoid_home
                 )
                 break  # plan received
             except rospy.ServiceException:
