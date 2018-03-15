@@ -123,11 +123,9 @@ def main():
         raise
     
     try:
-        # Recalibrate the home location because we're here.
-        swarmie.set_home_odom_location(swarmie.get_odom_location())
-        swarmie.set_home_gps_location(swarmie.get_gps_location())
+        # todo: Removed setting home locations. Done in gohome now. Is try/except still needed here?
 
-        swarmie.putdown() 
+        swarmie.putdown()
         
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         #swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #look at search if it starts by turning or not
