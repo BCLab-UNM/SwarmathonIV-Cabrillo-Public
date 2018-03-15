@@ -119,24 +119,23 @@ def spiral_search(has_block):
     return drive_result
 
 def reset_speeds():
-    global initial_drive_speed, initial_turn_speed, param_client
-    param_client.update_configuration(
-        {'DRIVE_SPEED': initial_drive_speed,
-         'TURN_SPEED': initial_turn_speed}
-    )
+    global initial_config, param_client
+    param_client.update_configuration(initial_config)
 
 
 def main():
     global planner, swarmie, rovername, use_waypoints
-    global initial_drive_speed, initial_turn_speed, param_client
+    global initial_config, param_client
 
     has_block = False
     # Whether to use waypoints from searching the map. Can be set to False if
     # the map service fails.
     use_waypoints = True
 
-    GOHOME_DRIVE_SPEED = 0.2
-    GOHOME_TURN_SPEED = 0.6
+    GOHOME_SPEEDS = {
+         'DRIVE_SPEED': 0.25,
+         'TURN_SPEED': 0.7
+    }
 
     if len(sys.argv) < 2 :
         print ('usage:', sys.argv[0], '<rovername>')
@@ -154,22 +153,20 @@ def main():
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    drive_speed = rospy.get_param(
-        '/' + rovername + '/gohome/drive_speed',
-        default=GOHOME_DRIVE_SPEED
-    )
-    turn_speed = rospy.get_param(
-        '/' + rovername + '/gohome/turn_speed',
-        default=GOHOME_TURN_SPEED
-    )
+    if not rospy.has_param('/' + rovername + '/gohome/speeds'):
+        speeds = GOHOME_SPEEDS
+        rospy.set_param('/' + rovername + '/gohome/speeds', speeds)
+    else:
+        speeds = rospy.get_param('/' + rovername + '/gohome/speeds',
+                                 default=GOHOME_SPEEDS)
+
     param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
-    initial_config = param_client.get_configuration()
-    initial_drive_speed = initial_config['DRIVE_SPEED']
-    initial_turn_speed = initial_config['TURN_SPEED']
-    param_client.update_configuration(
-        {'DRIVE_SPEED': drive_speed,
-         'TURN_SPEED': turn_speed}
-    )
+    config = param_client.get_configuration()
+    initial_config = {
+        'DRIVE_SPEED': config['DRIVE_SPEED'],
+        'TURN_SPEED': config['TURN_SPEED']
+    }
+    param_client.update_configuration(speeds)
     rospy.on_shutdown(reset_speeds)
 
     swarmie.fingers_close()  # make sure we keep a firm grip
