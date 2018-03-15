@@ -143,11 +143,7 @@ class Swarmie:
         else:
             rospy.init_node(rover + '_CONTROLLER')
 
-        # Transform listener. Use this to transform between coordinate spaces.
-        # Transform messages must predate any sensor messages so initialize this first.
-        # self.xform = tf.TransformListener()
-
-        # Create publishiers. 
+        # Create publishiers.
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
         self.info_publisher = rospy.Publisher('/infoLog', String, queue_size=10, latch=True)
