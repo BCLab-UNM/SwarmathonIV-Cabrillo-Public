@@ -99,24 +99,6 @@ def main():
     param_client.update_configuration(speeds)
     rospy.on_shutdown(handle_exit)
 
-    # try:
-    #     for move in range(30) :
-    #         if rospy.is_shutdown() :
-    #             exit(-1)
-    #         try:
-    #             wander()
-    #
-    #         except HomeException :
-    #             print ("I saw home!")
-    #             odom_location = swarmie.get_odom_location()
-    #             swarmie.set_home_odom_location(odom_location)
-    #             turnaround()
-    #
-    # except TagException :
-    #     print("I found a tag!")
-    #     # Let's drive there to be helpful.
-    #     swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
-    #     exit(0)
 
     if not planner.sees_home_tag():
         try:
@@ -193,54 +175,28 @@ def main():
             print('ObstacleException while finishing return to last search exit location.')
             pass # good enough
 
-    else:
-        # drive somewhere before starting spiral
-        print('Driving somewhere before starting search pattern.')
-        angle = random.gauss(0, math.pi/4)
-        dist = random.gauss(2.5, 1)
-        point = Point()
-        point.x = cur_pose.x + dist * math.cos(cur_pose.theta)
-        point.y = cur_pose.y + dist * math.sin(cur_pose.theta)
-        try:
-            planner.drive_to(point, avoid_targets=False, avoid_home=True)
-        except rospy.ServiceException:
-            pass  # just start the search
-
-    # do search
     try:
-        # Planner.spiral_search() can generate a PathException if the rover
-        # gets too far off course or is having a difficult time navigating
-        # obstacles. Let it crash the node. Task manager will just launch
-        # gohome.
-        drive_result = planner.spiral_search(
-            0.5,
-            0.75,
-            num_legs=15,
-            tolerance=0.0,
-            tolerance_step=0.5,
-            avoid_targets=False,
-            avoid_home=True
-        )
-    except rospy.ServiceException:
-        print('Nav plan ServiceException, trying search without waypoints.')
-        # try again with no map waypoints
-        drive_result = planner.spiral_search(
-            0.5,
-            0.75,
-            num_legs=15,
-            tolerance=0.0,
-            tolerance_step=0.5,
-            avoid_targets=False,
-            avoid_home=True,
-            use_waypoints=False
-        )
+        for move in range(30) :
+            if rospy.is_shutdown() :
+                exit(-1)
+            try:
+                wander()
 
-    if drive_result == MoveResult.OBSTACLE_TAG:
+            except HomeException :
+                print ("I saw home!")
+                odom_location = swarmie.get_odom_location()
+                swarmie.set_home_odom_location(odom_location)
+                turnaround()
+
+    except TagException :
+        print("I found a tag!")
+        # Let's drive there to be helpful.
         rospy.sleep(0.3)
         if not planner.sees_home_tag():
             found_tag = True
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
+            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
             exit(0)
 
     print ("I'm homesick!")
