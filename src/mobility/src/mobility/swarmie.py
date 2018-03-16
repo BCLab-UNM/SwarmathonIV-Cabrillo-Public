@@ -497,7 +497,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return(self.sees_resource(6))
+        return(False) #self.sees_resource(6)
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
