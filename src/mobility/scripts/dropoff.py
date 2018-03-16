@@ -126,12 +126,11 @@ def main():
         raise
     
     try:
-        # todo: Removed setting home locations. Done in gohome now. Is try/except still needed here?
-
-        swarmie.putdown()
-        
-        swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-        #swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #look at search if it starts by turning or not
+        swarmie.set_wrist_angle(.7)
+        rospy.sleep(.4)
+        swarmie.set_finger_angle(1)
+        rospy.sleep(.4)
+        swarmie.set_wrist_angle(0)
     except: 
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
         raise
