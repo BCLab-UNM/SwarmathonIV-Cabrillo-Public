@@ -34,11 +34,11 @@ def on_wall():
     global swarmie
     global linec
     #placeholder
-    if find_wall() :
-        return True
-    else:
-        return False
-
+    #if find_wall() :
+     #   return True
+    #else:
+     #   return False
+    return False
 
 def find_wall():
      global swarmie
@@ -446,7 +446,7 @@ def path_to(start,goal,avd):
     else: 
         return False
     
-        
+    
 def wander():
     global swarmie
     try :
@@ -459,6 +459,78 @@ def wander():
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround()
+        
+         
+def Dwander():
+    global swarmie
+    mapt = swarmie.get_obstacle_map()['obstacles']
+    fild = 0
+    loc = swarmie.get_odom_location().get_pose()
+    xi = -loc.y * 2 + 25
+    yi = loc.x * 2 + 25
+    mlist = [[]]*50
+    for i in range(50):
+        mlist[i] = [1] * 50
+    x = -1
+    for i in mapt:
+        for j in i:
+            x = x + 1    
+            if mapt[int(x / 50)][x % 50] > prob :
+                mlist[int(x / 50)][x % 50] = 4
+            elif mapt[int(x / 50)][x % 50] > 0 :
+                print("test if")
+                if int(x / 50) + 1 < 50 and int(x / 50) - 1 >= 0 and x % 50 + 1 < 50 and x % 50 >= 0 and (mapt[int(x / 50)][x % 50] > prob + mapt[int(x / 50) + 1][x % 50] + mapt[int(x / 50)][x % 50 + 1] + mapt[int(x / 50) - 1][x % 50] + mapt[int(x / 50)][x % 50 - 1]) / 4 > prob:
+                    mlist[int(x / 50)][x % 50] = 2
+                else:
+                    mlist[int(x / 50)][x % 50] = 0
+            elif mapt[int(x / 50)][x % 50] == 0.0:
+                mlist[int(x / 50)][x % 50] = 0
+                fild = fild + 1
+            else:
+                mlist[int(x / 50)][x % 50] = 1
+    for i in mlist:
+            print(i)
+    sumn = 0
+    x = 0
+    while x < xi:
+        for i in mapt[x]:
+            sumn = sumn + i
+        x = x + 1 
+    sumw = 0
+    y = 0
+    while y < yi:
+        for i in range[50]:
+            sumw = sumw + mapt[i][y]
+        y = y + 1 
+    sums = 0
+    x = 49
+    while x > xi:
+        for i in mapt[x]:
+            sums = sums + i
+        x = x - 1 
+    sume = 0
+    y = 49
+    while y > yi:
+        for i in range[50]:
+            sume = sume + mapt[i][y]
+        y = y - 1 
+    try:
+        if sumn < sume and sumn < sums and sumn < sumw:
+            swarie.set_heading(math.py/2)
+        elif sume < sumn and sume < sums and sume < sumw:
+            swarie.set_heading(0)
+        elif sums < sumn and sums < sume and sums < sumw:
+            swarie.set_heading(3*math.py/2)
+        elif sumw < sumn and sumw < sums and sumw < sume:
+            swarie.set_heading(math.py)
+        rospy.loginfo("Wandering...")
+        swarmie.turn(random.gauss(-math.pi/4, math.pi/4))
+        swarmie.drive(3)
+        rospy.loginfo("Circling...")
+        
+    except ObstacleException :
+        print ("I saw an obstacle!")
+        avoid(swarmie.get_odom_location.get_pose())
         
 def triangle():
     global swarmie
@@ -617,6 +689,13 @@ def main():
                     thing.y = i[1]
                     try:
                         swarmie.drive_to(thing)
+                        facing = swarmie.get_odom_location().get_pose()
+                        facing.x = facing.x - 1
+                        facing.y = facing.y - 1
+                        parl = swarmie.get_odom_location().get_pose()
+                        parl.x = parl.x + 1
+                        parl.y = parl.y + 1
+                        search_area(facing,parl,2)
                     except ObstacleException:
                         avoid(swarmie.get_odom_location)
                     
@@ -630,11 +709,11 @@ def main():
                 exit(-1)
             try:
                 try:
-                    wander()
+                    Dwander()
                     facing = swarmie.get_odom_location().get_pose()
                     parl = swarmie.get_odom_location().get_pose()
-                    parl.x = parl.x + 5
-                    search_area(facing,parl,5)
+                    parl.x = parl.x + 2
+                    search_area(facing,parl,2)
                 except ObstacleException:
                     avoid(swarmie.get_odom_location().get_pose())
             
