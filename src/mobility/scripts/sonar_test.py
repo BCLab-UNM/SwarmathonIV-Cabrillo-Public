@@ -181,6 +181,26 @@ def aprox_angle(poll):
         avg = angle
     return (math.floor(avg / (math.pi/4) + 4.5) - 4) * math.pi 
 
+
+def mapt():
+    mlist = [[]]*50
+    for i in range(50):
+        mlist[i] = [0] * 50
+    try:
+        while 10 < 100:
+            map = swarmie.get_obstacle_map()['obstacles']
+            x = 0
+            for i in map:
+                #print(i)
+                for j in i:
+                    x = x + 1
+                    if j >= 0:
+                        mlist[int(x / 50)][x % 50] = int(j+1)
+            swarmie.drive(1)
+    except ObstacleException:
+        print("done")
+        for i in mlist:
+            print(i)
 def main():
     global swarmie 
     global rovername 
@@ -207,7 +227,7 @@ def main():
         exit (-1)
         
     #for do in range(20) :
-    detect()
+    mapt()
         
     print ("End of sensing")
     exit(1)
