@@ -1,0 +1,6 @@
+geometry_msgs/PoseStamped start
+geometry_msgs/PoseStamped goal
+float32 tolerance
+std_msgs/Bool use_home_layer
+---
+nav_msgs/Path plan

@@ -38,6 +38,7 @@ class RoverMap:
         self.pose = self.map.info.pose        
         for n in self.map.data : 
             n.data.resize(n.layout.dim[0].size, n.layout.dim[1].size)
+            n.data = n.data.T
 
     def __getitem__(self, item):
         if item not in self.map.layers :

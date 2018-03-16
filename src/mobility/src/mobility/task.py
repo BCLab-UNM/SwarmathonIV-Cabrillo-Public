@@ -53,7 +53,10 @@ class Task :
         self.state_publisher.publish(s)
         
     def launch(self, prog):
-        node = roslaunch.core.Node('mobility', prog, args=self.rover)
+        args = self.rover
+        if self.has_block:
+            args += ' --has-block'
+        node = roslaunch.core.Node('mobility', prog, args=args)
         self.task = self.launcher.launch(node)
 
     @sync(task_lock)
@@ -129,6 +132,11 @@ class Task :
                     self.print_state('Recalibrated home. Back to searching.')
                     self.launch(Task.PROG_SEARCH)
                     self.current_state = Task.STATE_SEARCH
+
+            elif self.task.exit_code == 1 :
+                self.print_state('Go Home interrupted, I found a tag. Do pickup.')
+                self.launch(Task.PROG_PICKUP)
+                self.current_state = Task.STATE_PICKUP
                     
             else:
                 # FIXME: What happens when we don't find home?

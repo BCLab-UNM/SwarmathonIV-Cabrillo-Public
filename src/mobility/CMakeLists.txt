@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(mobility)
 
+set(CMAKE_BUILD_TYPE "Release")
+
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
@@ -50,6 +52,7 @@ catkin_install_python (
 	scripts/gohome.py 
 	scripts/dropoff.py
 	scripts/cal_imu.py
+	scripts/planner.py
 	scripts/test_square.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

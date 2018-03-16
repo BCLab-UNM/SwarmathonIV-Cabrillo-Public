@@ -8,7 +8,7 @@ import rospy
 
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie
+from mobility.swarmie import Swarmie, Location
 
 def main():
     global swarmie 
@@ -46,7 +46,17 @@ def main():
     # TODO: Can we ever get a fix this good in real life? 
     home = swarmie.wait_for_fix(distance=3, time=120) 
 
-    home_odom = swarmie.get_odom_location()
+    current_location = swarmie.get_odom_location()
+    current_pose = current_location.get_pose()
+    home_odom = Location(current_location.Odometry)
+
+    # project home_odom location 50cm in front of rover's current location
+    home_odom.Odometry.pose.pose.position.x = (
+        current_pose.x + 0.5 * math.cos(current_pose.theta)
+    )
+    home_odom.Odometry.pose.pose.position.y = (
+        current_pose.y + 0.5 * math.sin(current_pose.theta)
+    )
     swarmie.set_home_odom_location(home_odom)
 
     if home is None : 

@@ -12,7 +12,7 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, GetMap
+from mapping.srv import FindTarget, GetMap, GetNavPlan, GetNavPlanRequest
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
@@ -133,6 +133,8 @@ class Swarmie:
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
         self.TargetsDict = {}
+        self.TargetsBuffer = AprilTagDetectionArray()
+        self.TargetsDictBuffer = {}
         self.targets_timeout = 3
         
         # Intialize this ROS node.
@@ -141,7 +143,7 @@ class Swarmie:
         else:
             rospy.init_node(rover + '_CONTROLLER')
 
-        # Create publishiers. 
+        # Create publishiers.
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
         self.info_publisher = rospy.Publisher('/infoLog', String, queue_size=10, latch=True)
@@ -152,9 +154,8 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service(rover + '/control')
-        rospy.wait_for_service(rover + '/map/find_nearest_target')
-        rospy.wait_for_service(rover + '/map/get_obstacle_map')
-        rospy.wait_for_service(rover + '/map/get_target_map')
+        rospy.wait_for_service(rover + '/map/get_map')
+        rospy.wait_for_service(rover + '/map/get_plan')
 
         # Numpy-ify the GridMap 
         GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
@@ -162,8 +163,8 @@ class Swarmie:
         # Connect to services.
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
-        self._get_obstacle_map = rospy.ServiceProxy(rover + '/map/get_obstacle_map', GetMap)
-        self._get_target_map = rospy.ServiceProxy(rover + '/map/get_target_map', GetMap)
+        self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
+        self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetNavPlan)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
         self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
@@ -173,7 +174,6 @@ class Swarmie:
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
         self.xform = tf.TransformListener()
-        rospy.sleep(1)
 
         # Subscribe to useful topics 
         # These topics only update data. The data is used in other places to initialize
@@ -181,12 +181,24 @@ class Swarmie:
         rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
         rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
         rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
-        rospy.sleep(0.5)
+
+        # Wait for Odometry messages to come in.
+        # Don't wait for messages on /obstacle because it's published infrequently
+        try:
+            rospy.wait_for_message(rover + '/odom/filtered', Odometry, 2)
+            rospy.wait_for_message(rover + '/odom/ekf', Odometry, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for filtered odometry data.')
 
         # The targets subscriber needs odom data since Carter's patch. Make sure odom data
         # exists before we get a target callback.
         rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
-        rospy.sleep(1)
+        try:
+            rospy.wait_for_message(rover + '/targets', AprilTagDetectionArray, 2)
+        except rospy.ROSException:
+            rospy.logwarn(self.rover_name +
+                          ': timed out waiting for /targets data.')
 
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
@@ -205,6 +217,12 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg) : 
+        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
+        #adding currently seen tags to the dict
+        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+        #get the tags from the dict and saves them to Targets
+        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
+    
         if self._is_moving():
             self.Targets = msg
             #create a dict of tags as values and rounded coordinates as the key
@@ -217,6 +235,9 @@ class Swarmie:
             self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
             #get the tags from the dict and saves them to Targets
             self.Targets.detections = self.TargetsDict.values() 
+    
+    #self.TargetsBuffer = AprilTagDetectionArray()
+    #self.TargetsDictBuffer = {}
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -435,38 +456,48 @@ class Swarmie:
     def has_block(self):
         '''Try to determine if a block is in our grasp. 
         
-        Uses the algorithm: 
-        
-        * Raise the wrist all the way up. 
+        Uses the algorithm:
+
+         * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position.
+        * Check if we can see a block that's close to the camera. If so, return `True`
+        * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
-        * Check if this is the simulator. If so, return `True`
         * Return `False`
-        ''' 
+        '''
 
+        # First test: Can we see a bock that's close to the camera with the wrist middle.
+        self.set_wrist_angle(.55)
+        rospy.sleep(1)
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.18 :
+                return True 
+
+        # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
-        rospy.sleep(2)
-        
-        # First test: is something blocking the center sonar at a short range.
+        rospy.sleep(1)
+        blocks = self.get_latest_targets()
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        if len(blocks) > 0 :
+            nearest = blocks[0]
+            z_dist = nearest.pose.pose.position.z 
+            if abs(z_dist) < 0.15 :
+                return True 
+
+        # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
         if obstacles & Obstacle.SONAR_BLOCK :
             return True
 
-        # Second test: Can we see a bock that's close to the camera.
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.x))
-        if len(blocks) == 0 :
-            return False
-        
-        nearest = blocks[0]
-        x_dist = nearest.pose.pose.position.x 
-        if abs(x_dist) < 0.02 : # need to find optimal distance. previous 0.1 detects blocks in front of claw.
-            return True 
-            
-        # Third test: The block never seems to affect the sonar in the simulator. 
-        # Also, the grasped block rarely seems to be recognized in the simulator. 
-        # Which is whack. 
-        return(self.simulator_running())
+        # The block does not affect the sonar in the simulator. 
+        # Use the below check if having trouble with visual target check.
+        # return(self.simulator_running())
+        return(self.sees_resource(6))
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -478,14 +509,16 @@ class Swarmie:
 
     def pickup(self):
         '''Picks up the block'''
-        finger_close_angle = .5
-        if self.simulator_running():
-            finger_close_angle = 0
-
+        #finger_close_angle = .5
+        #if self.simulator_running():
+        #    finger_close_angle = 0
+        finger_close_angle = 0
+        
         self.set_finger_angle(2) #open
         rospy.sleep(1)
         self.set_wrist_angle(1)
         rospy.sleep(.7)
+        
         self.set_finger_angle(finger_close_angle) #close
         rospy.sleep(1)
         self.wrist_up()
@@ -508,6 +541,10 @@ class Swarmie:
         '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
         return self.Targets
     
+    def get_targets_buffer(self) :
+        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
+        return self.TargetsBuffer
+    
     def get_obstacle_map(self):
         '''Return a `mapping.msg.RoverMap` that is the obstacle map.
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
@@ -517,6 +554,44 @@ class Swarmie:
         '''Return a `mapping.msg.RoverMap` that is the targets map.
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
+
+    def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
+        '''Get plan from current location to goal location.
+
+        Args:
+
+        * `goal` (`geometry_msgs/Point`) or ('geometery_msgs/Pose2D`) - The \
+         goal location in the /odom frame.
+        * `tolerance` (`float`) - The acceptable distance to the goal you \
+         are willing to have the path return.
+        * `use_home_layer` (`bool`) - Whether to plan a path considering \
+         mapped home tags as obstacles.
+
+        Returns:
+
+        * `plan` (`nav_msgs/GetNavPlanResponse`) - contains a `nav_msgs/Path` \
+         with an array of `geometry_msgs/PoseStamped` poses to navigate to.
+
+        Raises:
+
+        * (`rospy.ServiceException`) - if no path to the goal can be found. \
+         This can happen if you requested an impossible goal to navigate to \
+         given the current map and obstacle layers.
+        '''
+        request = GetNavPlanRequest()
+        request.use_home_layer.data = use_home_layer
+
+        cur_loc = self.get_odom_location().get_pose()
+        request.start.pose.position.x = cur_loc.x
+        request.start.pose.position.y = cur_loc.y
+        request.goal.pose.position.x = goal.x
+        request.goal.pose.position.y = goal.y
+        if tolerance > 0:
+            request.tolerance = tolerance
+        else:
+            request.tolerance = 0.0
+
+        return self._get_plan(request)
     
     def start_imu_calibration(self):
         '''Start calibration Step One for the rover's IMU.
@@ -695,7 +770,7 @@ class Swarmie:
         
         Arguments:
         
-        * `place`: (`geometry_msgs.msg.Point`): The place to drive.
+        * `place`: (`geometry_msgs.msg.Point` or `geometry_msgs.msg.Pose2D`): The place to drive.
 
         Keyword Arguments/Returns/Raises:
         
@@ -737,7 +812,7 @@ class Swarmie:
         ''' calls _is_moving that uses OdomLocation angular.z & linear.x  
         Returns: 
 
-        * (`bool`) : True if swarmie is moving and False if stationary
+        * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
         return(self._is_moving())
         
@@ -745,15 +820,23 @@ class Swarmie:
         ''' uses OdomLocation angular.z & linear.x  
         Returns: 
 
-        * (`bool`) : True if swarmie is moving and False if stationary
+        * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
+        if (self.OdomLocation.Odometry is None):
+            return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-
-    def get_nearest_block_location(self):
+    def get_nearest_block_location(self, use_targets_buffer=False):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
         Nearest block will be the nearest to the camera, which should almost always be good enough.
+
+        Args:
+
+        * `use_targets_buffer` (`bool`) - whether to use the rolling buffer
+        of AprilTagDetections. Default value of False uses
+        Swarmie.get_latest_targets(), which you can rely on to return only
+        targets currently in view.
 
         Returns:
 
@@ -761,8 +844,11 @@ class Swarmie:
         '''
         global rovername, swarmie
 
-        # Find the nearest block
-        blocks = [tag for tag in self.get_latest_targets().detections if tag.id is 0]
+        # Finds all visible apriltags
+        if use_targets_buffer is True:
+            blocks = self.get_targets_buffer().detections
+        else:
+            blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 
@@ -773,8 +859,142 @@ class Swarmie:
                                   + x.pose.pose.position.z**2))
 
         nearest = blocks[0]
+
+        # checks for hometag between rover and block.
+        if nearest.id==256:
+            return None
+
         self.xform.waitForTransform(self.rover_name + '/odom',
                         nearest.pose.header.frame_id, nearest.pose.header.stamp,
                         rospy.Duration(3.0))
-
+        
+        # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
+        
+    def set_search_exit_poses(self):
+        '''Remember the search exit location.'''
+        odom =  self.get_odom_location().get_pose()
+        gps = self.get_gps_location().get_pose()
+    
+        rospy.set_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},
+             'gps': {'x': gps.x, 'y': gps.y, 'theta': gps.theta}}
+        )
+
+    def get_search_exit_poses(self):
+        '''Get the odom and gps poses (location and heading) where search last
+        exited (saw a tag).
+
+        Returns:
+
+        * (`geometry_msgs.msg.Pose2D`): odom_pose - The pose in the /odom frame
+        * (`geometry_msgs.msg.Pose2D`): gps_pose - The pose in the /map frame
+
+        Will return invalid poses (containing all zeroes) if search exit
+        location hasn't been set yet.
+
+        Use:
+            odom_pose, gps_pose = swarmie.get_search_exit_poses()
+            swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+            swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        '''
+        poses = rospy.get_param(
+            '/' + self.rover_name + '/search_exit_poses',
+            {'odom': {'x': 0, 'y': 0, 'theta': 0},
+             'gps': {'x': 0, 'y': 0, 'theta': 0}}
+        )
+        return ((Pose2D(**poses['odom']), Pose2D(**poses['gps'])))
+
+    def has_search_exit_poses(self):
+        '''Check to see if the search exit location parameter is set.
+
+        Returns:
+
+        * (`bool`): True if the parameter exists, False otherwise.
+        '''
+        return rospy.has_param('/' + self.rover_name + '/search_exit_poses')
+    
+
+    def sees_resource(self, required_matches,crop=True):
+        '''Check to see if a resource can be seen between the grippers
+        Args:
+        * (`int`): the minimum number of matches required to return true
+        Returns:
+        * (`bool`): True if the number of required matches has been met, False otherwise.
+        '''
+        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
+        ### TODO crop the image on where the tag in the claws would be
+        from sensor_msgs.msg import CompressedImage
+        import numpy as np
+        import cv2
+        
+        try:
+            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=3)
+        except(rospy.ROSException), e:
+            print("Camera Broke?")
+            print("Error message: ", e)
+        np_arr = np.fromstring(test.data, np.uint8)
+        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
+        #img2 = cv2.imread(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource'),0) 
+        import pickle
+        img2 = pickle.load( open(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource_pickel'), "rb" ) ) #this 
+        if(crop):       #(y1:y2, x1:x2)
+            img1 = img1[60:220, 50:220]
+        ''' #for testing1
+        cv2.imshow("cropped", img1)
+        cv2.waitKey(0)        
+        ''' #end for testing1
+        
+        # Initiate SIFT detector
+        #sift = cv2.SIFT() #for opencv2
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(img1,None)
+        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
+        '''
+        Throws
+        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
+        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
+        '''
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks = 50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1,des2,k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        good = []
+        for m,n in matches:
+            if m.distance < 0.7*n.distance:
+                good.append(m)
+                
+        '''#for testing2 ###############################################
+        from matplotlib import pyplot as plt
+        # Need to draw only good matches, so create a mask
+        matchesMask = [[0,0] for i in xrange(len(matches))]
+
+        # ratio test as per Lowe's paper
+        for i,(m,n) in enumerate(matches):
+            if m.distance < 0.7*n.distance:
+                matchesMask[i]=[1,0]
+
+        draw_params = dict(matchColor = (0,255,0),
+                           singlePointColor = (255,0,0),
+                           matchesMask = matchesMask,
+                           flags = 0)
+        img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,matches,None,**draw_params)
+        plt.imshow(img3,),plt.show()
+        '''#end for testing2   ###############################################
+        
+        print("Seen a resource with",len(good)*5,"% confidence")
+        
+        if len(good)>required_matches-1:
+            return(True)
+        else:
+            return(False)
+        

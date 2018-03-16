@@ -8,7 +8,7 @@ Pitch and roll should be below a set threshold, given that the rover is
 placed on level ground after calibration procedure is complete just before
 terminating this program.
 
-SSE's should also be below a set threshold.
+v[E]'s should also be below a set threshold.
 
 todo: pick SSE and roll/pitch thresholds
 todo: delete files if not satisfactory?
@@ -19,10 +19,14 @@ import sys
 import os
 import math
 import numpy as np
+import atexit
+import traceback
 
 import rospy
 from std_msgs.msg import Int32MultiArray
 
+CAL_MINMAX_FILE = os.environ['HOME'] + '/KSC.cal'
+CAL_DATA_FILE = os.environ['HOME'] + '/KSC_extended_calibration.csv'
 
 def ellipsoid_fit(x, y, z):
     """
@@ -74,10 +78,10 @@ def handle_exit(signal, frame) :
     global logfile, calfile
 
     if not logfile.closed:
-        print ('Closing raw_cal.txt')
+        print ('Closing', CAL_DATA_FILE)
         logfile.close()
     if not calfile.closed:
-        print ('Closing KSC.cal.')
+        print ('Closing', CAL_MINMAX_FILE)
         calfile.close()
 
     sys.exit(0)
@@ -138,13 +142,96 @@ def error(x, y, z, offsets, transform):
     offsets = np.array(offsets)
     transform = np.array(transform)
     v = transform.dot(v - offsets)
-    sse = np.sum(np.square(np.sqrt(np.sum(np.square(v), 0)) - 1))
-    return sse
+    # sse = np.sum(np.square(np.sqrt(np.sum(np.square(v), 0)) - 1))
+    var_err = np.var(np.sqrt(np.sum(np.square(v), 0)) - 1)
+    return var_err
 
 
 def deg(rad):
     return rad * 180 / math.pi
 
+def check_calibration() :
+    global calculating_data, roll, pitch, ROLL_PITCH_TOLERANCE
+
+    try:
+        print('Loading', CAL_DATA_FILE, 'for examination')
+        data = np.loadtxt(CAL_DATA_FILE, delimiter=',')
+        mag_x = data[:,0]
+        mag_y = data[:,1]
+        mag_z = data[:,2]
+        acc_x = data[:,3]
+        acc_y = data[:,4]
+        acc_z = data[:,5]
+        (mag_offsets, mag_transform) = ellipsoid_fit(mag_x, mag_y, mag_z)
+        (acc_offsets, acc_transform) = ellipsoid_fit(acc_x, acc_y, acc_z)
+        calculating_data = True
+
+        mag_var_err = error(mag_x, mag_y, mag_z, mag_offsets, mag_transform)
+        acc_var_err = error(acc_x, acc_y, acc_z, acc_offsets, acc_transform)
+        num_pts = len(mag_x)
+        minutes = num_pts // 50 // 60  # 50 hz, 60 sec/min
+        seconds = num_pts // 50 % 60  # 50 hz, 60 sec/min
+
+        print('Num data points in file:', num_pts)
+        print('Approx time spent calibrating: {}:{:02}'.format(minutes, seconds))
+        print('Magnetometer v[Err]:', mag_var_err)
+        print('Accelerometer v[Err]:', acc_var_err)
+
+        if math.isnan(mag_var_err) or abs(mag_var_err) >= 1e-3 :
+            raise ValueError("The magnetometer fit is too poor to use.")
+        
+        if math.isnan(acc_var_err) or abs(acc_var_err) >= 3e-3 :
+            raise ValueError("The accelerometer fit is too poor to use.")
+
+        print('Checking roll and pitch...')
+        rolls = []
+        pitches = []
+        rate = rospy.Rate(50)
+        for i in range(20):
+            rolls.append(roll)
+            pitches.append(pitch)
+            rate.sleep()
+        avg_roll = deg(np.average(rolls))
+        avg_pitch = deg(np.average(pitches))
+
+        print('Average roll: {:6.3f} deg'.format(avg_roll))
+        print('Average pitch: {:6.3f} deg'.format(avg_pitch))
+
+        if abs(avg_roll) > ROLL_PITCH_TOLERANCE:
+            raise ValueError('Roll exceeds tolerance threshold of {:.1f} deg.'.format(
+                ROLL_PITCH_TOLERANCE)
+            )
+        if abs(avg_pitch) > ROLL_PITCH_TOLERANCE:
+            raise ValueError('Pitch exceeds tolerance threshold of {:.1f} deg.'.format(
+                ROLL_PITCH_TOLERANCE)
+            )
+
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+        
+        os.remove(CAL_DATA_FILE)
+        os.remove(CAL_MINMAX_FILE)
+        
+        print ('''
+*******************************************************************************
+** 
+** 
+** ERROR: CALIBRATION FAILED 
+**
+** 
+*******************************************************************************
+
+The calibration data that was gathered failed to result in a good calibration
+fit. This is most likely because the calibration procedure was not done slowly
+or completely enough. 
+
+****** THE CALIBRATION FILES HAVE BEEN REMOVED *******
+
+Using a poor calibration will cause poor performance and hurt teams. Please
+recalibrate. 
+
+''')
 
 if __name__ == '__main__' :
     global logfile, calfile
@@ -152,9 +239,11 @@ if __name__ == '__main__' :
     global acc_offsets, acc_transform, mag_offsets, mag_transform
     global collecting_data, calculating_data
 
-    logfile = open(os.environ['HOME'] + '/raw_cal.txt', 'w')
-    calfile = open(os.environ['HOME'] + '/KSC.cal', 'w')
+    atexit.register(check_calibration)
     signal.signal(signal.SIGINT, handle_exit)
+    
+    logfile = open(CAL_DATA_FILE, 'w')
+    calfile = open(CAL_MINMAX_FILE, 'w')
 
     collecting_data = True
     calculating_data = False
@@ -193,62 +282,10 @@ if __name__ == '__main__' :
     raw_input('When finished, put rover down on level ground and press enter.')
     collecting_data = False
 
-    print ('Saving KSC.cal.')
+    print ('Saving', CAL_MINMAX_FILE)
     calfile.write('min: {{ {}, {}, {} }} max: {{ {}, {}, {} }}\n'.format(x_min, y_min, z_min, x_max, y_max, z_max))
     calfile.close()
 
-    print ('Closing raw_cal.txt')
+    print ('Closing', CAL_DATA_FILE)
     logfile.close()
 
-    print('Loading raw_cal.txt for examination')
-    data = np.loadtxt(os.environ['HOME'] + '/raw_cal.txt', delimiter=',')
-    mag_x = data[:,0]
-    mag_y = data[:,1]
-    mag_z = data[:,2]
-    acc_x = data[:,3]
-    acc_y = data[:,4]
-    acc_z = data[:,5]
-    (mag_offsets, mag_transform) = ellipsoid_fit(mag_x, mag_y, mag_z)
-    (acc_offsets, acc_transform) = ellipsoid_fit(acc_x, acc_y, acc_z)
-    calculating_data = True
-
-    mag_sse = error(mag_x, mag_y, mag_z, mag_offsets, mag_transform)
-    acc_sse = error(acc_x, acc_y, acc_z, acc_offsets, acc_transform)
-    num_pts = len(mag_x)
-    minutes = num_pts // 50 // 60  # 50 hz, 60 sec/min
-    seconds = num_pts // 50 % 60  # 50 hz, 60 sec/min
-
-    print('Num data points in file:', num_pts)
-    print('Approx time spent calibrating: {}:{:02}'.format(minutes, seconds))
-    print('Magnetometer SSE:', mag_sse)
-    print('Accelerometer SSE:', acc_sse)
-
-    print('Checking roll and pitch...')
-    rolls = []
-    pitches = []
-    rate = rospy.Rate(50)
-    for i in range(20):
-        rolls.append(roll)
-        pitches.append(pitch)
-        rate.sleep()
-    avg_roll = deg(np.average(rolls))
-    avg_pitch = deg(np.average(pitches))
-
-    print('Average roll: {:6.3f} deg'.format(avg_roll))
-    print('Average pitch: {:6.3f} deg'.format(avg_pitch))
-
-    roll_pitch_ok = True
-    if abs(avg_roll) > ROLL_PITCH_TOLERANCE:
-        print('\nRoll exceeds tolerance threshold of {:.1f} deg.'.format(
-            ROLL_PITCH_TOLERANCE)
-        )
-        roll_pitch_ok = False
-    if abs(avg_pitch) > ROLL_PITCH_TOLERANCE:
-        print('\nPitch exceeds tolerance threshold of {:.1f} deg.'.format(
-            ROLL_PITCH_TOLERANCE)
-        )
-        roll_pitch_ok = False
-    if not roll_pitch_ok:
-        print('Poor calibration file. Re-run calibration procedure.')
-    else:
-        print('Roll and pitch look ok.')
