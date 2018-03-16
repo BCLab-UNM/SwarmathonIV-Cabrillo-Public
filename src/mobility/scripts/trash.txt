@@ -1,0 +1,36 @@
+def find_area():
+    global swarmie
+    global local_map
+    #local_map needs to be a dictionary of arrays that contain fr,fl,br,bl that are poses indicating a rectangle with each angle pointing the next point to the right
+    fillmap()
+    l = local_map[unexplored][0].fl
+    r = local_map[unexplored][0].fl
+    r.x = r.x + math.cos(r.theta) * 2
+    r.y = r.y + math.sin(r.theta) * 2
+    d = math.hypot(local_map[unexplored][0].bl.x - l.x,local_map[unexplored][0].bl.y - l.y)
+    return (l,r,d)
+
+
+def branch(tx,ty,delta,goals,goalp,mapt):
+    global path
+    global local_map
+    unob = True
+    atGoal = False
+    delta = tx / ty
+    add = int(math.fabs(ty) / ty)
+    tx = tx + 25
+    ty = ty + 25
+    while (tx > 0 and tx < 50) and (ty > 0 and ty < 50) and unob and not atGoal:
+        ty = ty + add
+        tx = int(ty * delta)
+        if mapt[ty][tx] > prob or mapt[ty + 1][tx] > prob or mapt[ty][tx + 1] > prob or mapt[ty - 1][tx] > prob or mapt[ty][tx - 1] > prob:
+            unob = False
+        elif numpy.isnan(mapt[ty][tx]) or numpy.isnan(mapt[ty + 1][tx]) or numpy.isnan(mapt[ty][tx + 1]) or numpy.isnan(mapt[ty - 1][tx]) or numpy.isnan(mapt[ty][tx - 1]):
+            unob = False
+        elif math.fabs(ty / 2 - goals.y) < pVar or math.fabs(ty / 2 - goals.y) < pVar:
+            atGoal = true
+    if atGoal and unob:
+        return True
+    else:
+    
+        branch()
