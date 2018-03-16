@@ -48,4 +48,10 @@ build=$repo/build
 
 $arduino --upload --preserve-temp-files --pref serial.port=$swarmie_dev --pref build.verbose=1 --pref upload.verbose=1 --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
 
+if [ -f $projdir/devel/setup.bash ]; then
+    echo "deploy_host.sh not called assuming rover_onboard_node_launch"
+    source /opt/ros/kinetic/setup.bash
+    source $projdir/devel/setup.bash
+fi
+
 roslaunch $launchfile name:=$(hostname) simulation:=False swarmie_dev:=$swarmie_dev ublox_dev:=$ublox_dev

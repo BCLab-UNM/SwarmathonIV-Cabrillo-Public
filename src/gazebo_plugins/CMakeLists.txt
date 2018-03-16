@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(gazebo_plugins)
 
+set(CMAKE_BUILD_TYPE "Release")
+
 set(CMAKE_CXX_FLAGS "-std=c++0x")
 
 # Load catkin and all dependencies required for this package
