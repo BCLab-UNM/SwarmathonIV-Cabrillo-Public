@@ -8,6 +8,10 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <map>
+#include <set>
+#include <array>
+#include <queue>
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
@@ -24,6 +28,8 @@
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/GetPlan.h>
+#include <nav_msgs/Path.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_srvs/Empty.h>
@@ -37,18 +43,381 @@ using namespace std;
 
 string rover;
 
-grid_map::GridMap obstacle_map;
-grid_map::GridMap target_map;
+grid_map::GridMap rover_map;
 
 ros::Publisher obstaclePublish;
-ros::Publisher obstacle_map_publisher;
-ros::Publisher target_map_publisher;
+ros::Publisher rover_map_publisher;
+ros::Publisher path_publisher;
 
 geometry_msgs::Pose2D currentLocation;
+bool isMoving = false;
 tf::TransformListener *cameraTF;
 
-double collisionDistance = 0.6; //meters the ultrasonic detectors will flag obstacles
+double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
+double doubleSensorCollisionDist = 0.6; //meters the two sensors will flag obstacles
+const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
+const double MAP_RESOLUTION = 0.5; // map resolution, meters per cell
 unsigned int obstacle_status;
+
+
+/*
+ * Data structures and A* Search adapted from:
+ * https://www.redblobgames.com/pathfinding/a-star/introduction.html
+ * https://www.redblobgames.com/pathfinding/a-star/implementation.html
+ *
+ * Sample code from https://www.redblobgames.com/pathfinding/a-star/
+ *
+ * Copyright 2014 Red Blob Games <redblobgames@gmail.com>
+ * Feel free to use this code in your own projects, including commercial projects
+ * License: Apache v2.0 <http://www.apache.org/licenses/LICENSE-2.0.html>
+ */
+
+struct GridLocation {
+	int x, y;
+};
+
+// Helpers for GridLocation
+
+bool operator == (GridLocation a, GridLocation b) {
+	return a.x == b.x && a.y == b.y;
+}
+
+bool operator != (GridLocation a, GridLocation b) {
+	return !(a == b);
+}
+
+bool operator < (GridLocation a, GridLocation b) {
+	return std::tie(a.x, a.y) < std::tie(b.x, b.y);
+}
+
+bool in_bounds(grid_map::GridMap& map, GridLocation location) {
+        int width = map.getSize()(1);
+		int height = map.getSize()(0);
+		return 0 <= location.x && location.x < width
+			   && 0 <= location.y && location.y < height;
+}
+
+// Neighbors for 8-connected grid
+const std::array<GridLocation, 8> DIRECTIONS =
+		{GridLocation{-1, 0}, GridLocation{-1, 1},
+		 GridLocation{0, 1}, GridLocation{1, 1},
+		 GridLocation{1, 0}, GridLocation{1, -1},
+		 GridLocation{0, -1}, GridLocation{-1, -1}};
+
+// 2-step away neighbors for an 8-connected grid
+const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
+		{GridLocation{-2, 0}, GridLocation{-2, 1}, GridLocation{-2, 2},
+		 GridLocation{-1, 2}, GridLocation{0, 2}, GridLocation{1, 2},
+		 GridLocation{2, 2}, GridLocation{2, 1}, GridLocation{2, 0},
+		 GridLocation{2, -1}, GridLocation{2, -2}, GridLocation{1, -2},
+		 GridLocation{0, -2}, GridLocation{-1, -2}, GridLocation{-2, -2},
+		 GridLocation{-2, -1}};
+
+/*
+ * Check if location and it's neighbors obstacle values are all below threshold.
+ * location_from and location_to must be in_bounds
+ */
+bool passable(grid_map::GridMap& map, GridLocation location_from,
+			  GridLocation location_to) {
+	const double OBSTACLE_THRESHOLD = 0.10;
+    grid_map::Index index;
+    index(0) = location_to.x;
+	index(1) = location_to.y;
+    GridLocation direction{location_to.x - location_from.x,
+						   location_to.y - location_from.y};
+	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+		return false;
+	}
+//    if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
+//		return false;
+//	}
+
+	if (direction.x != 0 || direction.y != 0) { // it's a diagonal direction
+		grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
+		grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
+
+		// not passable if both adjacent neighbors of diagonal are blocked
+//		if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+//            map.at("target", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
+//			&& (map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
+//            map.at("target", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+//			return false;
+//		}
+        if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+			map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
+			return false;
+		}
+	}
+
+    return true;
+}
+
+std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
+    std::vector<GridLocation> results;
+
+    for (GridLocation direction : DIRECTIONS) {
+        GridLocation next{location.x + direction.x, location.y + direction.y};
+        if (in_bounds(map, next) && passable(map, location, next)) {
+            results.push_back(next);
+        }
+    }
+
+    if ((location.x + location.y) % 2 == 0) {
+        // aesthetic improvement on square grids
+        std::reverse(results.begin(), results.end());
+    }
+
+    return results;
+}
+
+// to_node should be valid position on the grid. Not necessarily with a finite
+// value, though.
+double cost(grid_map::GridMap& map, GridLocation to_node) {
+	// Inflate cost of cells which are neighboring an obstacle
+	const double INFLATION_PCT = 0.7;
+	const double LETHAL_COST = 255;
+	const double NEUTRAL_COST = 50; // not yet mapped cells will take this value
+	// minimum cost for a cell, must match the heuristic. This is slightly
+	// larger than sqrt(2), the heuristic value for a diagonal move
+	double cost = 1.5;
+
+	grid_map::Index index;
+	index(0) = to_node.x;
+	index(1) = to_node.y;
+
+	if (map.isValid(index, "obstacle")) {
+        cost += 2 * LETHAL_COST * map.at("obstacle", index);
+	}
+//	if (map.isValid(index, "target")) {
+//		cost += LETHAL_COST * map.at("target", index);
+//	}
+
+	if (cost > LETHAL_COST) { // skip 2-layer neighbors check if possible
+		cost = LETHAL_COST;
+		return cost;
+	}
+
+    for (GridLocation direction : DIRECTIONS) {
+        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+		index(0) = next.x;
+		index(1) = next.y;
+        if (in_bounds(map, next)) {
+            if (map.isValid(index, "obstacle")) {
+                cost += INFLATION_PCT * 2 * LETHAL_COST *
+                        map.at("obstacle", index);
+            }
+//            if (map.isValid(index, "target")) {
+//                cost += INFLATION_PCT * LETHAL_COST *
+//                        map.at("target", index);
+//            }
+        }
+    }
+
+    for (GridLocation direction : TWO_STEP_DIRECTIONS) {
+        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+		index(0) = next.x;
+		index(1) = next.y;
+        if (in_bounds(map, next)) {
+            if (map.isValid(index, "obstacle")) {
+                cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
+                        map.at("obstacle", index);
+            }
+//            if (map.isValid(index, "target")) {
+//                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+//                        map.at("target", index);
+//            }
+        }
+    }
+
+	if (cost > LETHAL_COST) {
+		cost = LETHAL_COST;
+	}
+
+    return cost;
+}
+
+template<typename T, typename priority_t>
+struct PriorityQueue {
+	typedef std::pair<priority_t, T> PQElement;
+	std::priority_queue<PQElement, std::vector<PQElement>,
+			std::greater<PQElement>> elements;
+
+	inline bool empty() const {
+		return elements.empty();
+	}
+
+	inline void put(T item, priority_t priority) {
+		elements.emplace(priority, item);
+	}
+
+	T get() {
+		T best_item = elements.top().second;
+		elements.pop();
+		return best_item;
+	}
+};
+
+
+
+/*
+ * Helper to a_star_search() and at_goal()
+ *
+ * The hueristic for A* approximates the minimum distance between location
+ * a and location b, if the route between them was free of any obstacles.
+ *
+ * Octile distance, for 8-connected grid
+ * http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
+ */
+inline double heuristic(GridLocation a, GridLocation b) {
+    const double D = 1;
+	const double D2 = 1.41421356237; // sqrt(2)
+	double dx = abs(a.x - b.x);
+	double dy = abs(a.y - b.y);
+	return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy);
+}
+
+/*
+ * Helper to a_star_search()
+ *
+ * Returns true if distance from current location to goal location is
+ * within the acceptable tolerance.
+ */
+inline bool at_goal(GridLocation current, GridLocation goal, int tolerance) {
+	return heuristic(current, goal) <= tolerance;
+}
+
+/*
+ * A* Search Algorithm
+ *
+ * Returns true if a path from start to goal is found.
+ * Otherwise, returns false.
+ *
+ * Looks for the shortest path in map from start to goal. Stops when current
+ * cell is within tolerance distance of goal cell.
+ *
+ * If using tolerance > 0 and the search completes successfully, the goal
+ * location will be modified here to be the location where the search ended.
+ * This way, reconstruct path will still function normally.
+ */
+bool a_star_search(
+		grid_map::GridMap& map,
+        GridLocation start,
+        GridLocation& goal,
+		int tolerance,
+        std::map<GridLocation, GridLocation>& came_from,
+        std::map<GridLocation, double>& cost_so_far) {
+
+	PriorityQueue<GridLocation, double> frontier;
+	frontier.put(start, 0);
+
+	came_from[start] = start;
+	cost_so_far[start] = 0;
+
+	while (!frontier.empty()) {
+		GridLocation current = frontier.get();
+
+		if (at_goal(current, goal, tolerance)) {
+			goal = current; // modify goal location so path rebuilding works
+			return true;
+		}
+
+		for (GridLocation next : neighbors(map, current)) {
+			double new_cost = cost_so_far[current] + cost(map, next);
+			if (cost_so_far.find(next) == cost_so_far.end()
+				|| new_cost < cost_so_far[next]) {
+				cost_so_far[next] = new_cost;
+				double priority = new_cost + heuristic(next, goal);
+				frontier.put(next, priority);
+				came_from[next] = current;
+			}
+		}
+	}
+	return false;
+}
+
+/*
+ * Helper to straighten_path(). Returns true if end is in line of sight of
+ * start. Returns false otherwise.
+ *
+ * end is in line of sight if line iterator between the two indexes doesn't
+ * cross a cell with value above OBSTACLE_THRESHOLD
+ */
+bool in_line_of_sight(
+		grid_map::GridMap& map,
+		grid_map::Index start,
+		grid_map::Index end) {
+	const double OBSTACLE_THRESHOLD = 0.10;
+	for (grid_map::LineIterator iterator(map, start, end);
+		 !iterator.isPastEnd(); ++iterator) {
+        if (map.isValid(*iterator, "obstacle")) {
+            if (map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
+				return false;
+			}
+//			if (map.at("target", *iterator) > OBSTACLE_THRESHOLD) {
+//                return false;
+//            }
+        }
+	}
+	return true;
+}
+
+/*
+ * Straighten first part of the path by finding the furthest waypoint that's
+ * still in line-of-sight (not blocked by obstacles). Straightened path will
+ * begin with the furthest waypoint in line-of-sight, followed by the remaining
+ * original waypoints.
+ *
+ * Returns a vector containing the new, straightened path.
+ * Returns the original path if path has 1 or fewer waypoints.
+ */
+std::vector<GridLocation> straighten_path(
+		grid_map::GridMap& map,
+		std::vector<GridLocation> path) {
+	std::vector<GridLocation> result;
+
+	if (path.size() <= 1) {
+		return path;
+	}
+
+	grid_map::Index start(path[0].x, path[0].y);
+	unsigned int i = 1;
+    while (i < path.size()) {
+		grid_map::Index end(path[i].x, path[i].y);
+        if (!in_line_of_sight(map, start, end)) {
+			break;
+		}
+		i++;
+	}
+
+	result.push_back(path[i - 1]); // last in line-of-sight location
+	while (i < path.size()) {
+		result.push_back(path[i]);
+		i++;
+	}
+
+	return result;
+}
+
+/*
+ * Rebuild the path from the map of came_from locations.
+ * came_from obviously needs to contain a path from goal back to start at this
+ * point.
+ */
+std::vector<GridLocation> reconstruct_path(
+		GridLocation start, GridLocation goal,
+		std::map<GridLocation, GridLocation> came_from) {
+	std::vector<GridLocation> path;
+	GridLocation current = goal;
+	while (current != start) {
+		path.push_back(current);
+		current = came_from[current];
+	}
+    // Don't bother pushing the start location onto the path.
+	// todo: put this back now that path straightening is in?
+	path.push_back(start); // optional
+	reverse(path.begin(), path.end());
+	return path;
+}
 
 double poseToYaw(const geometry_msgs::Pose &pose) {
     tf::Quaternion q(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
@@ -58,24 +427,29 @@ double poseToYaw(const geometry_msgs::Pose &pose) {
     return yaw;
 }
 
-void publishObstacleMap() {
-	if (obstacle_map_publisher.getNumSubscribers() > 0) {
+void publishRoverMap() {
+	if (rover_map_publisher.getNumSubscribers() > 0) {
 		ros::Time time = ros::Time::now();
 		grid_map_msgs::GridMap message;
-		obstacle_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(obstacle_map, message);
-		obstacle_map_publisher.publish(message);
+		rover_map.setTimestamp(time.toNSec());
+		grid_map::GridMapRosConverter::toMessage(rover_map, message);
+		rover_map_publisher.publish(message);
 	}
 }
 
-void publishTargetMap() {
-	if (target_map_publisher.getNumSubscribers() > 0) {
-		ros::Time time = ros::Time::now();
-		grid_map_msgs::GridMap message;
-		target_map.setTimestamp(time.toNSec());
-		grid_map::GridMapRosConverter::toMessage(target_map, message);
-		target_map_publisher.publish(message);
-	}
+/*
+ * Helper to sonarHandler() and targetHandler()
+ * Returns val decreased by rate, with minimum val zero.
+ * Returns zero if val is not a number (isnan(val)) or if decreasing val by
+ * rate would reduce val to < 0.
+ */
+double decreaseVal(double val, double rate) {
+	if (isnan(val))
+		val = 0;
+	val -= rate;
+	if (val < 0)
+		val = 0;
+	return val;
 }
 
 /* sonarHandler() - Called when there's new data from the sonar array.
@@ -93,94 +467,145 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
+	// Minimum distance sonar center obstacles will be marked at. Anything
+	// inside this distance should be a block in the claw.
+    const double MIN_CENTER_DIST = 0.15;
+    // todo: what's a good number for SONAR_DEPTH?
+    const double SONAR_DEPTH = 0.75;  // limit mark_poly to 75cm past measured ranges
+    // todo: what's a good number for VIEW_RANGE?
+	// VIEW_RANGE can help avoid marking "fake" obstacles seen due to sonar
+	// noise at longer ranges. It limits the mark_poly to this range, but
+	// not clear_poly, so the map can still be cleared past this point.
+	// todo: limit clear_poly left and right ranges using VIEW_RANGE?
+    const double VIEW_RANGE = 1.5;  // don't mark obstacles past this range
+
 	// Update the timestamp in the Obstacle map.
-	obstacle_map.setTimestamp(ros::Time::now().toNSec());
+	rover_map.setTimestamp(ros::Time::now().toNSec());
 
 	// Calculate the obstacle status.
-	if (sonarLeft->range < collisionDistance && sonarCenter->range < collisionDistance) {
+	// Single sensor ranges below single sensor threshold can trigger an
+	// obstacle message.
+	if (sonarLeft->range < singleSensorCollisionDist) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
+	}
+    if (sonarCenter->range < singleSensorCollisionDist &&
+        sonarCenter->range > 0.12) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
+	}
+    if (sonarRight->range < singleSensorCollisionDist) {
+		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
+	}
+
+	// Two adjacent sensors both below double sensor threshold can also trigger
+	// an obstacle message.
+	if (sonarLeft->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
-	if (sonarRight->range < collisionDistance && sonarCenter->range < collisionDistance) {
+	if (sonarRight->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
+
 	if (sonarCenter->range < 0.12) {
 		//block in front of center ultrasound.
 		next_status |= swarmie_msgs::Obstacle::SONAR_BLOCK;
 	}
 
-	grid_map::Polygon view_poly;
-	view_poly.setFrameId(obstacle_map.getFrameId());
-
-	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
-
-	// Left sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + 3 * sin(currentLocation.theta + M_PI_4)
-			));
-
-	// Center sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta),
-					currentLocation.y + 3 * sin(currentLocation.theta)
-			));
-
-	// Right sonar
-	view_poly.addVertex(
-			grid_map::Position(currentLocation.x + 3 * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + 3 * sin(currentLocation.theta - M_PI_4)
-			));
-
-	// Increase the "obstacleness" of the viewable area.
-	for (grid_map::PolygonIterator iterator(obstacle_map, view_poly);
-	      !iterator.isPastEnd(); ++iterator) {
-		double val = obstacle_map.at("obstacles", *iterator);
-		if (isnan(val)) {
-			val = 0.5;
-		}
-		val += 0.01;
-		if (val > 1)
-			val = 1;
-	    obstacle_map.at("obstacles", *iterator) = val;
-	  }
-
 
 	grid_map::Polygon clear_poly;
-	clear_poly.setFrameId(obstacle_map.getFrameId());
+	clear_poly.setFrameId(rover_map.getFrameId());
 
 	clear_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
 
 	// Left sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + M_PI_4),
-					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + M_PI_4)
+			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
 			));
 
 	// Center sonar
-	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarCenter->range * cos(currentLocation.theta),
-					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
-			));
+	// Only use if its range is far enough away to definitely not be a block
+	// in the claw.
+	if (sonarCenter->range > MIN_CENTER_DIST) {
+		clear_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarCenter->range *
+				cos(currentLocation.theta),
+						currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
+				));
+	}
 
 	// Right sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - M_PI_4),
-					currentLocation.y + sonarRight->range * sin(currentLocation.theta - M_PI_4)
+			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
+					currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
 			));
 
 	// Clear the area that's clear in sonar.
-	for (grid_map::PolygonIterator iterator(obstacle_map, clear_poly);
+	for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
 	      !iterator.isPastEnd(); ++iterator) {
-		double val = obstacle_map.at("obstacles", *iterator);
-		if (!isnan(val)) {
-			val -= 0.05;
-			if (val < 0)
-				val = 0;
-		}
-	    obstacle_map.at("obstacles", *iterator) = val;
+		double val = rover_map.at("obstacle", *iterator);
+	    rover_map.at("obstacle", *iterator) = decreaseVal(val, 0.05);
 	  }
+
+	grid_map::Polygon mark_poly;
+	mark_poly.setFrameId(rover_map.getFrameId());
+	bool do_marking = false;
+
+	if (sonarLeft->range < VIEW_RANGE) {
+		do_marking = true;
+		// Left sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarLeft->range + SONAR_DEPTH) * cos(currentLocation.theta + SONAR_ANGLE),
+                    currentLocation.y + (sonarLeft->range + SONAR_DEPTH) * sin(currentLocation.theta + SONAR_ANGLE)
+				));
+	}
+
+	if (sonarCenter->range > MIN_CENTER_DIST && sonarCenter->range < VIEW_RANGE) {
+		do_marking = true;
+		// Center sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarCenter->range * cos(currentLocation.theta),
+					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarCenter->range + SONAR_DEPTH) * cos(currentLocation.theta),
+                    currentLocation.y + (sonarCenter->range + SONAR_DEPTH) * sin(currentLocation.theta)
+				));
+	}
+
+	if (sonarRight->range < VIEW_RANGE) {
+        do_marking = true;
+		// Right sonar
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
+                    currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
+				));
+		mark_poly.addVertex(
+				grid_map::Position(currentLocation.x + (sonarRight->range + SONAR_DEPTH) * cos(currentLocation.theta - SONAR_ANGLE),
+                    currentLocation.y + (sonarRight->range + SONAR_DEPTH) * sin(currentLocation.theta - SONAR_ANGLE)
+				));
+	}
+
+	if (do_marking) {
+		// Mark the area that's blocked in sonar.
+		double avg_range = (sonarLeft->range + sonarCenter->range + sonarRight->range) / 3.0;
+		for (grid_map::PolygonIterator iterator(rover_map, mark_poly);
+			 !iterator.isPastEnd(); ++iterator) {
+			double val = rover_map.at("obstacle", *iterator);
+			if (isnan(val)) {
+				val = 0.1;
+			}
+			val += 0.01 * (3.0 / avg_range); // mark nearer obstacles faster
+			if (val > 1)
+				val = 1;
+			rover_map.at("obstacle", *iterator) = val;
+		  }
+	}
 
 	// Publish the obstacle message if there's an update to it.
 	if (next_status != prev_status) {
@@ -192,39 +617,100 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	prev_status = next_status;
 
-	publishObstacleMap();
+	publishRoverMap();
 }
 
-/* sonarHandler() - Called when there's new Apriltag detection data.
+/* targetHandler() - Called when there's new Apriltag detection data.
  *
  * This does two things:
  *
- * 1. Send and obstacle message if there's a visible tag.
+ * 1. Send and obstacle message if there's a visible tag. TAG_TARGET's are only
+ *    considered obstacles if they are far enough from the camera to definitely
+ *    not be a block in the claw.
  *
  * 2. Update the target maps based on current detections.
  *
  */
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	// Measurements defining camera field of view for polygon iterator
+	const double CAMERA_NEAR_ANGLE = 0.28; // radians
+	const double CAMERA_FAR_ANGLE = 0.34;
+	const double CAMERA_NEAR_DIST = 0.29; // meters
+	const double CAMERA_FAR_DIST = 0.74;
+
+	// TAG_TARGET detections closer than this won't be marked as obstacles
+	const double TAG_IN_CLAW_DIST = 0.20; // meters
+
+	// Clear camera field of view at different rates if moving or stopped
+	// todo: are these rates good?
+	const double MOVING_CLEAR_RATE = 0.03;
+	const double STOPPED_CLEAR_RATE = 0.3;
+
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
 
 	// Update the timestamp in the target map.
-	target_map.setTimestamp(ros::Time::now().toNSec());
+	rover_map.setTimestamp(ros::Time::now().toNSec());
 
-	//
-	// Aging. As time goes by, the probability that a block
-	// Is still in the place we saw it shrinks. Let's iterate
-	// over the map and apply aging.
-	//
-	grid_map::Matrix &data = target_map["home"];
-	grid_map::Matrix &tdata = target_map["target"];
-	for (grid_map::GridMapIterator it(target_map); !it.isPastEnd(); ++it) {
-		const int i = it.getLinearIndex();
-		data(i) *= 0.99;
-		tdata(i) *= 0.99;
+	/*
+	 * Clear the polygon that the camera sees. This is necessary to erase
+	 * grid cells where blocks have disappeared.
+	 */
+	grid_map::Position pos (currentLocation.x, currentLocation.y);
+	grid_map::Index map_index;
+	rover_map.getIndex(pos, map_index);
+
+	grid_map::Polygon view_poly;
+	view_poly.setFrameId(rover_map.getFrameId());
+
+	view_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
+
+	// Near left corner
+	view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_NEAR_DIST * cos(currentLocation.theta + CAMERA_NEAR_ANGLE),
+					currentLocation.y + CAMERA_NEAR_DIST * sin(currentLocation.theta + CAMERA_NEAR_ANGLE)
+			));
+
+	// Far left corner
+	view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_FAR_DIST * cos(currentLocation.theta + CAMERA_FAR_ANGLE),
+					currentLocation.y + CAMERA_FAR_DIST * sin(currentLocation.theta + CAMERA_FAR_ANGLE)
+			));
+
+	// Far right corner
+    view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_FAR_DIST * cos(currentLocation.theta - CAMERA_FAR_ANGLE),
+					currentLocation.y + CAMERA_FAR_DIST * sin(currentLocation.theta - CAMERA_FAR_ANGLE)
+			));
+
+	// Near right corner
+    view_poly.addVertex(
+			grid_map::Position(currentLocation.x + CAMERA_NEAR_DIST * cos(currentLocation.theta - CAMERA_NEAR_ANGLE),
+					currentLocation.y + CAMERA_NEAR_DIST * sin(currentLocation.theta - CAMERA_NEAR_ANGLE)
+			));
+
+	double rate = STOPPED_CLEAR_RATE;
+	if (isMoving) {
+		rate = MOVING_CLEAR_RATE;
 	}
 
+	grid_map::Matrix& home_layer = rover_map["home"];
+	grid_map::Matrix& target_layer = rover_map["target"];
+
+	for (grid_map::PolygonIterator iterator(rover_map, view_poly);
+	      !iterator.isPastEnd(); ++iterator) {
+	    const grid_map::Index index(*iterator);
+		double val = home_layer(index(0), index(1));
+        home_layer(index(0), index(1)) = decreaseVal(val, rate);
+
+        val = target_layer(index(0), index(1));
+		target_layer(index(0), index(1)) = decreaseVal(val, rate);
+	}
+
+	// Handle target detections
+
 	if (message->detections.size() > 0) {
+
 		try {
 			// The Apriltags package can detect the pose of the tag. The pose
 			// in the detections array is relative to the camera. This transform
@@ -232,36 +718,49 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			// frame so we can place them on the map.
 			//
 			// This ensures that the transform is ready to be used below.
+			// Wait for 0.2 seconds to try to avoid transform exceptions
 			//
 			cameraTF->waitForTransform(
 					rover + "/odom",   // Target frame
 					message->detections[0].pose.header.frame_id, // Source frame
 					message->detections[0].pose.header.stamp,    // Time
-					ros::Duration(0.1) // How long to wait for the tf.
+					ros::Duration(0.2) // How long to wait for the tf.
 			);
 
-			for (int i=0; i<message->detections.size(); i++) {
+            for (int i=0; i<message->detections.size(); i++) {
+                geometry_msgs::PoseStamped tagpose;
+                cameraTF->transformPose(rover + "/odom",
+                                        message->detections[i].pose,
+                                        tagpose);
 
-				geometry_msgs::PoseStamped tagpose;
-				cameraTF->transformPose(rover + "/odom",
-						message->detections[i].pose, tagpose);
+                grid_map::Position pos(tagpose.pose.position.x,
+                                       tagpose.pose.position.y);
+                grid_map::Index ind;
+                rover_map.getIndex(pos, ind);
 
-				grid_map::Position pos (tagpose.pose.position.x, tagpose.pose.position.y);
-				grid_map::Index ind;
-				target_map.getIndex(pos, ind);
-
-				if (message->detections[i].id == 0) {
-					next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
-					target_map.at("target", ind) = 1;
-				}
-				else if (message->detections[i].id == 256) {
-					next_status |= swarmie_msgs::Obstacle::TAG_HOME;
-					target_map.at("home", ind) = 1;
-					target_map.at("home_yaw", ind) = poseToYaw(tagpose.pose);
-				}
+                // Only consider TAG_TARGET's far enough away from camera
+                // to avoid marking block in claw as an obstacle.
+                if (message->detections[i].id == 0 &&
+                    message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+                    rover_map.at("target", ind) = 1;
+                } else if (message->detections[i].id == 256) {
+                    rover_map.at("home", ind) = 1;
+                }
 			}
 		} catch (tf::TransformException &e) {
 			ROS_ERROR("%s", e.what());
+		}
+
+        // Make sure Obstacle messages get published, so do this here, outside
+		// the try/catch block for transforms
+		for (int i=0; i<message->detections.size(); i++) {
+			if (message->detections[i].id == 0 &&
+				message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
+			}
+			else if (message->detections[i].id == 256) {
+				next_status |= swarmie_msgs::Obstacle::TAG_HOME;
+			}
 		}
 	}
 
@@ -274,85 +773,106 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
 	prev_status = next_status;
 
-	publishTargetMap();
+	publishRoverMap();
 }
 
 /* odometryHandler() - Called when new odometry data is available.
  *
- * The target map is high resolution and doesn't cover the whole arena.
- * Use odometry data to recenter the map on top of the rover. Data that
- * "falls off" is forgotten.
+ * Store current 2D Pose and see if we're moving.
  */
 void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     double x = message->pose.pose.position.x;
     double y = message->pose.pose.position.y;
 
-	// Update the timestamp in both maps.
-	uint64_t now = ros::Time::now().toNSec();
-	obstacle_map.setTimestamp(now);
-	target_map.setTimestamp(now);
-
-	grid_map::Position newPos(x, y);
-    target_map.move(newPos);
-
     // Store the current location so we can use it in other places.
     currentLocation.x = x;
     currentLocation.y = y;
     currentLocation.theta = poseToYaw(message->pose.pose);
+
+	isMoving = (abs(message->twist.twist.linear.x) > 0.1
+				|| abs(message->twist.twist.angular.z > 0.2));
 }
 
 /* Python API
  *
- * find_nearest_target() - Return the position of the nearest tag. Fail
- *   if there are no tags in the map.
- *
- * The service definition is in:
- * 	srv/FindTarget.srv
- *
- */
-bool find_neareset_target(mapping::FindTarget::Request &req, mapping::FindTarget::Response &resp) {
-	bool rval = false;
-	grid_map::Position mypos(currentLocation.x, currentLocation.y);
-	for (grid_map::SpiralIterator it(target_map, mypos, 2); !it.isPastEnd(); ++it) {
-		if (target_map.at("target", *it) == 0) {
-			// Found one!
-			resp.result.header.frame_id = target_map.getFrameId();
-			resp.result.header.stamp = ros::Time::now();
-			grid_map::Position tagpos;
-			obstacle_map.getPosition(*it, tagpos);
-			resp.result.point.x = tagpos.x();
-			resp.result.point.y = tagpos.y();
-			resp.result.point.z = 0; // No z() in the map.
-			rval = true;
-			break;
-		}
-	}
-	return rval;
-}
-
-/* Python API
- *
- * get_obstacle_map() - Return a view of the obstacles grid_map.
+ * get_map() - Return a view of the rover's grid_map.
  *
  * The service definition is in:
  * 	srv/GetMap.srv
  *
  */
-bool get_obstacle_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-	grid_map::GridMapRosConverter::toMessage(obstacle_map, rsp.map);
+bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
+	grid_map::GridMapRosConverter::toMessage(rover_map, rsp.map);
 	return true;
 }
 
-/* Python API
+/*
+ * Python API
  *
- * get_target_map() - Return a view of the targets grid_map.
- *
- * The service definition is in:
- * 	srv/GetMap.srv
- *
+ * get_plan() - get global plan from a start pose to a goal pose
+ * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
  */
-bool get_target_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-	grid_map::GridMapRosConverter::toMessage(target_map, rsp.map);
+bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
+    grid_map::Index start_index;
+	grid_map::Index goal_index;
+	nav_msgs::Path pose_path;
+
+	rover_map.getIndex(
+			grid_map::Position(req.start.pose.position.x, req.start.pose.position.y),
+			start_index
+	);
+	rover_map.getIndex(
+			grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y),
+			goal_index
+	);
+
+	GridLocation start{start_index(0), start_index(1)};
+	GridLocation goal{goal_index(0), goal_index(1)};
+
+	int tolerance = 0; // default tolerance for search, must reach goal exactly
+	if (req.tolerance > 0) {
+		tolerance = int(req.tolerance / MAP_RESOLUTION);
+	}
+
+	std::map<GridLocation, GridLocation> came_from;
+	std::map<GridLocation, double> cost_so_far;
+
+	bool success = a_star_search(rover_map, start, goal, tolerance,
+								 came_from, cost_so_far);
+	if (!success) {
+		return false;
+	}
+	std::vector<GridLocation> grid_path = straighten_path(
+			rover_map,
+			reconstruct_path(start, goal, came_from)
+	);
+
+	grid_map::Index index;
+	grid_map::Position position;
+	std::vector<geometry_msgs::PoseStamped> poses;
+
+	// convert vector of GridLocations to a vector of poses in /odom frame
+	for (GridLocation& location : grid_path) {
+		index(0) = location.x;
+		index(1) = location.y;
+		rover_map.getPosition(index, position);
+		geometry_msgs::PoseStamped pose;
+        pose.pose.position.x = position.x();
+		pose.pose.position.y = position.y();
+		poses.push_back(pose);
+	}
+
+	rsp.plan.header.stamp = ros::Time::now();
+//	std::vector<geometry_msgs::PoseStamped> poses;
+//	poses.push_back(req.goal);
+	rsp.plan.poses = poses;
+//    rsp.plan.poses.push_back(req.goal);
+
+	pose_path.header.stamp = ros::Time::now();
+	pose_path.header.frame_id = rover + "/odom";
+	pose_path.poses = poses;
+	path_publisher.publish(pose_path);
+
 	return true;
 }
 
@@ -403,25 +923,20 @@ int main(int argc, char **argv) {
 
     obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>((rover + "/obstacle"), 1, true);
 
-    obstacle_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/obstacle_map", 1, false);
-    target_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/target_map", 1, false);
+    rover_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/map", 1, false);
+	path_publisher = mNH.advertise<nav_msgs::Path>(rover + "/plan", 1, false);
 
     // Services
     //
     // This is the API into the Python control code
     //
-    ros::ServiceServer fnt = mNH.advertiseService(rover + "/map/find_nearest_target", find_neareset_target);
-    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_obstacle_map", get_obstacle_map);
-    ros::ServiceServer tmap = mNH.advertiseService(rover + "/map/get_target_map", get_target_map);
+    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_map", get_map);
+	ros::ServiceServer plan = mNH.advertiseService(rover + "/map/get_plan", get_plan);
 
     // Initialize the maps.
-    obstacle_map = grid_map::GridMap({"obstacles"});
-    obstacle_map.setFrameId(rover + "/odom");
-    obstacle_map.setGeometry(grid_map::Length(25, 25), 0.5);
-
-    target_map = grid_map::GridMap({"target", "home", "home_yaw"});
-    target_map.setFrameId(rover + "/odom");
-    target_map.setGeometry(grid_map::Length(3, 3), 0.01);
+    rover_map = grid_map::GridMap({"obstacle", "target", "home"});
+    rover_map.setFrameId(rover + "/odom");
+    rover_map.setGeometry(grid_map::Length(25, 25), MAP_RESOLUTION);
 
     ros::spin();
     return 0;

@@ -325,7 +325,7 @@ def main():
 
 
     try: 
-        for move in range(5) :
+        for move in range(30) :
             if rospy.is_shutdown() : 
                 exit(-1)
             try:

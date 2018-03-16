@@ -28,6 +28,8 @@
         respawn="true" />
   <node name="$(arg name)_DIAGNOSTICS" pkg="diagnostics" type="diagnostics" args="$(arg name)" respawn="true"/>
   <node name="$(arg name)_MOBILITY" pkg="mobility" type="core.py" args="$(arg name)" respawn="true">
+    <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
+    <param name="april_tag_resource_pickel" value="$(find mobility)/resources/atag-0.p"/>
     <param name="DRIVE_SPEED" value="0.2"/>
     <param name="REVERSE_SPEED" value="0.2"/>
     <param name="TURN_SPEED" value="0.6"/>
@@ -199,6 +201,7 @@
     {id: 256, size: 0.038}]</rosparam>
   </node>
   
+  
   <group if="$(arg simulation)">
     <node name="$(arg name)_SBRIDGE" pkg="bridge" type="sbridge" args="$(arg name)" respawn="true">
     </node>
@@ -220,9 +223,8 @@
 
     <node name="$(arg name)_IMU" pkg="mobility" type="cal_imu.py"
           args="$(arg name)" respawn="true" >
-      <param name="raw_data_path" value="/home/robot/" />
       <param name="load_raw_data" value="true" />
-      <param name="calibration_file_path" value="/home/robot/"/>
+      <param name="raw_data_path" value="/home/swarmie/KSC_extended_calibration.csv"/>
       <param name="publish_debug_topic" value="false" />
     </node>
     

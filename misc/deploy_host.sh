@@ -44,6 +44,7 @@ cp -R deploy/install/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
 cp -R Swarmathon-Arduino/ $TEMPDIR
+cp -R src/mobility/resources $TEMPDIR/install/share/mobility/
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {
   cd ~
@@ -64,9 +65,9 @@ chmod u+x $TEMPDIR/bootstrap.sh
 (
     # Copy the build products to the swarmie. 
     cd $TEMPDIR
-    tar -cf - $TEMPDIR 2>/dev/null | ssh robot@$1 "cd /; tar -xf -"
+    tar -cf - $TEMPDIR 2>/dev/null | ssh swarmie@$1 "cd /; tar -xf -"
 )
 
 echo "Executing rover code."
 # Execute the bootstrap code.
-ssh -t robot@$1 $TEMPDIR/bootstrap.sh
+ssh -t swarmie@$1 $TEMPDIR/bootstrap.sh
