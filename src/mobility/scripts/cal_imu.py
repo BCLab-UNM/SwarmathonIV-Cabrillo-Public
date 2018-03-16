@@ -71,9 +71,9 @@ class IMU:
     MIN_DATA_SIZE = 50
 
     # For extended file validation
-    ROLL_PITCH_TOLERANCE = 1.5  # degrees
-    MAG_VAR_TOLERANCE = 1e-3
-    ACC_VAR_TOLERANCE = 3e-3
+    ROLL_PITCH_TOLERANCE = 3.5  # degrees
+    MAG_VAR_TOLERANCE = 1e-2
+    ACC_VAR_TOLERANCE = 3e-2
 
     def __init__(self, rover):
         self.rover = rover
