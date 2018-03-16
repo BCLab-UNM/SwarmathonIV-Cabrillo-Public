@@ -488,7 +488,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// noise at longer ranges. It limits the mark_poly to this range, but
 	// not clear_poly, so the map can still be cleared past this point.
 	// todo: limit clear_poly left and right ranges using VIEW_RANGE?
-    const double VIEW_RANGE = 1.5;  // don't mark obstacles past this range
+    const double VIEW_RANGE = 1.0;  // don't mark obstacles past this range
 
 	// Update the timestamp in the Obstacle map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
