@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(mapping)
 
-set(CMAKE_BUILD_TYPE "Release")
+#set(CMAKE_BUILD_TYPE "Release")
 
 SET(CMAKE_CXX_FLAGS "-std=c++11")
 
@@ -27,7 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_python_setup()
 
 add_service_files (
-	FILES FindTarget.srv GetMap.srv
+	FILES FindTarget.srv GetMap.srv GetNavPlan.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs grid_map_msgs)

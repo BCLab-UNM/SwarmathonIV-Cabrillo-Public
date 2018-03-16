@@ -51,8 +51,11 @@ def approach():
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
             swarmie.wrist_up()
+            swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+
             # did we succesuflly grab a block?
             if swarmie.has_block():
+                swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
                 swarmie.wrist_middle()
                 return True
             else:

@@ -12,14 +12,13 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, GetMap
+from mapping.srv import FindTarget, GetMap, GetNavPlan, GetNavPlanRequest
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
 from std_srvs.srv import Empty 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
-from nav_msgs.srv import GetPlan, GetPlanRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
 from rospy.numpy_msg import numpy_msg
@@ -144,7 +143,7 @@ class Swarmie:
         else:
             rospy.init_node(rover + '_CONTROLLER')
 
-        # Create publishiers. 
+        # Create publishiers.
         self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
         self.info_publisher = rospy.Publisher('/infoLog', String, queue_size=10, latch=True)
@@ -165,7 +164,7 @@ class Swarmie:
         self.control = rospy.ServiceProxy(rover + '/control', Core)
         self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
         self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
-        self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetPlan)
+        self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetNavPlan)
         self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
         self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
         self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
@@ -556,7 +555,7 @@ class Swarmie:
             See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
         return RoverMap(self._get_target_map())
 
-    def get_plan(self, goal, tolerance=0.0):
+    def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 
         Args:
@@ -565,10 +564,12 @@ class Swarmie:
          goal location in the /odom frame.
         * `tolerance` (`float`) - The acceptable distance to the goal you \
          are willing to have the path return.
+        * `use_home_layer` (`bool`) - Whether to plan a path considering \
+         mapped home tags as obstacles.
 
         Returns:
 
-        * `plan` (`nav_msgs/GetPlanResponse`) - contains a `nav_msgs/Path` \
+        * `plan` (`nav_msgs/GetNavPlanResponse`) - contains a `nav_msgs/Path` \
          with an array of `geometry_msgs/PoseStamped` poses to navigate to.
 
         Raises:
@@ -577,7 +578,9 @@ class Swarmie:
          This can happen if you requested an impossible goal to navigate to \
          given the current map and obstacle layers.
         '''
-        request = GetPlanRequest()
+        request = GetNavPlanRequest()
+        request.use_home_layer.data = use_home_layer
+
         cur_loc = self.get_odom_location().get_pose()
         request.start.pose.position.x = cur_loc.x
         request.start.pose.position.y = cur_loc.y
@@ -823,10 +826,17 @@ class Swarmie:
             return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
                 
-    def get_nearest_block_location(self):
+    def get_nearest_block_location(self, use_targets_buffer=False):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
         Nearest block will be the nearest to the camera, which should almost always be good enough.
+
+        Args:
+
+        * `use_targets_buffer` (`bool`) - whether to use the rolling buffer
+        of AprilTagDetections. Default value of False uses
+        Swarmie.get_latest_targets(), which you can rely on to return only
+        targets currently in view.
 
         Returns:
 
@@ -834,8 +844,11 @@ class Swarmie:
         '''
         global rovername, swarmie
 
-        # Finds all visable  apriltags
-        blocks = self.get_latest_targets().detections
+        # Finds all visible apriltags
+        if use_targets_buffer is True:
+            blocks = self.get_targets_buffer().detections
+        else:
+            blocks = self.get_latest_targets().detections
         if len(blocks) == 0 :
             return None
 

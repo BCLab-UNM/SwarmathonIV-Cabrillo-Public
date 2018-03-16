@@ -3,7 +3,8 @@
 from __future__ import print_function
 
 import sys
-import rospy 
+import rospy
+import tf
 import math
 import time
 import angles
@@ -12,15 +13,17 @@ import random
 import message_filters
 import tf
 
+import dynamic_reconfigure.client
+from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 from geometry_msgs.msg import Vector3, Vector3Stamped, Quaternion
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Range
 
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
-from Tkconstants import FIRST
 from numpy import angle #not sure this is still needed
-from asyncore import poll
+from planner import Planner
+from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
+
 
 '''Searcher node.''' 
 
@@ -273,6 +276,30 @@ def aprox_angle(poll):
         avg = anglei
     return (math.floor(avg / (math.pi/4) + 4.5) - 4) * math.pi 
 
+def handle_exit():
+    global planner, swarmie, found_tag
+
+    reset_speeds()
+
+    if found_tag:
+        print('Found a tag! Trying to get a little closer.')
+        planner.face_nearest_block()
+
+    swarmie.print_infoLog('Setting search exit poses.')
+    set_search_exit_poses()
+
+
+
+def reset_speeds():
+    global initial_config, param_client
+    param_client.update_configuration(initial_config)
+
+
+def set_search_exit_poses():
+    global swarmie
+    swarmie.set_search_exit_poses()
+
+
 def main():
     global swarmie 
     global rovername 
@@ -293,8 +320,19 @@ def main():
     pVar =  0.5
     sonVar = 0.5
     
+    global  found_tag
+    global initial_config, param_client
+
+    found_tag = False
+    SEARCH_SPEEDS = {
+         'DRIVE_SPEED': 0.25,
+         'TURN_SPEED': 0.7
+    }
+
     rovername = sys.argv[1]
     swarmie = Swarmie(rovername)
+    planner = Planner(swarmie)
+
     swarmie.fingers_open()
     swarmie.wrist_middle()
     print("search start...")
@@ -324,10 +362,52 @@ def main():
     #    print(anglei/ math.pi * 180, aprox_anglei(5) / math.pi * 180)
 
 
-    try: 
-        for move in range(30) :
-            if rospy.is_shutdown() : 
-                exit(-1)
+    # Change drive and turn speeds for this behavior, and register shutdown
+    # hook to reset them at exit.
+    if not rospy.has_param('/' + rovername + '/search/speeds'):
+        speeds = SEARCH_SPEEDS
+        rospy.set_param('/' + rovername + '/search/speeds', speeds)
+    else:
+        speeds = rospy.get_param('/' + rovername + '/search/speeds',
+                                 default=SEARCH_SPEEDS)
+
+    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    config = param_client.get_configuration()
+    initial_config = {
+        'DRIVE_SPEED': config['DRIVE_SPEED'],
+        'TURN_SPEED': config['TURN_SPEED']
+    }
+    param_client.update_configuration(speeds)
+    rospy.on_shutdown(handle_exit)
+
+    # try:
+    #     for move in range(30) :
+    #         if rospy.is_shutdown() :
+    #             exit(-1)
+    #         try:
+    #             wander()
+    #
+    #         except HomeException :
+    #             print ("I saw home!")
+    #             odom_location = swarmie.get_odom_location()
+    #             swarmie.set_home_odom_location(odom_location)
+    #             turnaround()
+    #
+    # except TagException :
+    #     print("I found a tag!")
+    #     # Let's drive there to be helpful.
+    #     swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
+    #     exit(0)
+
+    
+    try:
+        try:
+            swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
+        except HomeException:
+            swarmie.turn(math.pi,
+                         ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        except TagException:
+            rospy.sleep(0.3)  # build the buffer a little
             try:
                 print("new1")
                 triangle()
@@ -348,6 +428,7 @@ def main():
 
         exit(0)
         
+               
     print ("I'm homesick!")
     exit(1)
 
