@@ -28,7 +28,6 @@
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
-#include <nav_msgs/GetPlan.h>
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/PointStamped.h>
@@ -38,6 +37,7 @@
 #include <swarmie_msgs/Obstacle.h>
 #include <mapping/FindTarget.h>
 #include <mapping/GetMap.h>
+#include <mapping/GetNavPlan.h>
 
 using namespace std;
 
@@ -118,7 +118,7 @@ const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
  * location_from and location_to must be in_bounds
  */
 bool passable(grid_map::GridMap& map, GridLocation location_from,
-			  GridLocation location_to) {
+			  GridLocation location_to, bool use_home_layer) {
 	const double OBSTACLE_THRESHOLD = 0.10;
     grid_map::Index index;
     index(0) = location_to.x;
@@ -128,36 +128,41 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
 	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
 		return false;
 	}
-//    if (map.at("target", index) >= OBSTACLE_THRESHOLD) {
-//		return false;
-//	}
+    if (use_home_layer && map.at("home", index) >= OBSTACLE_THRESHOLD) {
+		return false;
+	}
 
 	if (direction.x != 0 || direction.y != 0) { // it's a diagonal direction
 		grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
 		grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
 
 		// not passable if both adjacent neighbors of diagonal are blocked
-//		if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
-//            map.at("target", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
-//			&& (map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
-//            map.at("target", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
-//			return false;
-//		}
-        if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
-			map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
+		if (use_home_layer) {
+			if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+				 map.at("home", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
+				&&
+				(map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
+				 map.at("home", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+				return false;
+			}
+		} else if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
+				   map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
 			return false;
 		}
 	}
 
-    return true;
+	return true;
 }
 
-std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation location) {
+std::vector<GridLocation> neighbors(grid_map::GridMap& map,
+									GridLocation location,
+									bool use_home_layer) {
     std::vector<GridLocation> results;
 
     for (GridLocation direction : DIRECTIONS) {
         GridLocation next{location.x + direction.x, location.y + direction.y};
-        if (in_bounds(map, next) && passable(map, location, next)) {
+        if (in_bounds(map, next) &&
+				passable(map, location, next, use_home_layer)) {
             results.push_back(next);
         }
     }
@@ -172,7 +177,8 @@ std::vector<GridLocation> neighbors(grid_map::GridMap& map, GridLocation locatio
 
 // to_node should be valid position on the grid. Not necessarily with a finite
 // value, though.
-double cost(grid_map::GridMap& map, GridLocation to_node) {
+double cost(grid_map::GridMap& map,
+			GridLocation to_node, bool use_home_layer) {
 	// Inflate cost of cells which are neighboring an obstacle
 	const double INFLATION_PCT = 0.7;
 	const double LETHAL_COST = 255;
@@ -188,9 +194,9 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
 	if (map.isValid(index, "obstacle")) {
         cost += 2 * LETHAL_COST * map.at("obstacle", index);
 	}
-//	if (map.isValid(index, "target")) {
-//		cost += LETHAL_COST * map.at("target", index);
-//	}
+	if (use_home_layer && map.isValid(index, "home")) {
+		cost += LETHAL_COST * map.at("home", index);
+	}
 
 	if (cost > LETHAL_COST) { // skip 2-layer neighbors check if possible
 		cost = LETHAL_COST;
@@ -206,10 +212,10 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
                 cost += INFLATION_PCT * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
-//            if (map.isValid(index, "target")) {
-//                cost += INFLATION_PCT * LETHAL_COST *
-//                        map.at("target", index);
-//            }
+            if (use_home_layer && map.isValid(index, "home")) {
+                cost += INFLATION_PCT * LETHAL_COST *
+                        map.at("home", index);
+            }
         }
     }
 
@@ -222,10 +228,10 @@ double cost(grid_map::GridMap& map, GridLocation to_node) {
                 cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
                         map.at("obstacle", index);
             }
-//            if (map.isValid(index, "target")) {
-//                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
-//                        map.at("target", index);
-//            }
+            if (use_home_layer && map.isValid(index, "home")) {
+                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
+                        map.at("home", index);
+            }
         }
     }
 
@@ -304,6 +310,7 @@ bool a_star_search(
         GridLocation start,
         GridLocation& goal,
 		int tolerance,
+		bool use_home_layer,
         std::map<GridLocation, GridLocation>& came_from,
         std::map<GridLocation, double>& cost_so_far) {
 
@@ -321,8 +328,10 @@ bool a_star_search(
 			return true;
 		}
 
-		for (GridLocation next : neighbors(map, current)) {
-			double new_cost = cost_so_far[current] + cost(map, next);
+		for (GridLocation next : neighbors(map, current, use_home_layer)) {
+			double new_cost = cost_so_far[current]
+							  + cost(map, next, use_home_layer);
+
 			if (cost_so_far.find(next) == cost_so_far.end()
 				|| new_cost < cost_so_far[next]) {
 				cost_so_far[next] = new_cost;
@@ -345,7 +354,8 @@ bool a_star_search(
 bool in_line_of_sight(
 		grid_map::GridMap& map,
 		grid_map::Index start,
-		grid_map::Index end) {
+		grid_map::Index end,
+		bool use_home_layer) {
 	const double OBSTACLE_THRESHOLD = 0.10;
 	for (grid_map::LineIterator iterator(map, start, end);
 		 !iterator.isPastEnd(); ++iterator) {
@@ -353,9 +363,10 @@ bool in_line_of_sight(
             if (map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
 				return false;
 			}
-//			if (map.at("target", *iterator) > OBSTACLE_THRESHOLD) {
-//                return false;
-//            }
+			if (use_home_layer &&
+					map.at("home", *iterator) > OBSTACLE_THRESHOLD) {
+                return false;
+            }
         }
 	}
 	return true;
@@ -370,9 +381,9 @@ bool in_line_of_sight(
  * Returns a vector containing the new, straightened path.
  * Returns the original path if path has 1 or fewer waypoints.
  */
-std::vector<GridLocation> straighten_path(
-		grid_map::GridMap& map,
-		std::vector<GridLocation> path) {
+std::vector<GridLocation> straighten_path(grid_map::GridMap& map,
+										  std::vector<GridLocation> path,
+										  bool use_home_layer) {
 	std::vector<GridLocation> result;
 
 	if (path.size() <= 1) {
@@ -383,7 +394,7 @@ std::vector<GridLocation> straighten_path(
 	unsigned int i = 1;
     while (i < path.size()) {
 		grid_map::Index end(path[i].x, path[i].y);
-        if (!in_line_of_sight(map, start, end)) {
+        if (!in_line_of_sight(map, start, end, use_home_layer)) {
 			break;
 		}
 		i++;
@@ -477,7 +488,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// noise at longer ranges. It limits the mark_poly to this range, but
 	// not clear_poly, so the map can still be cleared past this point.
 	// todo: limit clear_poly left and right ranges using VIEW_RANGE?
-    const double VIEW_RANGE = 1.5;  // don't mark obstacles past this range
+    const double VIEW_RANGE = 1.0;  // don't mark obstacles past this range
 
 	// Update the timestamp in the Obstacle map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
@@ -812,10 +823,14 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
  * get_plan() - get global plan from a start pose to a goal pose
  * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
  */
-bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp) {
+bool get_plan(mapping::GetNavPlan::Request &req,
+			  mapping::GetNavPlan::Response &rsp) {
     grid_map::Index start_index;
 	grid_map::Index goal_index;
 	nav_msgs::Path pose_path;
+
+	// whether to use "home" layer in path search
+	bool use_home_layer = req.use_home_layer.data;
 
 	rover_map.getIndex(
 			grid_map::Position(req.start.pose.position.x, req.start.pose.position.y),
@@ -838,13 +853,14 @@ bool get_plan(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &rsp)
 	std::map<GridLocation, double> cost_so_far;
 
 	bool success = a_star_search(rover_map, start, goal, tolerance,
-								 came_from, cost_so_far);
+								 use_home_layer, came_from, cost_so_far);
 	if (!success) {
 		return false;
 	}
 	std::vector<GridLocation> grid_path = straighten_path(
 			rover_map,
-			reconstruct_path(start, goal, came_from)
+			reconstruct_path(start, goal, came_from),
+			use_home_layer
 	);
 
 	grid_map::Index index;
