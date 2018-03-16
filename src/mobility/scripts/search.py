@@ -153,7 +153,8 @@ def main():
         try:
             # planner.clear(math.pi / 4, ignore=Obstacle.TAG_HOME, throw=True)
             # swarmie.drive(0.2, throw=False)
-            planner.sweep(throw=True)
+            # planner.sweep(throw=True)
+            swarmie.circle()
             swarmie.set_heading(
                 last_pose.theta,
                 ignore=Obstacle.TAG_HOME
