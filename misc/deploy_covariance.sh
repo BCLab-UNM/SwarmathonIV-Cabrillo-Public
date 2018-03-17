@@ -21,7 +21,7 @@ cd $(catkin locate)
 echo "Copying covariance files."
 
 cp -R misc/ $TEMPDIR
-cp -R Swarmathon-Arduino/ $TEMPDIR
+cp -R arduino/ $TEMPDIR
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {
   cd ~
