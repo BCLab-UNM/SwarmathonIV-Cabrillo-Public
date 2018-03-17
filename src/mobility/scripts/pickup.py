@@ -51,8 +51,11 @@ def approach():
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
             swarmie.wrist_up()
+            swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+
             # did we succesuflly grab a block?
             if swarmie.has_block():
+                swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
                 swarmie.wrist_middle()
                 return True
             else:
@@ -80,13 +83,13 @@ def recover():
     claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
     try:
-        swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
         try:
             block = swarmie.get_nearest_block_location()
         except tf.Exception as e:
             print("Something went wrong recovering and we can't locate the block. ", e)
+            swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
             swarmie.wrist_up()
             exit(1)
         if block is not None:
@@ -97,7 +100,8 @@ def recover():
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
-    except: 
+    except:
+        swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         print("Oh no, we have an exception!")
 
 def main():
