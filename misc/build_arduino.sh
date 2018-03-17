@@ -11,12 +11,12 @@ fi
 
 echo Using Arduino executable: $arduino
 
-repo=$(catkin locate)/Swarmathon-Arduino
+repo=$(catkin locate)/arduino
 build=$repo/build
-sketch=$repo/Swarmathon_Arduino/Swarmathon_Arduino.ino
+sketch=$repo/swarmie_control/swarmie_control.ino
 
 if [ -z "$1" ]; then
-    sketch=$repo/Swarmathon_Arduino/Swarmathon_Arduino.ino
+    sketch=$repo/swarmie_control/swarmie_control.ino
 else
     sketch="$1"
 fi
@@ -28,5 +28,7 @@ else
 fi
 
 echo "Building for Leonardo on $dev"
+echo Sketch: $sketch
+echo Build Dir: $build
 
 $arduino --upload --preserve-temp-files --pref serial.port=$dev --pref build.verbose=true --pref upload.verbose=true --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
