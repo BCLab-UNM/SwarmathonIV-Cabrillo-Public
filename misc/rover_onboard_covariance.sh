@@ -24,9 +24,9 @@ fi
 
 echo Using Arduino executable: $arduino
 
-if [ -f ./Swarmathon-Arduino/Covariance/Covariance.ino ]; then
-    repo=$(realpath ./Swarmathon-Arduino)
-elif [ -f $(catkin locate)/Swarmathon-Arduino/Covariance/Covariance.ino ]; then
+if [ -f ./arduino/Covariance/Covariance.ino ]; then
+    repo=$(realpath ./arduino)
+elif [ -f $(catkin locate)/arduino/Covariance/Covariance.ino ]; then
     repo=$(catkin locate)
 else
     echo "Couldn't locate covariance sketch."
