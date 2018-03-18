@@ -39,6 +39,9 @@
 #include <mapping/GetMap.h>
 #include <mapping/GetNavPlan.h>
 
+#include <execinfo.h>
+#include <signal.h>
+
 using namespace std;
 
 string rover;
@@ -892,6 +895,16 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 	return true;
 }
 
+void crashHandler(int s) {
+  int j, nptrs;
+  void *buffer[1000];
+
+  nptrs = backtrace(buffer, 1000);
+  printf("backtrace() returned %d addresses\n", nptrs);
+  backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO);
+  exit(-s);
+}
+
 int main(int argc, char **argv) {
 
 	char host[128];
@@ -909,6 +922,8 @@ int main(int argc, char **argv) {
 
     ros::init(argc, argv, (rover + "_MAP"));
     ros::NodeHandle mNH;
+
+    signal(SIGSEGV, crashHandler);
 
     obstacle_status = swarmie_msgs::Obstacle::PATH_IS_CLEAR;
 

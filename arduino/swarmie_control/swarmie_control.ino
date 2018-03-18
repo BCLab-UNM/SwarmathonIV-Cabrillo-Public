@@ -5,7 +5,7 @@
 //Built-in Arduino libraries
 #include <Wire.h>
 
-//Custom libraries located in Swarmathon-Arduino repo
+//Custom libraries located in arduino directory
 #include <L3G.h>
 #include <LPS.h>
 #include <LSM303.h>
