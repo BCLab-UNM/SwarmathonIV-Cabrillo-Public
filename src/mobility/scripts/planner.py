@@ -758,7 +758,133 @@ class Planner:
 
         return drive_result
 
+    def _is_safe_to_back_up(self):
+        """Returns True if it's safe for the rover to back up. It is safe to
+        back up if the rover is further than 1.5 meters from the current home
+        location, or if the rover is within 1.5 meters from home, but is
+        facing home. In other words, it's not safe to back up if the rover
+        is close to home and has it's back to home.
 
+        Returns:
+        * is_safe - bool whether it's safe to back up.
+        """
+        # Only back up if we're far enough away from home for it
+        # to be safe. Don't want to back up into the nest!
+        home_loc = self.swarmie.get_home_odom_location()
+        current_loc = self.swarmie.get_odom_location().get_pose()
+        dist = math.sqrt((home_loc.x - current_loc.x) ** 2
+                         + (home_loc.y - current_loc.y) ** 2)
+        if dist > 1.5:
+            return True
+
+        angle_to_home = self.get_angle_to_face_point(home_loc)
+        if abs(angle_to_home) < math.pi / 2:
+            return True
+
+        return False
+
+    def _face_point(self, point, ignore=Obstacle.PATH_IS_CLEAR):
+        """Turn to face a point in the odometry frame. Rover will attempt to
+        turn the shortest angle to face the point, and if it fails (sonar
+        detects something in the way, or the rover saw a type of tag it wants
+        to stop for), it will possibly back up and try to turn in the opposite
+        direction to face the point.
+
+        Args:
+        * point - geometry_msgs/Point the point to turn and face.
+        * ignore - the Obstacle's to ignore while turning. Should only be
+          either Obstacle.TAG_HOME or Obstacle.TAG_TARGET, or both. Sonar
+          will not be ignored in the direction the rover is currently turning.
+        """
+        print('Facing next point...')
+        # Make sure all sonar sensors are never ignored together here
+        if ignore & Obstacle.IS_SONAR == Obstacle.IS_SONAR:
+            ignore ^= Obstacle.IS_SONAR
+        ignore |= Obstacle.SONAR_BLOCK
+
+        # Try turning in the shortest direction:
+        turn_angle = self.get_angle_to_face_point(point)
+
+        if turn_angle > 0:
+            # turning left, pay attention to left sensor only
+            cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_RIGHT
+        else:
+            # turning right, pay attention to right sensor only
+            cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT
+
+        drive_result = self.swarmie.turn(
+            turn_angle,
+            ignore=cur_ignore,
+            throw=False
+        )
+
+        # Return if successful, or if rover stopped for a cube or home tag
+        if drive_result != MoveResult.OBSTACLE_SONAR:
+            print("Completed turn or found an important AprilTag.")
+            return drive_result
+
+        # If possible, back up and try same direction again.
+        if self._is_safe_to_back_up():
+            self.swarmie.drive(-0.15, ignore=ignore | Obstacle.IS_SONAR)
+
+            turn_angle = self.get_angle_to_face_point(point)
+            if turn_angle > 0:
+                cur_ignore = (ignore |
+                              Obstacle.SONAR_CENTER | Obstacle.SONAR_RIGHT)
+            else:
+                cur_ignore = (ignore |
+                              Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT)
+
+            drive_result = self.swarmie.turn(
+                turn_angle,
+                ignore=cur_ignore,
+                throw=False
+            )
+
+            if drive_result != MoveResult.OBSTACLE_SONAR:
+                print("Completed turn or found an important AprilTag.")
+                return drive_result
+
+        # Last resort, try turning in the other direction.
+        turn_angle = self.get_angle_to_face_point(point)
+
+        # But don't bother if the rover is already mostly facing the
+        # right direction.
+        if abs(turn_angle) < math.pi / 2:
+            print("Didn't make the whole turn, but I'm close enough.")
+            return drive_result
+
+        print("Trying to turn other way.")
+        turn_angle = angles.two_pi_complement(turn_angle)
+        turns = []
+
+        if turn_angle > 0:
+            cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_RIGHT
+        else:
+            cur_ignore = ignore |Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT
+
+        # Split turn angle into two steps if abs val is greater than PI.
+        # The driver API only makes individual turns <= PI.
+        if turn_angle >= math.pi:
+            turns.append(9 * math.pi / 10)
+            turns.append(turn_angle - (9 * math.pi / 10))
+        elif turn_angle <= math.pi:
+            turns.append(-9 * math.pi / 10)
+            turns.append(turn_angle + (9 * math.pi / 10))
+        else:
+            turns.append(turn_angle)
+
+        for turn in turns:
+            drive_result = self.swarmie.turn(
+                turn,
+                ignore=cur_ignore,
+                throw=False
+            )
+
+            if drive_result != MoveResult.SUCCESS:
+                return drive_result
+
+        return drive_result
 
     def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5,
                  max_attempts=10, avoid_targets=True, avoid_home=False,
@@ -859,52 +985,17 @@ class Planner:
             # Turn to approximate goal heading while ignoring sonar and tags
             # helps to prevent rover from trying to jump around obstacles
             # before it even starts along its new path
-            turn_angle = self.get_angle_to_face_point(point)
-
-            self.result = self.swarmie.turn(
-                turn_angle,
-                ignore=current_ignore,
-                throw=False
+            self.result = self._face_point(
+                point,
+                ignore=current_ignore ^ Obstacle.IS_SONAR
             )
 
-            # if self.result == MoveResult.OBSTACLE_HOME:
-            #     self.set_home_locations()
-            #
-            #     detections = self.swarmie.get_latest_targets()
-            #     if self.is_inside_home_ring(detections):
-            #         angle, dist = self.get_angle_and_dist_to_escape_home(
-            #             detections
-            #         )
-            #         self.swarmie.turn(
-            #             angle,
-            #             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-            #         )
-            #         self.swarmie.drive(
-            #             dist,
-            #             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-            #         )
-            #     print('Obstacle: Found Home.')
-            #     return self.result
-
-            # elif self.result == MoveResult.OBSTACLE_TAG:
-            #     if not self.sees_home_tag():
-            #         print('Obstacle: Found a tag.')
-            #         return self.result
-                # try:
-                #     # is is a valid target (not already in the nest)?
-                #     block = self.swarmie.get_nearest_block_location(
-                #         use_targets_buffer=True
-                #     )
-                #     if block is not None:
-                #         print('Obstacle: Found a tag.')
-                #         return self.result
-                # except tf.Exception:
-                #     print('Obstacle: Found a tag.')
-                #     return self.result
-
-            self.result = self.swarmie.drive_to(point,
-                                                ignore=Obstacle.SONAR_BLOCK,
-                                                throw=False)
+            if self.result == MoveResult.SUCCESS:
+                self.result = self.swarmie.drive_to(
+                    point,
+                    ignore=Obstacle.SONAR_BLOCK,
+                    throw=False
+                )
 
             if self.result == MoveResult.SUCCESS:
                 # Success, we got to our waypoint, or got ourselves out of
@@ -918,7 +1009,6 @@ class Planner:
             # otherwise, something went wrong or we found home
             elif self.result == MoveResult.OBSTACLE_HOME:
                 self.set_home_locations()
-
 
                 # get around the home tag obstacle
                 count = 0
@@ -987,7 +1077,6 @@ class Planner:
                     self.result = self._avoid_tag(id=0,
                                                   ignore=current_ignore)
 
-
             elif self.result == MoveResult.OBSTACLE_SONAR:
                 # Check for home and tag obstacles just to be safe, because
                 # sonar MoveResults take priority, and would mask a home or
@@ -1012,6 +1101,7 @@ class Planner:
 
                 if (not left_blocked and
                         not center_blocked and not right_blocked):
+                    print('\nFake sonar obstacle??')
                     pass  # 'fake' obstacle?
 
                 elif not left_blocked and center_blocked and right_blocked:
@@ -1047,11 +1137,7 @@ class Planner:
 
                     # Only back up if we're far enough away from home for it
                     # to be safe. Don't want to back up into the nest!
-                    home_loc = self.swarmie.get_home_odom_location()
-                    current_loc = self.swarmie.get_odom_location().get_pose()
-                    dist = math.sqrt((home_loc.x - current_loc.x) ** 2
-                                     + (home_loc.y - current_loc.y) ** 2)
-                    if dist > 1.5:
+                    if self._is_safe_to_back_up():
                         print('Backing up.')
                         self.swarmie.drive(
                             -0.3,
@@ -1281,7 +1367,9 @@ class Planner:
         Raises:
         * mobility.Swarmie.PathException - if the rover fails more than
           max_attempts times to reach a single waypoint in its current
-          navigation plan.
+          navigation plan. Or, if the rover's current location is further than
+          distance_threshold from the start_location (helps to keep spiral
+          search from wandering off too far, trying to get around walls).
         * rospy.ServiceException - if a path can't be found in 3
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
