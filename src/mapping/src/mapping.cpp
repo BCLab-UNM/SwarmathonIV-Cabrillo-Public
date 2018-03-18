@@ -653,7 +653,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	const double CAMERA_FAR_DIST = 0.74;
 
 	// TAG_TARGET detections closer than this won't be marked as obstacles
-	const double TAG_IN_CLAW_DIST = 0.20; // meters
+	const double TAG_IN_CLAW_DIST = 0.22; // meters
 
 	// Clear camera field of view at different rates if moving or stopped
 	// todo: are these rates good?
