@@ -835,14 +835,21 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 	// whether to use "home" layer in path search
 	bool use_home_layer = req.use_home_layer.data;
 
-	rover_map.getIndex(
-			grid_map::Position(req.start.pose.position.x, req.start.pose.position.y),
+	// Return service error (false) if start or goal outside map boundaries.
+	if (!rover_map.getIndex(
+			grid_map::Position(req.start.pose.position.x,
+							   req.start.pose.position.y),
 			start_index
-	);
-	rover_map.getIndex(
-			grid_map::Position(req.goal.pose.position.x, req.goal.pose.position.y),
+	)) {
+		return false;
+	}
+	if (!rover_map.getIndex(
+			grid_map::Position(req.goal.pose.position.x,
+							   req.goal.pose.position.y),
 			goal_index
-	);
+	)) {
+		return false;
+	}
 
 	GridLocation start{start_index(0), start_index(1)};
 	GridLocation goal{goal_index(0), goal_index(1)};
