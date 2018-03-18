@@ -385,7 +385,7 @@ class Planner:
         * sorted_detections - sorted list of AprilTagDetections in view. Will
           be empty if no tags are in view.
         """
-        BLOCK_IN_CLAW_DIST = 0.18
+        BLOCK_IN_CLAW_DIST = 0.22  # meters
         sorted_detections = []
 
         for detection in detections:
