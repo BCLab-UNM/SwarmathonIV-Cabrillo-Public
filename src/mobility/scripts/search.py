@@ -135,6 +135,12 @@ def main():
                              tolerance_step=0.5,
                              avoid_targets=False,
                              avoid_home=True)
+
+            cur_loc = swarmie.get_odom_location()
+            if not cur_loc.at_goal(last_pose, 0.3):
+                print('Getting a little closer to last exit position.')
+                swarmie.drive_to(last_pose, throw=False)
+
         except rospy.ServiceException:
             # try again without map waypoints
             planner.drive_to(last_pose,
@@ -143,6 +149,12 @@ def main():
                              avoid_targets=False,
                              avoid_home=True,
                              use_waypoints=False)
+
+            cur_loc = swarmie.get_odom_location()
+            if not cur_loc.at_goal(last_pose, 0.3):
+                print('Getting a little closer to last exit position.')
+                swarmie.drive_to(last_pose, throw=False)
+
         except PathException:
             print('PathException on our way to last search exit location.')
             # good enough
@@ -167,7 +179,7 @@ def main():
                 # planner.face_nearest_block()
                 exit(0)
         except HomeException:
-            # Just move onto spiral search, but this shouldn't really happen
+            # Just move onto random search, but this shouldn't really happen
             # either.
             pass
         except ObstacleException:
