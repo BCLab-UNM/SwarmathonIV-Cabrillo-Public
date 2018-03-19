@@ -36,6 +36,21 @@ def wander():
         turnaround()
 
 
+def escape_home(detections):
+    global swarmie, planner
+
+    print('\nGetting out of the home ring!!')
+    angle, dist = planner.get_angle_and_dist_to_escape_home(detections)
+    swarmie.turn(
+        angle,
+        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+    )
+    swarmie.drive(
+        dist,
+        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+    )
+
+
 def handle_exit():
     global planner, swarmie, found_tag
 
@@ -102,8 +117,13 @@ def main():
         try:
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
-            swarmie.turn(math.pi,
-                         ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            # get out of from inside home if it ever happens
+            detections = swarmie.get_latest_targets().detections
+            if planner.is_inside_home_ring(detections):
+                escape_home(detections)
+            else:
+                swarmie.turn(math.pi,
+                             ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
@@ -115,7 +135,12 @@ def main():
             except tf.Exception:
                 pass
     else:
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        # get out of from inside home if it ever happens
+        detections = swarmie.get_latest_targets().detections
+        if planner.is_inside_home_ring(detections):
+            escape_home(detections)
+        else:
+            swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     # Return to our last search exit pose if possible
     dist = 0
@@ -196,6 +221,12 @@ def main():
             except HomeException :
                 print ("I saw home!")
                 planner.set_home_locations()
+
+                # get out of from inside home if it ever happens
+                detections = swarmie.get_latest_targets().detections
+                if planner.is_inside_home_ring(detections):
+                    escape_home(detections)
+
                 turnaround()
 
     except TagException :
