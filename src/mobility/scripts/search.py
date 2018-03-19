@@ -49,7 +49,6 @@ def handle_exit():
     set_search_exit_poses()
 
 
-
 def reset_speeds():
     global initial_config, param_client
     param_client.update_configuration(initial_config)
@@ -98,7 +97,6 @@ def main():
     }
     param_client.update_configuration(speeds)
     rospy.on_shutdown(handle_exit)
-
 
     if not planner.sees_home_tag():
         try:
@@ -185,8 +183,7 @@ def main():
 
             except HomeException :
                 print ("I saw home!")
-                odom_location = swarmie.get_odom_location()
-                swarmie.set_home_odom_location(odom_location)
+                planner.set_home_locations()
                 turnaround()
 
     except TagException :
