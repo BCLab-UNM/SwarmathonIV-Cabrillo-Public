@@ -126,7 +126,7 @@ def main():
         dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
                          + (last_pose.y - cur_pose.y) ** 2)
 
-    if dist > 1.5:  # only bother if it was reasonably far away
+    if dist > 1:  # only bother if it was reasonably far away
         print('Driving to last search exit position.')
         swarmie.print_infoLog('Driving to last search exit position.')
         try:
