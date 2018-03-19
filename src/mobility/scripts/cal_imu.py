@@ -71,9 +71,9 @@ class IMU:
     MIN_DATA_SIZE = 50
 
     # For extended file validation
-    ROLL_PITCH_TOLERANCE = 3.5  # degrees
-    MAG_VAR_TOLERANCE = 1e-2
-    ACC_VAR_TOLERANCE = 3e-2
+    ROLL_PITCH_TOLERANCE = 3.0  # degrees
+    MAG_VAR_TOLERANCE = 1e-3
+    ACC_VAR_TOLERANCE = 4e-3
 
     def __init__(self, rover):
         self.rover = rover
@@ -158,9 +158,9 @@ class IMU:
         )
         if self.DEBUG:
             self.imu_cal_data_pub = rospy.Publisher(
-                        self.rover + '/imu/raw/calibrated',
-                        SwarmieIMU,
-                        queue_size=10
+                self.rover + '/imu/raw/calibrated',
+                SwarmieIMU,
+                queue_size=10
             )
         self.info_log = rospy.Publisher(
             '/infoLog',
