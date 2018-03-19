@@ -403,7 +403,10 @@ std::vector<GridLocation> straighten_path(grid_map::GridMap& map,
 		i++;
 	}
 
-	result.push_back(path[i - 1]); // last in line-of-sight location
+    // Only include this point if it isn't the start point
+    if (i > 1) {
+		result.push_back(path[i - 1]); // last in line-of-sight location
+    }
 	while (i < path.size()) {
 		result.push_back(path[i]);
 		i++;
