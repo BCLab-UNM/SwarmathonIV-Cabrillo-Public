@@ -825,7 +825,12 @@ class Planner:
 
         # If possible, back up and try same direction again.
         if self._is_safe_to_back_up():
-            self.swarmie.drive(-0.15, ignore=ignore | Obstacle.IS_SONAR)
+            dist = -0.15
+            if (self.prev_state == Planner.STATE_AVOID_LEFT or
+                    self.prev_state == Planner.STATE_AVOID_RIGHT or
+                    self.prev_state == Planner.STATE_AVOID_REVERSE):
+                dist = -0.25
+            self.swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
 
             turn_angle = self.get_angle_to_face_point(point)
             if turn_angle > 0:
@@ -846,6 +851,14 @@ class Planner:
                 return drive_result
 
         # Last resort, try turning in the other direction.
+        if self._is_safe_to_back_up():
+            dist = -0.15
+            if (self.prev_state == Planner.STATE_AVOID_LEFT or
+                    self.prev_state == Planner.STATE_AVOID_RIGHT or
+                    self.prev_state == Planner.STATE_AVOID_REVERSE):
+                dist = -0.25
+            self.swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
+
         turn_angle = self.get_angle_to_face_point(point)
 
         # But don't bother if the rover is already mostly facing the
