@@ -44,7 +44,7 @@
     <!--Simulation and physical need different settings here-->
     <param if="$(arg simulation)" name="magnetic_declination_radians" value="0"/>
     <param if="$(arg simulation)" name="yaw_offset" value="1.57079632679"/>
-    <param unless="$(arg simulation)" name="magnetic_declination_radians" value="0.227"/> <!--Aptos, CA-->
+    <param unless="$(arg simulation)" name="magnetic_declination_radians" value="0"/>
     <param unless="$(arg simulation)" name="yaw_offset" value="0"/>
     <param name="world_frame" value="map"/>
     <param name="frequency" value="10"/>
