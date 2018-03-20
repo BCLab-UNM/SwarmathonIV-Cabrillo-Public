@@ -25,8 +25,8 @@ def wander():
     global swarmie
     try :
         rospy.loginfo("Wandering...")
-        swarmie.turn(random.gauss(0, math.pi/8))
-        swarmie.drive(2)
+        swarmie.turn(random.gauss(0, math.pi/6))
+        swarmie.drive(random.gauss(2.5, 1))
 
         rospy.loginfo("Circling...")
         swarmie.circle()
@@ -34,6 +34,21 @@ def wander():
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround()
+
+
+def escape_home(detections):
+    global swarmie, planner
+
+    print('\nGetting out of the home ring!!')
+    angle, dist = planner.get_angle_and_dist_to_escape_home(detections)
+    swarmie.turn(
+        angle,
+        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+    )
+    swarmie.drive(
+        dist,
+        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+    )
 
 
 def handle_exit():
@@ -47,7 +62,6 @@ def handle_exit():
 
     swarmie.print_infoLog('Setting search exit poses.')
     set_search_exit_poses()
-
 
 
 def reset_speeds():
@@ -99,13 +113,17 @@ def main():
     param_client.update_configuration(speeds)
     rospy.on_shutdown(handle_exit)
 
-
     if not planner.sees_home_tag():
         try:
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
-            swarmie.turn(math.pi,
-                         ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            # get out of from inside home if it ever happens
+            detections = swarmie.get_latest_targets().detections
+            if planner.is_inside_home_ring(detections):
+                escape_home(detections)
+            else:
+                swarmie.turn(math.pi,
+                             ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
@@ -117,7 +135,12 @@ def main():
             except tf.Exception:
                 pass
     else:
-        swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        # get out of from inside home if it ever happens
+        detections = swarmie.get_latest_targets().detections
+        if planner.is_inside_home_ring(detections):
+            escape_home(detections)
+        else:
+            swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     # Return to our last search exit pose if possible
     dist = 0
@@ -128,7 +151,7 @@ def main():
         dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
                          + (last_pose.y - cur_pose.y) ** 2)
 
-    if dist > 1.5:  # only bother if it was reasonably far away
+    if dist > 1:  # only bother if it was reasonably far away
         print('Driving to last search exit position.')
         swarmie.print_infoLog('Driving to last search exit position.')
         try:
@@ -137,6 +160,12 @@ def main():
                              tolerance_step=0.5,
                              avoid_targets=False,
                              avoid_home=True)
+
+            cur_loc = swarmie.get_odom_location()
+            if not cur_loc.at_goal(last_pose, 0.3):
+                print('Getting a little closer to last exit position.')
+                swarmie.drive_to(last_pose, throw=False)
+
         except rospy.ServiceException:
             # try again without map waypoints
             planner.drive_to(last_pose,
@@ -145,6 +174,12 @@ def main():
                              avoid_targets=False,
                              avoid_home=True,
                              use_waypoints=False)
+
+            cur_loc = swarmie.get_odom_location()
+            if not cur_loc.at_goal(last_pose, 0.3):
+                print('Getting a little closer to last exit position.')
+                swarmie.drive_to(last_pose, throw=False)
+
         except PathException:
             print('PathException on our way to last search exit location.')
             # good enough
@@ -169,7 +204,7 @@ def main():
                 # planner.face_nearest_block()
                 exit(0)
         except HomeException:
-            # Just move onto spiral search, but this shouldn't really happen
+            # Just move onto random search, but this shouldn't really happen
             # either.
             pass
         except ObstacleException:
@@ -185,8 +220,13 @@ def main():
 
             except HomeException :
                 print ("I saw home!")
-                odom_location = swarmie.get_odom_location()
-                swarmie.set_home_odom_location(odom_location)
+                planner.set_home_locations()
+
+                # get out of from inside home if it ever happens
+                detections = swarmie.get_latest_targets().detections
+                if planner.is_inside_home_ring(detections):
+                    escape_home(detections)
+
                 turnaround()
 
     except TagException :
