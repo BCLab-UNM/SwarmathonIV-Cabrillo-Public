@@ -12,7 +12,7 @@
   <param name="sonar_right_frame" value="$(arg name)/sonar_right"/>
   <param name="sonar_center_frame" value="$(arg name)/sonar_center"/>
   <param name="sonar_left_frame" value="$(arg name)/sonar_left"/>
-    
+
   <include file="$(find swarmie)/launch/robot_localization.xml">
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
@@ -22,7 +22,7 @@
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
   </include>
-
+  
   <include file="$(find swarmie)/launch/tf.xml">
       <arg name="name" value="$(arg name)"/>
   </include>

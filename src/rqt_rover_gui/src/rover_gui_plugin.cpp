@@ -448,7 +448,7 @@ void RoverGUIPlugin::EKFEventHandler(const ros::MessageEvent<const nav_msgs::Odo
     QString x_str; x_str.setNum(x);
     QString y_str; y_str.setNum(y);
     // Extract rover name from the message source. Publisher is in the format /*rover_name*_MAP
-    size_t found = publisher_name.find("_MAP");
+    size_t found = publisher_name.find("/", 1);
     string rover_name = publisher_name.substr(1,found-1);
 
     // Store map info for the appropriate rover name
@@ -471,9 +471,9 @@ void RoverGUIPlugin::encoderEventHandler(const ros::MessageEvent<const nav_msgs:
     QString x_str; x_str.setNum(x);
     QString y_str; y_str.setNum(y);
 
-    // Extract rover name from the message source. Get the topic name from the event header. Can't use publisher_name here because it is just /gazebo.
-    size_t found = topic.find("/odom/filtered");
-    string rover_name = topic.substr(1,found-1);
+    // Extract rover name from the message source. Publisher is in the format /*rover_name*_NAVSAT
+    size_t found = publisher_name.find("/", 1);
+    string rover_name = publisher_name.substr(1,found-1);
 
     // Store map info for the appropriate rover name
    ui.map_frame->addToEncoderRoverPath(rover_name, x, y);
@@ -494,7 +494,7 @@ void RoverGUIPlugin::GPSEventHandler(const ros::MessageEvent<const nav_msgs::Odo
     QString y_str; y_str.setNum(y);
 
     // Extract rover name from the message source. Publisher is in the format /*rover_name*_NAVSAT
-    size_t found = publisher_name.find("_NAVSAT");
+    size_t found = publisher_name.find("/", 1);
     string rover_name = publisher_name.substr(1,found-1);
 
     // Store map info for the appropriate rover name
@@ -505,7 +505,7 @@ void RoverGUIPlugin::GPSNavSolutionEventHandler(const ros::MessageEvent<const ub
     const boost::shared_ptr<const ublox_msgs::NavSOL> msg = event.getMessage();
 
     // Extract rover name from the message source. Publisher is in the format /*rover_name*_UBLOX
-    size_t found = event.getPublisherName().find("_UBLOX");
+    size_t found = event.getPublisherName().find("/", 1);
     QString rover_name = event.getPublisherName().substr(1,found-1).c_str();
 
     // Update the number of sattellites detected for the specified rover
