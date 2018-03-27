@@ -44,8 +44,6 @@
 
 using namespace std;
 
-string rover;
-
 grid_map::GridMap rover_map;
 
 ros::Publisher obstaclePublish;
@@ -62,6 +60,7 @@ const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensor
 const double MAP_RESOLUTION = 0.5; // map resolution, meters per cell
 unsigned int obstacle_status;
 
+std::string map_frame;
 
 /*
  * Data structures and A* Search adapted from:
@@ -738,7 +737,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			// Wait for 0.2 seconds to try to avoid transform exceptions
 			//
 			cameraTF->waitForTransform(
-					rover + "/odom",   // Target frame
+					map_frame,   // Target frame
 					message->detections[0].pose.header.frame_id, // Source frame
 					message->detections[0].pose.header.stamp,    // Time
 					ros::Duration(0.2) // How long to wait for the tf.
@@ -746,7 +745,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
             for (int i=0; i<message->detections.size(); i++) {
                 geometry_msgs::PoseStamped tagpose;
-                cameraTF->transformPose(rover + "/odom",
+                cameraTF->transformPose(map_frame,
                                         message->detections[i].pose,
                                         tagpose);
 
@@ -898,7 +897,7 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 //    rsp.plan.poses.push_back(req.goal);
 
 	pose_path.header.stamp = ros::Time::now();
-	pose_path.header.frame_id = rover + "/odom";
+	pose_path.header.frame_id = map_frame;
 	pose_path.poses = poses;
 	path_publisher.publish(pose_path);
 
@@ -917,26 +916,16 @@ void crashHandler(int s) {
 
 int main(int argc, char **argv) {
 
-	char host[128];
-    gethostname(host, sizeof (host));
-    string hostname(host);
-
-    if (argc >= 2) {
-        rover = argv[1];
-        cout << "Welcome to the world of tomorrow " << rover
-             << "!  Mapping node started." << endl;
-    } else {
-        rover = hostname;
-        cout << "No Name Selected. Default is: " << rover << endl;
-    }
-
-    ros::init(argc, argv, (rover + "_MAP"));
+    ros::init(argc, argv, "mapping");
     ros::NodeHandle mNH;
 
     signal(SIGSEGV, crashHandler);
 
     obstacle_status = swarmie_msgs::Obstacle::PATH_IS_CLEAR;
 
+    // Parameters
+    ros::param::param<std::string>("~map_frame", map_frame, "odom");
+    
     // Transform Listener
     //
     // C++ Tutorial Here:
@@ -948,12 +937,12 @@ int main(int argc, char **argv) {
     // C++ Tutorial Here:
     // 		http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28c%2B%2B%29
     //
-    ros::Subscriber odomSubscriber = mNH.subscribe((rover + "/odom/filtered"), 10, odometryHandler);
-    ros::Subscriber targetSubscriber = mNH.subscribe((rover + "/targets"), 10, targetHandler);
+    ros::Subscriber odomSubscriber = mNH.subscribe("odom/filtered", 10, odometryHandler);
+    ros::Subscriber targetSubscriber = mNH.subscribe("targets", 10, targetHandler);
 
-    message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(mNH, (rover + "/sonarLeft"), 10);
-    message_filters::Subscriber<sensor_msgs::Range> sonarCenterSubscriber(mNH, (rover + "/sonarCenter"), 10);
-    message_filters::Subscriber<sensor_msgs::Range> sonarRightSubscriber(mNH, (rover + "/sonarRight"), 10);
+    message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(mNH, "sonarLeft", 10);
+    message_filters::Subscriber<sensor_msgs::Range> sonarCenterSubscriber(mNH, "sonarCenter", 10);
+    message_filters::Subscriber<sensor_msgs::Range> sonarRightSubscriber(mNH, "sonarRight", 10);
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Range, sensor_msgs::Range, sensor_msgs::Range> sonarSyncPolicy;
 
@@ -962,21 +951,21 @@ int main(int argc, char **argv) {
 
     //	Publishers
 
-    obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>((rover + "/obstacle"), 1, true);
+    obstaclePublish = mNH.advertise<swarmie_msgs::Obstacle>("obstacle", 1, true);
 
-    rover_map_publisher = mNH.advertise<grid_map_msgs::GridMap>(rover + "/map", 1, false);
-	path_publisher = mNH.advertise<nav_msgs::Path>(rover + "/plan", 1, false);
+    rover_map_publisher = mNH.advertise<grid_map_msgs::GridMap>("map", 1, false);
+	path_publisher = mNH.advertise<nav_msgs::Path>("plan", 1, false);
 
     // Services
     //
     // This is the API into the Python control code
     //
-    ros::ServiceServer omap = mNH.advertiseService(rover + "/map/get_map", get_map);
-	ros::ServiceServer plan = mNH.advertiseService(rover + "/map/get_plan", get_plan);
+    ros::ServiceServer omap = mNH.advertiseService("map/get_map", get_map);
+	ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacle", "target", "home"});
-    rover_map.setFrameId(rover + "/odom");
+    rover_map.setFrameId(map_frame);
     rover_map.setGeometry(grid_map::Length(25, 25), MAP_RESOLUTION);
 
     ros::spin();
