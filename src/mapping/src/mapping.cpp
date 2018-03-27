@@ -924,7 +924,7 @@ int main(int argc, char **argv) {
     obstacle_status = swarmie_msgs::Obstacle::PATH_IS_CLEAR;
 
     // Parameters
-    ros::param::param<std::string>("~map_frame", map_frame, "odom");
+    ros::param::param<std::string>("~odom_frame", map_frame);
     
     // Transform Listener
     //

@@ -141,9 +141,9 @@ int main(int argc, char **argv) {
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
-    ros::param::param("~imu_frame", imuRaw.header.frame_id);
     ros::param::param("~odom_frame", odom.header.frame_id);
-    ros::param::param("~base_link", odom.child_frame_id);
+    ros::param::param("~base_link_frame", odom.child_frame_id);
+    imuRaw.header.frame_id = odom.child_frame_id;
 
     // configure dynamic reconfiguration
     dynamic_reconfigure::Server<bridge::pidConfig> config_server;
