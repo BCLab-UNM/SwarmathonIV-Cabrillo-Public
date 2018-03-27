@@ -1,0 +1,31 @@
+<launch>
+
+  <arg name="name"/>
+
+  <param name="tf_prefix" value="/$(arg name)" />
+
+  <node name="stfBase2Cam"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 100"
+        respawn="true">
+  </node>
+ 
+  <node name="stfBase2SL"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.11 0.05 0.155 0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_left 100"
+        respawn="true" />
+  <node name="stfBase2SC"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.12 0 0.155 0 0 0 $(arg name)/base_link $(arg name)/sonar_center 100"
+        respawn="true" />
+  <node name="stfBase2SR"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0.11 -0.05 0.155 -0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_right 100"
+        respawn="true" />
+
+  
+</launch>
