@@ -141,8 +141,8 @@ int main(int argc, char **argv) {
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
-    ros::param::param("~odom_frame", odom.header.frame_id);
-    ros::param::param("~base_link_frame", odom.child_frame_id);
+    ros::param::param<std::string>("odom_frame", odom.header.frame_id, "odom");
+    ros::param::param<std::string>("base_link_frame", odom.child_frame_id, "base_link");
     imuRaw.header.frame_id = odom.child_frame_id;
 
     // configure dynamic reconfiguration
