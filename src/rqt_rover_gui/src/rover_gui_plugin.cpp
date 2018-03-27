@@ -270,6 +270,72 @@ namespace rqt_rover_gui
 
     emit updateNumberOfSatellites("<font color='white'>---</font>");
 
+    // Add ROS parameters to assist the easy setup of simulations...
+    ros::NodeHandle nh("rqt_rover_gui");
+    std::string world;
+    if (nh.getParam("world", world)) {
+    	// Load the specified world.
+		QFile file(world.c_str());
+		if (file.exists()) {
+			ui.custom_distribution_radio_button->setChecked(true);
+			ui.custom_world_path_button->setEnabled(true);
+			sim_mgr.setCustomWorldPath(file.fileName());
+			emit sendInfoLogMessage("User selected custom world path: " + file.fileName());
+			// Extract the base filename for short display
+			QFileInfo fi=file;
+			ui.custom_world_path->setText(fi.baseName());
+		}
+		else {
+			emit sendInfoLogMessage("Failed to load custom world file");
+		}
+    }
+
+    // Check if the user specified a generated world.
+    std::string round;
+    if (nh.getParam("round", round)) {
+    	if (round == "prelim") {
+    		ui.final_radio_button->setChecked(false);
+    		emit sendInfoLogMessage("Round set to preliminary round.");
+    	}
+    	else {
+    		ui.final_radio_button->setChecked(true);
+    		emit sendInfoLogMessage("Round set to final round.");
+    	}
+    }
+
+    std::string dist;
+    if (nh.getParam("distribution", dist)) {
+    	if (dist == "clustered") {
+    		ui.clustered_distribution_radio_button->setChecked(true);
+    		emit sendInfoLogMessage("Using clustered distribution.");
+    	}
+    	else if (dist == "powerlaw") {
+    		ui.powerlaw_distribution_radio_button->setChecked(true);
+    		emit sendInfoLogMessage("Using power law distribution.");
+    	}
+    }
+
+    bool singlerover;
+    if (nh.getParam("single", singlerover)) {
+    	if (singlerover) {
+    		ui.override_num_rovers_checkbox->setChecked(true);
+    		ui.custom_num_rovers_combobox->setCurrentIndex(1);
+    	}
+    }
+
+    bool doview;
+    if (nh.getParam("gazebo", doview)) {
+		emit sendInfoLogMessage("Setting visualization checkbox.");
+    	ui.start_visualization_on_build_checkbox->setChecked(doview);
+    }
+
+    bool dostart;
+    if (nh.getParam("startsim", dostart)) {
+    	if (dostart) {
+    		emit sendInfoLogMessage("Automatically starting simulation.");
+    		buildSimulationButtonEventHandler();
+    	}
+    }
   }
 
   void RoverGUIPlugin::shutdownPlugin()
