@@ -28,7 +28,7 @@
 class Diagnostics {
   
 public:
-  Diagnostics(std::string);
+  Diagnostics();
   ~Diagnostics();
   void publishWarningLogMessage(std::string);
   void publishErrorLogMessage(std::string);
