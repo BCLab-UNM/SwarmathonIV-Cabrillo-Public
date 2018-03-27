@@ -140,7 +140,7 @@
 					<updateRate>0.0</updateRate>
 					<cameraName>/aeneas/camera</cameraName>
 					<imageTopicName>/aeneas/camera/image</imageTopicName>
-					<cameraInfoTopicName>/aeneas/camera/info</cameraInfoTopicName>
+					<cameraInfoTopicName>/aeneas/camera/camera_info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>

@@ -157,7 +157,7 @@
 					<updateRate>0.0</updateRate>
 					<cameraName>/zeus/camera</cameraName>
 					<imageTopicName>/zeus/camera/image</imageTopicName>
-					<cameraInfoTopicName>/zeus/camera/info</cameraInfoTopicName>
+					<cameraInfoTopicName>/zeus/camera/camera_info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>

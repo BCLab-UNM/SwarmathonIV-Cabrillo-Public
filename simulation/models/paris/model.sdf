@@ -140,7 +140,7 @@
 					<updateRate>0.0</updateRate>
 					<cameraName>/paris/camera</cameraName>
 					<imageTopicName>/paris/camera/image</imageTopicName>
-					<cameraInfoTopicName>/paris/camera/info</cameraInfoTopicName>
+					<cameraInfoTopicName>/paris/camera/camera_info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>

@@ -140,7 +140,7 @@
 					<updateRate>0.0</updateRate>
 					<cameraName>/diomedes/camera</cameraName>
 					<imageTopicName>/diomedes/camera/image</imageTopicName>
-					<cameraInfoTopicName>/diomedes/camera/info</cameraInfoTopicName>
+					<cameraInfoTopicName>/diomedes/camera/camera_info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>
