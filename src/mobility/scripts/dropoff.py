@@ -131,6 +131,11 @@ def main():
         swarmie.set_finger_angle(1)
         rospy.sleep(.4)
         swarmie.set_wrist_angle(0)
+        import os
+        import random
+        os.system('rosrun gazebo_ros spawn_model -file /home/carter/Robotics/Swarmathon-Cabrillo/object.urdf -urdf -x '+str(random.uniform(-.5, .5))+' -y '+str(random.uniform(-.5, .5))+' -z 1 -model c'+str(random.randint(1,99999)))
+        
+        
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     except: 
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
