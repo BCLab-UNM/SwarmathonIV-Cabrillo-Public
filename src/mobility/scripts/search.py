@@ -92,8 +92,8 @@ def main():
     swarmie = Swarmie(rovername)
     planner = Planner(swarmie)
 
-    swarmie.fingers_open()
-    swarmie.wrist_middle()
+    #swarmie.fingers_open()
+    #swarmie.wrist_middle()
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.

@@ -169,8 +169,8 @@ def main():
     param_client.update_configuration(speeds)
     rospy.on_shutdown(reset_speeds)
 
-    swarmie.fingers_close()  # make sure we keep a firm grip
-    swarmie.wrist_middle()  # get block mostly out of camera view
+    #swarmie.fingers_close()  # make sure we keep a firm grip
+    #swarmie.wrist_middle()  # get block mostly out of camera view
     home = swarmie.get_home_odom_location()
 
     drive_home(has_block, home)
