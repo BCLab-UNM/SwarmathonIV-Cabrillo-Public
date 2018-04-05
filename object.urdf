@@ -1,8 +1,8 @@
-<robot name="simple_box">
+<robot name="my_cylinder">
 <link name="my_cylinder">
   <inertial>
     <origin xyz="0 0 0" />
-    <mass value="1.0" />
+    <mass value="0.1" />
     <inertia  ixx="1.0" ixy="0.0"  ixz="0.0"  iyy="100.0"  iyz="0.0"  izz="1.0" />
   </inertial>
   <visual>
@@ -19,6 +19,6 @@
     </collision>
   </link>
   <gazebo reference="my_cylinder">
-    <material>Gazebo/Blue</material>
+    <material>Gazebo/Orange</material>
   </gazebo>
 </robot>
