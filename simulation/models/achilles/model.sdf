@@ -514,7 +514,6 @@
 			<!-- required: joint definitions -->
 			<wristJoint>drill_casing_joint</wristJoint>
 			<leftFingerJoint>Drill_Joint</leftFingerJoint>
-			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
 			<wristTopic>/achilles/wristAngle/cmd</wristTopic>

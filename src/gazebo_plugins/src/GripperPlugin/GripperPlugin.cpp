@@ -71,7 +71,8 @@ void GripperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf) {
   // LOAD GRIPPER JOINTS - begin
   wristJoint = loadJoint("wristJoint");
   leftFingerJoint = loadJoint("leftFingerJoint");
-  rightFingerJoint = loadJoint("rightFingerJoint");
+  rightFingerJoint = loadJoint("leftFingerJoint");
+  //rightFingerJoint = loadJoint("rightFingerJoint");
   ROS_DEBUG_STREAM_COND(isDebuggingModeActive, "[Gripper Plugin : "
     << model->GetName() << "]\n    loaded the gripper's joints:\n"
     << "        " << wristJoint->GetName() << endl << "        "
