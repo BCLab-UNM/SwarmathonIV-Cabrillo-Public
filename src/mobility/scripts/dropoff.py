@@ -126,15 +126,24 @@ def main():
         raise
     
     try:
-        swarmie.set_wrist_angle(.7)
-        rospy.sleep(.4)
-        swarmie.set_finger_angle(1)
-        rospy.sleep(.4)
-        swarmie.set_wrist_angle(0)
+        swarmie.set_finger_angle(2)
         import os
         import random
-        os.system('rosrun gazebo_ros spawn_model -file /home/carter/Robotics/Swarmathon-Cabrillo/object.urdf -urdf -x '+str(random.uniform(-.5, .5))+' -y '+str(random.uniform(-.5, .5))+' -z 1 -model c'+str(random.randint(1,99999)))
+
+        from gazebo_msgs.srv import GetModelState
+
+        model_coordinates = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
+        resp_coordinates = model_coordinates(swarmie.rover_name, 'world')
+        offset = .23
+        x = resp_coordinates.pose.position.x
+        y = resp_coordinates.pose.position.y
         
+        #this is a total hack, it is possible in matlab and in python just have to spend more time
+        os.system('rosrun gazebo_ros spawn_model -file /home/carter/Robotics/Swarmathon-Cabrillo/object.urdf -urdf'
+        +' -x '+ str(x - math.copysign(offset, x)) 
+        +' -y '+ str(y) #str(y - math.copysign(offset, y))
+        +' -z 0 -model c' #on the ground
+        +str(random.randint(1,99999))) #to avoid name collisions
         
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     except: 
