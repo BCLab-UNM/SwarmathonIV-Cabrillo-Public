@@ -134,7 +134,7 @@ def main():
         y = resp_coordinates.pose.position.y
         
         #this is a total hack, it is possible in matlab and in python just have to spend more time
-        os.system('rosrun gazebo_ros spawn_model -file /home/carter/Robotics/Swarmathon-Cabrillo/object.urdf -urdf'
+        os.system('rosrun gazebo_ros spawn_model -file object.urdf -urdf'
         +' -x '+ str(x - math.copysign(offset, x)) 
         +' -y '+ str(y) #str(y - math.copysign(offset, y))
         +' -z 0 -model c' #on the ground
