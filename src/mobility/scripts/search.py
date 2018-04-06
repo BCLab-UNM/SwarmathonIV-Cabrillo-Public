@@ -19,7 +19,7 @@ from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleExcep
 
 def turnaround(): 
     global swarmie
-    swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+    swarmie.turn(random.gauss(math.pi/4, math.pi/16), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
 def wander():
     global swarmie
