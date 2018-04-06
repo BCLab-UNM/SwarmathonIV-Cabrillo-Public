@@ -25,7 +25,7 @@ def wander():
     global swarmie
     try :
         rospy.loginfo("Wandering...")
-        swarmie.turn(random.gauss(0, math.pi/6))
+        swarmie.turn(random.gauss(0, math.pi/8))
         swarmie.drive(random.gauss(2.5, 1))
 
         rospy.loginfo("Circling...")
