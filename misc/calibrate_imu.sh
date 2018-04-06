@@ -1,7 +1,7 @@
 #! /bin/bash
 
 arduino=/opt/arduino/arduino
-repo=~/Swarmathon-Arduino
+repo=~/arduino
 sketch=$repo/Calibrate/Calibrate.ino
 
 if udevadm info /dev/ttyACM0 | grep -q Leonardo; then

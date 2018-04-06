@@ -30,6 +30,7 @@ fi
     catkin config --profile rover-deploy -i='deploy/install'
     catkin config --profile rover-deploy --install
     catkin config --profile rover-deploy --cmake-args -DCMAKE_BUILD_TYPE=Release
+    catkin config --profile rover-deploy --blacklist gazebo_plugins rqt_rover_gui
 
 ) > /dev/null
 
@@ -43,7 +44,7 @@ echo "Copying installation files."
 cp -R deploy/install/ $TEMPDIR
 cp -R launch/ $TEMPDIR
 cp -R misc/ $TEMPDIR
-cp -R Swarmathon-Arduino/ $TEMPDIR
+cp -R arduino/ $TEMPDIR
 cp -R src/mobility/resources $TEMPDIR/install/share/mobility/
 cat <<EOF > $TEMPDIR/bootstrap.sh
 function finish {

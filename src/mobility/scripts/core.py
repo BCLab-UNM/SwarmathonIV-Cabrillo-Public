@@ -13,7 +13,7 @@ from mobility.task import Task
 def heartbeat(event):
     global heartbeat_pub, status_pub, task
     heartbeat_pub.publish("ok")
-    status_pub.publish(task.get_task())
+    status_pub.publish("+ (Cabrillo) cab110:" + task.get_task())
 
 def mode(msg):
     global driver, task 

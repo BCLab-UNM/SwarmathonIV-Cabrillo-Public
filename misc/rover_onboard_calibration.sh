@@ -22,9 +22,9 @@ fi
 
 echo Using Arduino executable: $arduino
 
-if [ -f ./Swarmathon-Arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
-    repo=$(realpath ./Swarmathon-Arduino)
-elif [ -f $(catkin locate)/Swarmathon-Arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
+if [ -f ./arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
+    repo=$(realpath ./arduino)
+elif [ -f $(catkin locate)/arduino/CabrilloCalibrator/CabrilloCalibrator.ino ]; then
     repo=$(catkin locate)
 else
     echo "Couldn't locate calibration sketch."

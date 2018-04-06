@@ -17,12 +17,15 @@
 #ifndef ROVERGUIPLUGIN_H
 #define ROVERGUIPLUGIN_H
 
+#include "gazebo/physics/physics.hh"
+#include "gazebo/common/common.hh"
+#include "gazebo/gazebo.hh"
+
+#include <rqt_gui_cpp/plugin.h>
 #include <ui_rover_gui_plugin.h>
 //#include <rqt_rover_gui/ui_rover_gui_plugin.h>
-#include <rqt_gui_cpp/plugin.h>
-#include <ublox_msgs/NavSOL.h>
-#include "GazeboSimManager.h"
-#include "JoystickGripperInterface.h"
+#include <ros/ros.h>
+#include <image_transport/image_transport.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/Image.h>
 #include <ros/macros.h>
@@ -39,15 +42,6 @@
 #include <geometry_msgs/Polygon.h>
 #include <geometry_msgs/Point32.h>
 #include <pluginlib/class_list_macros.h>
-#include "gazebo/common/common.hh"
-
-#ifndef Q_MOC_RUN 
-#include "gazebo/gazebo.hh"
-#include "gazebo/physics/physics.hh"
-#include <ros/ros.h>
-#include <image_transport/image_transport.h>
-#endif 
-
 #include <QGraphicsView>
 #include <QEvent>
 #include <QKeyEvent>
@@ -66,6 +60,9 @@
 #include <QWidget>
 #include <QTimer>
 #include <QLabel>
+
+#include "GazeboSimManager.h"
+#include "JoystickGripperInterface.h"
 
 
 // Forward declarations

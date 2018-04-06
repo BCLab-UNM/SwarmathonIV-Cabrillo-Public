@@ -34,17 +34,20 @@ fi
 
 echo Using Arduino executable: $arduino
 
-if [ -f ./Swarmathon-Arduino/Swarmathon_Arduino/Swarmathon_Arduino.ino ]; then
-    repo=$(realpath ./Swarmathon-Arduino)
-elif [ -f $(catkin locate)/Swarmathon-Arduino/Swarmathon_Arduino/Swarmathon_Arduino.ino ]; then
-    repo=$(catkin locate)
+if [ -f $projdir/arduino/swarmie_control/swarmie_control.ino ]; then
+    repo=$(realpath $projdir/arduino)
+elif [ -f $(catkin locate)/arduino/swarmie_control/swarmie_control.ino ]; then
+    repo=$(catkin locate)/arduino
 else
     echo "Couldn't locate Arduino sketch."
     exit 1 
 fi
 
-sketch=$repo/Swarmathon_Arduino/Swarmathon_Arduino.ino
+sketch=$repo/swarmie_control/swarmie_control.ino
 build=$repo/build
+
+echo Sketch: $sketch
+echo Build Dir: $build
 
 $arduino --upload --preserve-temp-files --pref serial.port=$swarmie_dev --pref build.verbose=1 --pref upload.verbose=1 --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
 

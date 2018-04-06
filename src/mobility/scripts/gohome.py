@@ -188,9 +188,12 @@ def main():
     if has_block:
         ignore |= Obstacle.TAG_TARGET
     try:
-        planner.clear(math.pi / 4, ignore=ignore, throw=True)
-        swarmie.drive(0.2, ignore=ignore)
-        # planner.sweep(ignore=ignore, throw=True)
+        cur_loc = swarmie.get_odom_location()
+        if not cur_loc.at_goal(home, 0.3):
+            print('Getting a little closer to home position.')
+            swarmie.drive_to(home, ignore=ignore)
+
+        planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
         planner.face_home_tag()
         exit(0)
