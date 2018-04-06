@@ -172,37 +172,12 @@
 				</geometry>
 				<material>
 					<script>
-						<name>Gazebo/Red</name>
+						<name>Gazebo/FlatBlack</name>
 					</script>
 				</material>
 			</visual>
 
-			<collision name='cow_catcher_front_left_collision'>
-				<pose>0.1675 0.06 -0.05 0 -0.4 0.3</pose>
-				<geometry>
-					<box>
-					  <size>0.01 0.08 0.06</size>
-					</box>
-				</geometry>
-			</collision>
-      
-			<collision name='wheel_guard_front_left_collision'>
-				<pose>0.148 0.13 -0.05 0 0 0</pose>
-				<geometry>
-					<box>
-					  <size>0.01 0.08 0.06</size>
-					</box>
-				</geometry>
-			</collision>
-
-			<collision name='cow_catcher_front_right_collision'>
-				<pose>0.1675 -0.06 -0.05 0 -0.4 -0.3</pose>
-				<geometry>
-					<box>
-					  <size>0.01 0.08 0.06</size>
-					</box>
-				</geometry>
-			</collision>
+			
       
 			<collision name='wheel_guard_front_right_collision'>
 				<pose>0.148 -0.13 -0.05 0 0 0</pose>
@@ -212,48 +187,10 @@
 					</box>
 				</geometry>
 			</collision>
-      
-			<visual name='cow_catcher_front_visual'>
-				<pose>0.1675 0 -0.08 1.57079 0 0</pose>
-				<geometry>
-					<mesh>
-						<uri>model://swarmie/meshes/CowCatcherFront.stl</uri>
-						<scale>0.001 0.001 0.001</scale>
-					</mesh>
-				</geometry>
-				<material>
-					<script>
-						<name>Gazebo/FlatBlack</name>
-					</script>
-				</material>
-			</visual>
-
-			<collision name='cow_catcher_back_lower_collision'>
-				<pose>-0.1305 0.0 -0.0665 1.57079 1.05 0.0</pose>
-				<geometry>
-					<box>
-					  <size>0.01 0.03 0.18</size>
-					</box>
-				</geometry>
-			</collision>
-			<visual name='cow_catcher_back_visual'>
-				<pose>-0.1275 -0.1 -0.04 1.57079 0 3.1415</pose>
-				<geometry>
-					<mesh>
-						<uri>model://swarmie/meshes/CowCatcherRear.stl</uri>
-						<scale>0.001 0.001 0.001</scale>
-					</mesh>
-				</geometry>
-				<material>
-					<script>
-						<name>Gazebo/FlatBlack</name>
-					</script>
-				</material>
-			</visual>
 
 		</link>
 
-	<link name="gripper_wrist">
+	<link name="drill_casing">
 			<pose>0.155 0 -0.013 0 0 0</pose>
 			<inertial>
 				<mass>0.03</mass>
@@ -268,10 +205,12 @@
 			</inertial>
 
 			<visual name="visual">
-				<pose>0 0 0 0 0 0</pose>
+				<pose>-0.03 0 0.038 1.6 0 1.6</pose>
 				<geometry>
 					<mesh>
-						<uri>model://swarmie/meshes/GripperWrist.stl</uri>
+						<uri>model://swarmie/meshes/drill casing.stl</uri>
+
+						<scale>0.0006 0.0006 0.0006</scale>
 					</mesh>
 				</geometry>
 				<material>
@@ -290,12 +229,13 @@
 			</collision>
 		</link>
 
-		<joint name="gripper_wrist_joint" type="revolute">
+		
+		<joint name="drill_casing_joint" type="revolute">
 			<parent>base_link</parent>
-			<child>gripper_wrist</child>
-			<pose>-0.0227 0 -0.0105 0 0 0</pose>
+			<child>drill_casing</child>
+			<pose>-0.0527 0 -0.0105 0 0 0</pose>
 			<axis>
-				<xyz>0 1 0</xyz>
+				<xyz>0 0 0</xyz>
 				<limit>
 					<upper>0.7</upper>
 					<lower>0.0</lower>
@@ -305,90 +245,10 @@
 				</dynamics>
 			</axis>
 		</joint>
+		
 
-		<link name="gripper_left_finger">
-			<pose>0.214 0.016 0.0095 0 0 0</pose>
-			<inertial>
-				<mass>0.005</mass>
-				<inertia>
-					<ixx>0.0000833</ixx>
-					<ixy>0.0</ixy>
-					<ixz>0.0</ixz>
-					<iyy>0.0005417</iyy>
-					<iyz>0.0</iyz>
-					<izz>0.0006083</izz>
-				</inertia>
-			</inertial>
-			<collision name="collision">
-				<pose>0 0 0 0 0 -0.38</pose>
-				<geometry>
-					<box>
-						<size>0.06 0.01 0.007</size>
-					</box>
-				</geometry>
-				<surface>
-					<friction>
-						<ode>
-							<mu>0.8</mu>
-							<mu2>0.7</mu2>
-						</ode>
-					</friction>
-				</surface>
-			</collision>
-			<collision name="collision2">
-				<pose>0.033 -0.014 0.000 0 0 -0.38</pose>
-				<geometry>
-					<box>
-						<size>0.01 0.01 0.007</size>
-					</box>
-				</geometry>
-				<surface>
-					<friction>
-						<ode>
-							<mu>0.8</mu>
-							<mu2>0.7</mu2>
-						</ode>
-					</friction>
-				</surface>
-			</collision>
-			<visual name="visual">
-				<pose>0 0 0 0 0 0.0</pose>
-				<geometry>
-					<mesh>
-						<uri>model://swarmie/meshes/GripperFingerLeft.stl</uri>
-					</mesh>
-				</geometry>
-				<material>
-					<script>
-						<name>Gazebo/Grey</name>
-					</script>
-				</material>
-			</visual>
-			<sensor name='finger' type='contact'>
-			  <contact>
-			    <collision>collision</collision>
-			  </contact>
-			</sensor>
-		</link>
-
-		<joint name ="gripper_left_finger_joint" type="revolute">
-			<parent>gripper_wrist</parent>
-			<child>gripper_left_finger</child>
-			<pose>-0.0324 0.0052 0 0 0 0</pose>
-			<axis>
-				<xyz>0 0 1</xyz>
-				<limit>
-					<upper>0.7854</upper>
-					<lower>0.0</lower>
-				</limit>
-				<dynamics>
-				  <damping>0.3</damping>
-				</dynamics>
-			</axis>
-		</joint>
-
-		<link name="gripper_right_finger">
-			<pose>0.214 -0.016 0.0095 0 0 0</pose>
+		<link name="drill">
+			<pose>0.150 0.001 0.024 0 0 0</pose>
 			<inertial>
  				<mass>0.005</mass>
 				<inertia>
@@ -400,43 +260,14 @@
 					<izz>0.0006083</izz>
 				</inertia>
 			</inertial>
-			<collision name="collision">
-				<pose>0 0 0 0 0 0.38</pose>
-				<geometry>
-					<box>
-						<size>0.06 0.01 0.007</size>
-					</box>
-				</geometry>
-				<surface>
-					<friction>
-						<ode>
-							<mu>0.8</mu>
-							<mu2>0.7</mu2>
-						</ode>
-					</friction>
-				</surface>
-			</collision>
-			<collision name="collision2">
-				<pose>0.033 0.014 0.000 0 0 0.38</pose>
-				<geometry>
-					<box>
-						<size>0.01 0.01 0.007</size>
-					</box>
-				</geometry>
-				<surface>
-					<friction>
-						<ode>
-							<mu>0.8</mu>
-							<mu2>0.7</mu2>
-						</ode>
-					</friction>
-				</surface>
-			</collision>
+			
 			<visual name="visual">3.0
 				<pose>0 0 0 0 0 0</pose>
 				<geometry>
 					<mesh>
-						<uri>model://swarmie/meshes/GripperFingerRight.stl</uri>
+						<uri>model://swarmie/meshes/drill 2.stl</uri>
+
+						<scale>0.0005 0.0005 0.0005</scale>
 					</mesh>
 				</geometry>
 				<material>
@@ -445,28 +276,30 @@
 					</script>
 				</material>
 			</visual>
-			<sensor name='finger' type='contact'>
+			<sensor name='Drillbit' type='contact'>
 			  <contact>
 			    <collision>collision</collision>
 			  </contact>
 			</sensor>
 		</link>
 
-		<joint name ="gripper_right_finger_joint" type="revolute">
-			<parent>gripper_wrist</parent>
-			<child>gripper_right_finger</child>
-			<pose>-0.0324 -0.0052 0 0 0 0</pose>
+		<joint name ="Drill_Joint" type="revolute">
+			<parent>drill_casing</parent>
+			<child>drill</child>
+			<pose>0.0127 0 0.505 0 0 0</pose>
 			<axis>
-				<xyz>0 0 1</xyz>
+				<xyz>0 0 0</xyz>
 				<limit>
-					<upper>0.0</upper>
-					<lower>-0.7854</lower>
+					<upper>100.0</upper>
+					<lower>-100.7854</lower>
 				</limit>
 				<dynamics>
 				  <damping>0.3</damping>
 				</dynamics>
 			</axis>
 		</joint>
+
+		
 
 		<link name="left_front_wheel">
 			<pose>0.095 0.135 -0.03 0 0 0</pose>
@@ -679,9 +512,8 @@
 		<!-- Gripper plugin-->
 		<plugin name="gripper_sim" filename="libgazebo_plugins_gripper.so">
 			<!-- required: joint definitions -->
-			<wristJoint>gripper_wrist_joint</wristJoint>
-			<leftFingerJoint>gripper_left_finger_joint</leftFingerJoint>
-			<rightFingerJoint>gripper_right_finger_joint</rightFingerJoint>
+			<wristJoint>drill_casing_joint</wristJoint>
+			<leftFingerJoint>Drill_Joint</leftFingerJoint>
 
 			<!-- required: data input topics for this plugin -->
 			<wristTopic>/diomedes/wristAngle/cmd</wristTopic>
@@ -691,6 +523,47 @@
 			<debug>
 				<!-- true (debug mode is on) or false (debug mode is off) -->
 				<printToConsole>false</printToConsole>
+				<!-- time (in simulated seconds) between debug print statements -->
+				<printDelayInSeconds>5.0</printDelayInSeconds>
+			</debug>
+
+			<!-- optional: the refresh rate of the gripper and all debugging output -->
+			<!-- this value is the number of updates performed per second -->
+			<!-- warning: low values (i.e. < 100) can cause the gripper to have poor performance -->
+			<updateRate>1000.0</updateRate>
+
+			<!-- optional: set the default PID values for the wrist joint -->
+			<!-- values in order: Proportional gain, Integral gain, Derivative gain -->
+      <wristPID>1.0 0.0 0.0</wristPID>
+
+			<!-- optional: set the default PID values for the finger joints -->
+			<!-- values in order: Proportional gain, Integral gain, Derivative gain -->
+			<!-- it is always assumed that both fingers use the same PID values -->
+      <fingerPID>1.0 0.0 0.0</fingerPID>
+
+			<!-- optional: set the min/max force applicable to the wrist joint in Newtons -->
+			<!-- values in order: minimum force, maximum force -->
+      <wristForceLimits>-0.5 0.5</wristForceLimits>
+
+			<!-- optional: set the min/max force applicable to the finger joints in Newtons -->
+			<!-- values in order: minimum force, maximum force -->
+			<!-- it is always assumed that both fingers use the same min/max force values -->
+      <fingerForceLimits>-0.5 0.5</fingerForceLimits>
+		</plugin>
+
+		<!-- Drill plugin-->
+		<plugin name="Drill_sim" filename="libvelodyne_plugin.so">
+			<!-- required: joint definitions -->
+			<DrillJoint>Drill_Joint</DrillJoint>
+
+			<!-- required: data input topics for this plugin -->
+			<wristTopic>/diomedes/wristAngle/cmd</wristTopic>
+			<drillTopic>/diomedes/drillAngle/cmd</drillTopic>
+
+			<!-- optional: print debug info to the console -->
+			<debug>
+				<!-- true (debug mode is on) or false (debug mode is off) -->
+				<printToConsole>true</printToConsole>
 				<!-- time (in simulated seconds) between debug print statements -->
 				<printDelayInSeconds>5.0</printDelayInSeconds>
 			</debug>
