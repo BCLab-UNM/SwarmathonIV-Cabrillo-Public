@@ -32,15 +32,13 @@ class Task :
     PROG_GOHOME    = 'gohome.py'
     PROG_DROPOFF   = 'dropoff.py'
 
-    def __init__(self, rover):
+    def __init__(self):
         self.task = None 
-        self.rover = rover
         self.current_state = Task.STATE_IDLE 
         self.rover_mode = 1 
         self.has_block = False
         self.launcher = roslaunch.scriptapi.ROSLaunch()
         self.launcher.start()
-        
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
 
     @sync(task_lock)
@@ -53,10 +51,10 @@ class Task :
         self.state_publisher.publish(s)
         
     def launch(self, prog):
-        args = self.rover
+        args = ""
         if self.has_block:
             args += ' --has-block'
-        node = roslaunch.core.Node('mobility', prog, args=args)
+        node = roslaunch.core.Node('mobility', prog, args=args, namespace=rospy.get_namespace())
         self.task = self.launcher.launch(node)
 
     @sync(task_lock)

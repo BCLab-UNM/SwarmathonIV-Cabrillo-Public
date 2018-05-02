@@ -23,23 +23,18 @@ def mode(msg):
 def main() :     
     global driver, task, status_pub, info_pub, heartbeat_pub
     
-    if len(sys.argv) < 2 :
-        print('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-    
-    rover = sys.argv[1]
-    rospy.init_node(rover + '_MOBILITY')
+    rospy.init_node('mobility')
 
     # Start the driver code. 
-    driver = State(rover)
-    task = Task(rover) 
+    driver = State()
+    task = Task() 
     
-    heartbeat_pub = rospy.Publisher(rover + '/mobility/heartbeat', String, queue_size=1, latch=True)
-    status_pub = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
+    heartbeat_pub = rospy.Publisher('mobility/heartbeat', String, queue_size=1, latch=True)
+    status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
     info_pub = rospy.Publisher('/infoLog', String, queue_size=1, latch=True)
 
     # Subscribers 
-    rospy.Subscriber(rover + '/mode', UInt8, mode)
+    rospy.Subscriber('mode', UInt8, mode)
 
     # Timers
     rospy.Timer(rospy.Duration(1), heartbeat)

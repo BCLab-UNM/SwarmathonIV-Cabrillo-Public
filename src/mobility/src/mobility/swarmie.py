@@ -116,7 +116,7 @@ class Swarmie:
     with ROS topics and services to perform action and acquire sensor data. 
     ''' 
     
-    def __init__(self, rover, **kwargs):
+    def __init__(self, **kwargs):
         '''Constructor.
 
         Args:
@@ -125,10 +125,13 @@ class Swarmie:
 
         Keyword arguments:
 
-        * `node_suffix` (`string`) - Optional argument to start up this node
-        without killing the main /rover_CONTROLLER node. Used by teleop_keyboard
+        * `anonymous` (`bool`) - Launch an anonymous node. Use this for debugging nodes. 
         '''
-        self.rover_name = rover 
+        if 'tf_rover_name' in kwargs :
+            self.rover_name = rospy.get_param(kwargs['tf_rover_name'])
+        else:
+            self.rover_name = rospy.get_namespace()
+           
         self.Obstacles = 0
         self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
@@ -139,40 +142,41 @@ class Swarmie:
         self.targets_timeout = 3
         
         # Intialize this ROS node.
-        if 'node_suffix' in kwargs and kwargs['node_suffix']:
-            rospy.init_node(rover + '_CONTROLLER' + kwargs['node_suffix'])
-        else:
-            rospy.init_node(rover + '_CONTROLLER')
+        anon = False
+        if 'anonymous' in kwargs : 
+            anon = True
+            
+        rospy.init_node('controller', anonymous=anon)
 
         # Create publishiers.
-        self.sm_publisher = rospy.Publisher(rover + '/state_machine', String, queue_size=10, latch=True)
-        self.status_publisher = rospy.Publisher(rover + '/status', String, queue_size=10, latch=True)
+        self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
+        self.status_publisher = rospy.Publisher('status', String, queue_size=10, latch=True)
         self.info_publisher = rospy.Publisher('/infoLog', String, queue_size=10, latch=True)
-        self.mode_publisher = rospy.Publisher(rover + '/mode', UInt8, queue_size=1, latch=True)
-        self.finger_publisher = rospy.Publisher(rover + '/fingerAngle/cmd', Float32, queue_size=1, latch=True)
-        self.wrist_publisher = rospy.Publisher(rover + '/wristAngle/cmd', Float32, queue_size=1, latch=True)
+        self.mode_publisher = rospy.Publisher('mode', UInt8, queue_size=1, latch=True)
+        self.finger_publisher = rospy.Publisher('fingerAngle/cmd', Float32, queue_size=1, latch=True)
+        self.wrist_publisher = rospy.Publisher('wristAngle/cmd', Float32, queue_size=1, latch=True)
 
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
-        rospy.wait_for_service(rover + '/control')
-        rospy.wait_for_service(rover + '/map/get_map')
-        rospy.wait_for_service(rover + '/map/get_plan')
+        rospy.wait_for_service('control')
+        print ('fuck')
+        rospy.wait_for_service('map/get_map')
+        rospy.wait_for_service('map/get_plan')
 
         # Numpy-ify the GridMap 
         GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
         
         # Connect to services.
-        self.control = rospy.ServiceProxy(rover + '/control', Core)
-        self._find_nearest_target = rospy.ServiceProxy(rover + '/map/find_nearest_target', FindTarget)
-        self._get_map = rospy.ServiceProxy(rover + '/map/get_map', GetMap)
-        self._get_plan = rospy.ServiceProxy(rover + '/map/get_plan', GetNavPlan)
-        self._imu_is_finished_validating = rospy.ServiceProxy(rover + '/imu/is_finished_validating', QueryCalibrationState)
-        self._imu_needs_calibration = rospy.ServiceProxy(rover + '/imu/needs_calibration', QueryCalibrationState)
-        self._start_imu_calibration = rospy.ServiceProxy(rover + '/start_imu_calibration', Empty)
-        self._start_misalignment_calibration = rospy.ServiceProxy(rover + '/start_misalignment_calibration', Empty)
-        self._start_gyro_bias_calibration = rospy.ServiceProxy(rover + '/start_gyro_bias_calibration', Empty)
-        self._start_gyro_scale_calibration = rospy.ServiceProxy(rover + '/start_gyro_scale_calibration', Empty)
-        self._store_imu_calibration = rospy.ServiceProxy(rover + '/store_imu_calibration', Empty)
+        self.control = rospy.ServiceProxy('control', Core)
+        self._get_map = rospy.ServiceProxy('map/get_map', GetMap)
+        self._get_plan = rospy.ServiceProxy('map/get_plan', GetNavPlan)
+        self._imu_is_finished_validating = rospy.ServiceProxy('imu/is_finished_validating', QueryCalibrationState)
+        self._imu_needs_calibration = rospy.ServiceProxy('imu/needs_calibration', QueryCalibrationState)
+        self._start_imu_calibration = rospy.ServiceProxy('start_imu_calibration', Empty)
+        self._start_misalignment_calibration = rospy.ServiceProxy('start_misalignment_calibration', Empty)
+        self._start_gyro_bias_calibration = rospy.ServiceProxy('start_gyro_bias_calibration', Empty)
+        self._start_gyro_scale_calibration = rospy.ServiceProxy('start_gyro_scale_calibration', Empty)
+        self._store_imu_calibration = rospy.ServiceProxy('store_imu_calibration', Empty)
 
         # Transform listener. Use this to transform between coordinate spaces.
         # Transform messages must predate any sensor messages so initialize this first.
@@ -181,24 +185,24 @@ class Swarmie:
         # Subscribe to useful topics 
         # These topics only update data. The data is used in other places to initialize
         # these and wait for valid data so that users of this data don't get errors.
-        rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
-        rospy.Subscriber(rover + '/odom/ekf', Odometry, self._map)
-        rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
+        rospy.Subscriber('odom/filtered', Odometry, self._odom)
+        rospy.Subscriber('odom/ekf', Odometry, self._map)
+        rospy.Subscriber('obstacle', Obstacle, self._obstacle)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
         try:
-            rospy.wait_for_message(rover + '/odom/filtered', Odometry, 2)
-            rospy.wait_for_message(rover + '/odom/ekf', Odometry, 2)
+            rospy.wait_for_message('odom/filtered', Odometry, 2)
+            rospy.wait_for_message('odom/ekf', Odometry, 2)
         except rospy.ROSException:
             rospy.logwarn(self.rover_name +
                           ': timed out waiting for filtered odometry data.')
 
         # The targets subscriber needs odom data since Carter's patch. Make sure odom data
         # exists before we get a target callback.
-        rospy.Subscriber(rover + '/targets', AprilTagDetectionArray, self._targets)
+        rospy.Subscriber('targets', AprilTagDetectionArray, self._targets)
         try:
-            rospy.wait_for_message(rover + '/targets', AprilTagDetectionArray, 2)
+            rospy.wait_for_message('targets', AprilTagDetectionArray, 2)
         except rospy.ROSException:
             rospy.logwarn(self.rover_name +
                           ': timed out waiting for /targets data.')
@@ -534,11 +538,6 @@ class Swarmie:
         self.set_finger_angle(2) #open
         rospy.sleep(1)
         self.wrist_up()
-
-
-    def find_nearest_target(self) :
-        '''Broken: Return a XXX that is the odom location of the nearest target on the map.''' 
-        return self._find_nearest_target()
     
     def get_latest_targets(self) :
         '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
@@ -737,7 +736,7 @@ class Swarmie:
         
         * loc: (`mobility.swarmie.Location`) The GPS coordinates to remember. 
         '''
-        rospy.set_param('/' + self.rover_name + '/home_gps', 
+        rospy.set_param('home_gps', 
                         {'x' : loc.Odometry.pose.pose.position.x, 
                          'y' : loc.Odometry.pose.pose.position.y})
     
@@ -748,7 +747,7 @@ class Swarmie:
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
-        return Point(**rospy.get_param('/' + self.rover_name + '/home_gps', {'x' : 0, 'y' : 0})) 
+        return Point(**rospy.get_param('home_gps', {'x' : 0, 'y' : 0})) 
 
     def has_home_gps_location(self):
         '''Check to see if the home location parameter is set.
@@ -757,7 +756,7 @@ class Swarmie:
         
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('/' + self.rover_name + '/home_gps')
+        return rospy.has_param('home_gps')
     
     def set_home_odom_location(self, loc):
         '''Remember the home odometry location. The location can be recalled by other 
@@ -768,7 +767,7 @@ class Swarmie:
         
         * loc: (`mobility.swarmie.Location`) The coordinates to remember. 
         '''
-        rospy.set_param('/' + self.rover_name + '/home_odom', 
+        rospy.set_param('home_odom', 
                         {'x' : loc.Odometry.pose.pose.position.x, 
                          'y' : loc.Odometry.pose.pose.position.y})
     
@@ -781,7 +780,7 @@ class Swarmie:
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
-        return Point(**rospy.get_param('/' + self.rover_name + '/home_odom', {'x' : 0, 'y' : 0})) 
+        return Point(**rospy.get_param('home_odom', {'x' : 0, 'y' : 0})) 
 
     def has_home_odom_location(self):
         '''Check to see if the home odometry location parameter is set.
@@ -790,7 +789,7 @@ class Swarmie:
         
         * (`bool`): `True` if the parameter exists, `False` otherwise.
         '''
-        return rospy.has_param('/' + self.rover_name + '/home_odom')
+        return rospy.has_param('home_odom')
     
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
@@ -905,7 +904,7 @@ class Swarmie:
         gps = self.get_gps_location().get_pose()
     
         rospy.set_param(
-            '/' + self.rover_name + '/search_exit_poses',
+            'search_exit_poses',
             {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},
              'gps': {'x': gps.x, 'y': gps.y, 'theta': gps.theta}}
         )
@@ -928,7 +927,7 @@ class Swarmie:
             swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
         '''
         poses = rospy.get_param(
-            '/' + self.rover_name + '/search_exit_poses',
+            'search_exit_poses',
             {'odom': {'x': 0, 'y': 0, 'theta': 0},
              'gps': {'x': 0, 'y': 0, 'theta': 0}}
         )
@@ -941,7 +940,7 @@ class Swarmie:
 
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('/' + self.rover_name + '/search_exit_poses')
+        return rospy.has_param('search_exit_poses')
     
 
     def sees_resource(self, required_matches,crop=True):
@@ -958,15 +957,14 @@ class Swarmie:
         import cv2
         
         try:
-            test = rospy.wait_for_message('/' + self.rover_name + '/camera/image/compressed', CompressedImage, timeout=3)
+            test = rospy.wait_for_message('camera/image/compressed', CompressedImage, timeout=3)
         except(rospy.ROSException), e:
             print("Camera Broke?")
             print("Error message: ", e)
         np_arr = np.fromstring(test.data, np.uint8)
         img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        #img2 = cv2.imread(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource'),0) 
         import pickle
-        img2 = pickle.load( open(rospy.get_param('/' + self.rover_name + '_MOBILITY/april_tag_resource_pickel'), "rb" ) ) #this 
+        img2 = pickle.load( open(rospy.get_param('april_tag_resource_pickel'), "rb" ) ) #this 
         if(crop):       #(y1:y2, x1:x2)
             img1 = img1[60:220, 50:220]
         ''' #for testing1
