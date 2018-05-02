@@ -128,9 +128,11 @@ class Swarmie:
         * `anonymous` (`bool`) - Launch an anonymous node. Use this for debugging nodes. 
         '''
         if 'tf_rover_name' in kwargs :
-            self.rover_name = rospy.get_param(kwargs['tf_rover_name'])
+            self.rover_name = kwargs['tf_rover_name']
         else:
             self.rover_name = rospy.get_namespace()
+            
+        self.rover_name = self.rover_name.strip('/')
            
         self.Obstacles = 0
         self.MapLocation = Location(None)
@@ -159,7 +161,6 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service('control')
-        print ('fuck')
         rospy.wait_for_service('map/get_map')
         rospy.wait_for_service('map/get_plan')
 

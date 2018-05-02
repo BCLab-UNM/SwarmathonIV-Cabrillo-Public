@@ -124,7 +124,7 @@ def reset_speeds():
 
 
 def main():
-    global planner, swarmie, rovername, use_waypoints
+    global planner, swarmie, use_waypoints
     global initial_config, param_client
 
     has_block = False
@@ -137,30 +137,24 @@ def main():
          'TURN_SPEED': 0.7
     }
 
-    if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-    if len(sys.argv) >= 3 and sys.argv[2] == '--has-block':
+    if len(sys.argv) > 1 and sys.argv[1] == '--has-block':
         has_block = True
 
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     if not has_block:
-        swarmie.print_infoLog(rovername +
-                              ": I don't have a block. Not avoiding targets.")
+        swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
 
     planner = Planner(swarmie)
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    if not rospy.has_param('/' + rovername + '/gohome/speeds'):
+    if not rospy.has_param('gohome/speeds'):
         speeds = GOHOME_SPEEDS
-        rospy.set_param('/' + rovername + '/gohome/speeds', speeds)
+        rospy.set_param('gohome/speeds', speeds)
     else:
-        speeds = rospy.get_param('/' + rovername + '/gohome/speeds',
+        speeds = rospy.get_param('gohome/speeds',
                                  default=GOHOME_SPEEDS)
 
-    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    param_client = dynamic_reconfigure.client.Client('mobility')
     config = param_client.get_configuration()
     initial_config = {
         'DRIVE_SPEED': config['DRIVE_SPEED'],
@@ -236,4 +230,5 @@ def main():
     exit(GOHOME_FAIL)
 
 if __name__ == '__main__' : 
+    swarmie = Swarmie()
     main()

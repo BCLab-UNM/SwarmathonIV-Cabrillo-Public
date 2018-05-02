@@ -75,7 +75,7 @@ def set_search_exit_poses():
 
 
 def main():
-    global swarmie, planner, rovername, found_tag
+    global swarmie, planner, found_tag
     global initial_config, param_client
 
     found_tag = False
@@ -84,12 +84,6 @@ def main():
          'TURN_SPEED': 0.7
     }
 
-    if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     planner = Planner(swarmie)
 
     swarmie.fingers_open()
@@ -97,14 +91,14 @@ def main():
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    if not rospy.has_param('/' + rovername + '/search/speeds'):
+    if not rospy.has_param('search/speeds'):
         speeds = SEARCH_SPEEDS
-        rospy.set_param('/' + rovername + '/search/speeds', speeds)
+        rospy.set_param('search/speeds', speeds)
     else:
-        speeds = rospy.get_param('/' + rovername + '/search/speeds',
+        speeds = rospy.get_param('search/speeds',
                                  default=SEARCH_SPEEDS)
 
-    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    param_client = dynamic_reconfigure.client.Client('mobility')
     config = param_client.get_configuration()
     initial_config = {
         'DRIVE_SPEED': config['DRIVE_SPEED'],
@@ -244,5 +238,6 @@ def main():
     exit(1)
 
 if __name__ == '__main__' : 
+    global swarmie
+    swarmie = Swarmie()
     main()
-

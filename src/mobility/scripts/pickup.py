@@ -104,21 +104,14 @@ def recover():
 
 def main():
     global swarmie 
-    global rovername
     global claw_offset_distance
     
-    if len(sys.argv) < 2:
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
 
     print ('Waiting for camera/base_link tf to become available.')
-    swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
+    swarmie.xform.waitForTransform(swarmie.rover_name + '/base_link', swarmie.rover_name + '/camera_link', rospy.Time(), rospy.Duration(10))
 
     for i in range(3): 
         if approach():
@@ -130,5 +123,6 @@ def main():
     exit(1)
 
 if __name__ == '__main__' : 
+    swarmie = Swarmie()
     main()
 

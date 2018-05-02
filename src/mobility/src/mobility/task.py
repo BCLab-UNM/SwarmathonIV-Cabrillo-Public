@@ -51,9 +51,11 @@ class Task :
         self.state_publisher.publish(s)
         
     def launch(self, prog):
-        args = ""
         if self.has_block:
-            args += ' --has-block'
+            args = '--has-block'
+        else:
+            args = ''
+            
         node = roslaunch.core.Node('mobility', prog, args=args, namespace=rospy.get_namespace())
         self.task = self.launcher.launch(node)
 

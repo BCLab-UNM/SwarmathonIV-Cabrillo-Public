@@ -98,12 +98,6 @@ def main():
     '''Dropoff throws IndexError when no tags near swarmie '''
     global swarmie 
     
-    if len(sys.argv) < 2:
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    swarmie = Swarmie(sys.argv[1])
-    
     #move wrist down but not so down that the resource hits the ground
     swarmie.wrist_middle()
     rospy.sleep(.5)
@@ -137,5 +131,6 @@ def main():
         raise
 
 if __name__ == '__main__' :
+    swarmie = Swarmie()
     main()
 

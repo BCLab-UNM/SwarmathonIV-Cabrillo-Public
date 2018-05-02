@@ -29,7 +29,7 @@
 
   <node name="diagnostics" pkg="diagnostics" type="diagnostics" respawn="true"/>
   
-  <node name="core" pkg="mobility" type="core.py" args="$(arg name)" respawn="true">
+  <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
     <param name="april_tag_resource_pickel" value="$(find mobility)/resources/atag-0.p"/>
     <param name="DRIVE_SPEED" value="0.2"/>

@@ -13,14 +13,6 @@ from mobility.swarmie import Swarmie, Location
 
 def main():
     global swarmie 
-    global rovername 
-    
-    if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
 
     # During a normal startup the rover will be facing the center and
     # close to the nest. But there's no guarantee where we will be if 
@@ -69,7 +61,7 @@ def main():
     swarmie.set_home_odom_location(home_odom)
 
     if home is None : 
-        swarmie.print_infoLog(rovername + ' failed to get a GPS fix!')        
+        swarmie.print_infoLog('Failed to get a GPS fix!')        
     else:
         swarmie.set_home_gps_location(home)
 
@@ -95,4 +87,6 @@ def main():
     swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     
 if __name__ == '__main__' : 
+    global swarmie
+    swarmie = Swarmie()
     main()
