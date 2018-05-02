@@ -148,8 +148,11 @@ class Swarmie:
         if 'anonymous' in kwargs : 
             anon = True
             
-        rospy.init_node('controller', anonymous=anon)
-
+        if 'node_name' in kwargs :
+            rospy.init_node(kwargs['node_name'], anonymous=anon)
+        else :
+            rospy.init_node('controller', anonymous=anon)
+        
         # Create publishiers.
         self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
         self.status_publisher = rospy.Publisher('status', String, queue_size=10, latch=True)

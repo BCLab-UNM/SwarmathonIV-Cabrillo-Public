@@ -33,7 +33,7 @@ def approach():
         except tf.Exception as e:
             print("Something went wrong and we can't locate the block. ", e)
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
 
         if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
@@ -66,11 +66,11 @@ def approach():
         else:
             print("No legal blocks detected.")
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
     except rospy.ServiceException as e:
         print ("There doesn't seem to be any blocks on the map. ", e)
         swarmie.wrist_up()
-        exit(1)
+        sys.exit(1)
 
     # otherwise reset claw and return Falase
     swarmie.wrist_up()
@@ -90,7 +90,7 @@ def recover():
         except tf.Exception as e:
             print("Something went wrong recovering and we can't locate the block. ", e)
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
         if block is not None:
             pass
         else:
@@ -102,10 +102,11 @@ def recover():
     except: 
         print("Oh no, we have an exception!")
 
-def main():
+def main(s, **kwargs):
     global swarmie 
     global claw_offset_distance
     
+    swarmie = s
     claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
@@ -116,13 +117,11 @@ def main():
     for i in range(3): 
         if approach():
             print ("Got it!")
-            exit(0)        
+            sys.exit(0)        
         recover()
         
     print ("Giving up after too many attempts.")
-    exit(1)
+    return 1
 
 if __name__ == '__main__' : 
-    swarmie = Swarmie()
-    main()
-
+    sys.exit(main(Swarmie()))

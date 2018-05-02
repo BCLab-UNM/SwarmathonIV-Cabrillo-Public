@@ -81,7 +81,7 @@ def drive_home(has_block, home_loc):
             if counter < 2:
                 pass
             else:
-                exit(GOHOME_FAIL)
+                sys.exit(GOHOME_FAIL)
 
 
 def spiral_search(has_block):
@@ -123,11 +123,14 @@ def reset_speeds():
     param_client.update_configuration(initial_config)
 
 
-def main():
+def main(s, **kwargs):
     global planner, swarmie, use_waypoints
     global initial_config, param_client
 
-    has_block = False
+    swarmie = s
+    if 'has_block' in kwargs : 
+        has_block = kwargs['has_block']
+    
     # Whether to use waypoints from searching the map. Can be set to False if
     # the map service fails.
     use_waypoints = True
@@ -174,7 +177,7 @@ def main():
     if planner.sees_home_tag():
         # victory!
         planner.face_home_tag()
-        exit(0)
+        sys.exit(0)
 
     # Look to the right and left before starting spiral search, which goes
     # left:
@@ -190,9 +193,9 @@ def main():
         planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
         planner.face_home_tag()
-        exit(0)
+        sys.exit(0)
     except TagException:
-        exit(GOHOME_FOUND_TAG)
+        sys.exit(GOHOME_FOUND_TAG)
     except ObstacleException:
         pass # do spiral search
 
@@ -200,9 +203,9 @@ def main():
     try:
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
-            exit(0)
+            sys.exit(0)
         elif drive_result == MoveResult.OBSTACLE_TAG:
-            exit(GOHOME_FOUND_TAG)
+            sys.exit(GOHOME_FOUND_TAG)
     except PathException:
         pass  # try gps backup
 
@@ -220,15 +223,14 @@ def main():
     try:
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
-            exit(0)
+            sys.exit(0)
         elif drive_result == MoveResult.OBSTACLE_TAG:
-            exit(GOHOME_FOUND_TAG)
+            sys.exit(GOHOME_FOUND_TAG)
     except PathException:
-        exit(GOHOME_FAIL)
+        sys.exit(GOHOME_FAIL)
 
     # didn't find anything
-    exit(GOHOME_FAIL)
+    return GOHOME_FAIL
 
 if __name__ == '__main__' : 
-    swarmie = Swarmie()
-    main()
+    sys.exit(main(Swarmie()))

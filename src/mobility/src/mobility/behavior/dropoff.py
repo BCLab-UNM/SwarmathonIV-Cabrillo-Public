@@ -94,9 +94,11 @@ def find_center(tags):
     return(mid_point(*get_furthest_side_hometags_location(tags))) #this will return the middle of the 2 furthest tags on one side
 
 
-def main():
+def main(s, **kwargs):
     '''Dropoff throws IndexError when no tags near swarmie '''
     global swarmie 
+    
+    swarmie = s 
     
     #move wrist down but not so down that the resource hits the ground
     swarmie.wrist_middle()
@@ -130,7 +132,7 @@ def main():
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
         raise
 
-if __name__ == '__main__' :
-    swarmie = Swarmie()
-    main()
+    return 0 
 
+if __name__ == '__main__' :
+    sys.exit(main(Swarmie()))

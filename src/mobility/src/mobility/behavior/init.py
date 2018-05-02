@@ -11,8 +11,7 @@ from mobility.msg import MoveResult
 
 from mobility.swarmie import Swarmie, Location
 
-def main():
-    global swarmie 
+def main(swarmie, **kwargs):
 
     # During a normal startup the rover will be facing the center and
     # close to the nest. But there's no guarantee where we will be if 
@@ -22,7 +21,7 @@ def main():
     if swarmie.has_home_gps_location() : 
         # Oops. This must be a restart. Don't assume we're near the 
         # nest. Just exit and hope... 
-        exit(0)
+        sys.exit(0)
 
     while not swarmie.imu_is_finished_validating():
         pass  # wait till extended cal file has been loaded in IMU node
@@ -85,8 +84,8 @@ def main():
                             ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-    
+    return 0 
+
 if __name__ == '__main__' : 
-    global swarmie
-    swarmie = Swarmie()
-    main()
+    sys.exit(main(Swarmie()))
+    

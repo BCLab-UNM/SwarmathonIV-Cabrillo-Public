@@ -74,10 +74,11 @@ def set_search_exit_poses():
     swarmie.set_search_exit_poses()
 
 
-def main():
+def main(s, **kwargs):
     global swarmie, planner, found_tag
     global initial_config, param_client
 
+    swarmie = s
     found_tag = False
     SEARCH_SPEEDS = {
          'DRIVE_SPEED': 0.25,
@@ -125,7 +126,7 @@ def main():
                     found_tag = True
                     # print('Found a tag! Turning to face.')
                     # planner.face_nearest_block()
-                    exit(0)  # found a tag?
+                    sys.exit(0)  # found a tag?
             except tf.Exception:
                 pass
     else:
@@ -196,7 +197,7 @@ def main():
                 found_tag = True
                 # print('Found a tag! Turning to face.')
                 # planner.face_nearest_block()
-                exit(0)
+                sys.exit(0)
         except HomeException:
             # Just move onto random search, but this shouldn't really happen
             # either.
@@ -208,7 +209,7 @@ def main():
     try:
         for move in range(30) :
             if rospy.is_shutdown() :
-                exit(-1)
+                sys.exit(-1)
             try:
                 wander()
 
@@ -232,12 +233,10 @@ def main():
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
             # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
-            exit(0)
+            sys.exit(0)
 
     print ("I'm homesick!")
-    exit(1)
+    return 1 
 
 if __name__ == '__main__' : 
-    global swarmie
-    swarmie = Swarmie()
-    main()
+    sys.exit(main(Swarmie()))
