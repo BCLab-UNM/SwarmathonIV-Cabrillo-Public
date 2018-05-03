@@ -6,7 +6,6 @@ import sys
 import math
 import rospy 
 import StringIO 
-import roslaunch
 import traceback 
 
 from std_msgs.msg import UInt8, String
@@ -23,7 +22,7 @@ import mobility.behavior.pickup
 import mobility.behavior.gohome
 import mobility.behavior.dropoff
 
-from mobility.swarmie import Swarmie
+from mobility.swarmie import Swarmie, AbortException
 
 '''Node that coordinates the overall robot task''' 
 
@@ -43,19 +42,11 @@ class Task :
     PROG_DROPOFF   = 'dropoff.py'
 
     def __init__(self):
-        self.task = None 
         self.current_state = Task.STATE_IDLE 
-        self.rover_mode = 1 
         self.has_block = False
-        self.launcher = roslaunch.scriptapi.ROSLaunch()
-        self.launcher.start()
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         self.swarmie = Swarmie(node_name='task') 
-        
-    @sync(task_lock)
-    def set_mode(self, msg) :
-        self.rover_mode = msg.data
-                
+                        
     def print_state(self, msg):
         s = String()
         s.data = msg 
@@ -67,14 +58,14 @@ class Task :
             rval = prog(self.swarmie, has_block=self.has_block)
         except SystemExit as e: 
             rval = e.code
+        except AbortException as e:
+            sys.exit(0) 
         except Exception as e: 
             print ('Task caught unknown exception: ', e)
             traceback.print_exc()
             rval = -100
 
         return rval
-        #node = roslaunch.core.Node('mobility', prog, args=args, namespace=rospy.get_namespace())
-        #self.task = self.launcher.launch(node)
 
     @sync(task_lock)
     def get_task(self) :
@@ -152,10 +143,10 @@ class Task :
                 self.current_state = Task.STATE_GOHOME
 
 def main() :
-
+    global taskman
+    
     # Get a manager instance. 
     taskman = Task() 
-
     while not rospy.is_shutdown():
         taskman.run_next() 
 
