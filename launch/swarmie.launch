@@ -9,23 +9,8 @@
   <node name="$(arg name)_BASE2CAM"
         pkg="tf"
         type="static_transform_publisher"
-        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 100"
+        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 1000"
         respawn="true"/>
-  <node name="$(arg name)_BASE2SONARLEFT"
-        pkg="tf"
-        type="static_transform_publisher"
-        args="0.11 0.05 0.155 0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_left 100"
-        respawn="true" />
-  <node name="$(arg name)_BASE2SONARCENTER"
-        pkg="tf"
-        type="static_transform_publisher"
-        args="0.12 0 0.155 0 0 0 $(arg name)/base_link $(arg name)/sonar_center 100"
-        respawn="true" />
-  <node name="$(arg name)_BASE2SONARRIGHT"
-        pkg="tf"
-        type="static_transform_publisher"
-        args="0.11 -0.05 0.155 -0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_right 100"
-        respawn="true" />
   <node name="$(arg name)_DIAGNOSTICS" pkg="diagnostics" type="diagnostics" args="$(arg name)" respawn="true"/>
   <node name="$(arg name)_MOBILITY" pkg="mobility" type="core.py" args="$(arg name)" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
