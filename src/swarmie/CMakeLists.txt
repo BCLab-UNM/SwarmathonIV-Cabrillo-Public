@@ -22,7 +22,11 @@ install (
   DESTINATION launch/
 )
 
-install (
-  DIRECTORY misc/
-  DESTINATION misc/
+install (FILES
+  launch/apriltags.xml  
+  launch/robot_localization.xml  
+  launch/swarmie.xml  
+  launch/tf.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
+
