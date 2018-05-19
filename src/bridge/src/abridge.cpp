@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "abridge");
     
     string devicePath;
-    ros::param::param("device", devicePath, string("/dev/ttyUSB0"));
+    ros::param::param("~device", devicePath, string("/dev/ttyUSB0"));
     usb.openUSBPort(devicePath, baud);
     void modeHandler(const std_msgs::UInt8::ConstPtr& message);
     
