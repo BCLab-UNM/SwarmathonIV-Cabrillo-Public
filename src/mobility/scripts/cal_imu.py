@@ -77,7 +77,7 @@ class IMU:
 
     def __init__(self, rover):
         self.rover = rover
-        rospy.init_node(self.rover + '_IMU')
+        rospy.init_node('imu')
 
         if rospy.has_param('~imu_mode'):  # if respawning
             self._get_mode()
@@ -138,7 +138,7 @@ class IMU:
 
         # Subscribers
         self.imu_raw_sub = rospy.Subscriber(
-            self.rover + '/imu/raw',
+            'imu/raw',
             SwarmieIMU,
             self.imu_callback,
             queue_size=10
@@ -146,29 +146,29 @@ class IMU:
 
         # Publishers
         self.imu_pub = rospy.Publisher(
-            self.rover + '/imu',
+            'imu',
             Imu,
             queue_size=10
         )
         self.imu_diag_pub = rospy.Publisher(
-            self.rover + '/imu/cal_diag',
+            'cal_diag',
             DiagnosticArray,
             queue_size=10,
             latch=True
         )
         if self.DEBUG:
             self.imu_cal_data_pub = rospy.Publisher(
-                self.rover + '/imu/raw/calibrated',
+                'imu/raw/calibrated',
                 SwarmieIMU,
                 queue_size=10
             )
         self.info_log = rospy.Publisher(
-            '/infoLog',
+            'infoLog',
             String,
             queue_size=10
         )
         self.diags_log = rospy.Publisher(
-            '/diagsLog',
+            'diagsLog',
             String,
             queue_size=10,
             latch=True
@@ -176,37 +176,37 @@ class IMU:
 
         # Services
         self.start_imu_cal = rospy.Service(
-            self.rover + '/start_imu_calibration',
+            'start_imu_calibration',
             Empty,
             self.start_imu_calibration
         )
         self.store_cal = rospy.Service(
-            self.rover + '/store_imu_calibration',
+            'store_imu_calibration',
             Empty,
             self.store_calibration
         )
         self.start_misalign_cal = rospy.Service(
-            self.rover + '/start_misalignment_calibration',
+            'start_misalignment_calibration',
             Empty,
             self.start_misalignment_calibration
         )
         self.start_gyro_bias_cal = rospy.Service(
-            self.rover + '/start_gyro_bias_calibration',
+            'start_gyro_bias_calibration',
             Empty,
             self.start_gyro_bias_calibration
         )
         self.start_gyro_scale_cal = rospy.Service(
-            self.rover + '/start_gyro_scale_calibration',
+            'start_gyro_scale_calibration',
             Empty,
             self.start_gyro_scale_calibration
         )
         self._is_finished_val = rospy.Service(
-            self.rover + '/imu/is_finished_validating',
+            'imu/is_finished_validating',
             QueryCalibrationState,
             self._is_finished_validating
         )
         self._needs_cal = rospy.Service(
-            self.rover + '/imu/needs_calibration',
+            'imu/needs_calibration',
             QueryCalibrationState,
             self._needs_calibration
         )
@@ -369,7 +369,7 @@ class IMU:
         self.current_state = IMU.STATE_VALIDATE
         try:
             rospy.wait_for_message(
-                self.rover + '/imu/raw',
+                'imu/raw',
                 SwarmieIMU,
                 timeout=5
             )
