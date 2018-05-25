@@ -91,7 +91,7 @@
       <param name="image_height" value="240"/>
       <param name="framerate" value="10"/>
       <param name="camera_frame_id" value="$(arg name)/camera_link"/>
-      <remap from="/$(arg name)_CAMERA/image_raw" to="/$(arg name)/camera/image"/>
+      <remap from="/$(arg name)/camera/image_raw" to="/$(arg name)/camera/image"/>
     </node>
   </group>
   

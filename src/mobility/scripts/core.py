@@ -46,7 +46,7 @@ def main() :
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
         if rover_mode > 1 :
-            print ('the fucking mode is ', mode)
+            print ('The mode is: ', mode)
             if task is None: 
                 node = roslaunch.core.Node('mobility', 'task.py', namespace=rospy.get_namespace())
                 task = launcher.launch(node)
