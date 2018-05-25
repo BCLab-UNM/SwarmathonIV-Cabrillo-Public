@@ -180,7 +180,7 @@ def check_calibration() :
         if math.isnan(mag_var_err) or abs(mag_var_err) >= 1e-3 :
             raise ValueError("The magnetometer fit is too poor to use.")
         
-        if math.isnan(acc_var_err) or abs(acc_var_err) >= 3e-3 :
+        if math.isnan(acc_var_err) or abs(acc_var_err) >= 4e-3 :
             raise ValueError("The accelerometer fit is too poor to use.")
 
         print('Checking roll and pitch...')
@@ -265,7 +265,7 @@ if __name__ == '__main__' :
     roll = 0
     pitch = 0
 
-    ROLL_PITCH_TOLERANCE = 1.5  # degrees
+    ROLL_PITCH_TOLERANCE = 3.0  # degrees
 
     rospy.init_node('CALIBRATE')
     rospy.Subscriber("/imu_raw", Int32MultiArray, callback)
