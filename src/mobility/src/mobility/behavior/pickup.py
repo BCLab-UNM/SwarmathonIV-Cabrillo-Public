@@ -44,13 +44,14 @@ def approach():
             # Grab - minimal pickup with sim_check.
             
             if swarmie.simulator_running():
-                finger_close_angle = 0.5
+                finger_close_angle = 0
             else:
-              finger_close_angle = 0
+              finger_close_angle = 0.5
               
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
             swarmie.wrist_up()
+            rospy.sleep(.5)
             # did we succesuflly grab a block?
             if swarmie.has_block():
                 swarmie.wrist_middle()
