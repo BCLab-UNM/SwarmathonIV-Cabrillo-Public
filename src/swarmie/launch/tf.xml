@@ -3,26 +3,26 @@
   <arg name="name"/>
 
   <node name="stfBase2Cam"
-        pkg="tf"
+        pkg="tf2_ros"
         type="static_transform_publisher"
-        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link 100"
+        args="0.12 -0.02 0.195 -1.570796 0 -2.09 $(arg name)/base_link $(arg name)/camera_link"
         respawn="true">
   </node>
  
   <node name="stfBase2SL"
-        pkg="tf"
+        pkg="tf2_ros"
         type="static_transform_publisher"
-        args="0.11 0.05 0.155 0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_left 100"
+        args="0.11 0.05 0.155 0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_left"
         respawn="true" />
   <node name="stfBase2SC"
-        pkg="tf"
+        pkg="tf2_ros"
         type="static_transform_publisher"
-        args="0.12 0 0.155 0 0 0 $(arg name)/base_link $(arg name)/sonar_center 100"
+        args="0.12 0 0.155 0 0 0 $(arg name)/base_link $(arg name)/sonar_center"
         respawn="true" />
   <node name="stfBase2SR"
-        pkg="tf"
+        pkg="tf2_ros"
         type="static_transform_publisher"
-        args="0.11 -0.05 0.155 -0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_right 100"
+        args="0.11 -0.05 0.155 -0.43633 0 0 $(arg name)/base_link $(arg name)/sonar_right"
         respawn="true" />
 
   
