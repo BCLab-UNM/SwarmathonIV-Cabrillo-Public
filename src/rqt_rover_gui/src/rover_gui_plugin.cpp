@@ -122,7 +122,6 @@ namespace rqt_rover_gui
     connect(ui.rover_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
     connect(ui.rover_list, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
     connect(ui.ekf_checkbox, SIGNAL(toggled(bool)), this, SLOT(EKFCheckboxToggledEventHandler(bool)));
-    connect(ui.gps_checkbox, SIGNAL(toggled(bool)), this, SLOT(GPSCheckboxToggledEventHandler(bool)));
     connect(ui.encoder_checkbox, SIGNAL(toggled(bool)), this, SLOT(encoderCheckboxToggledEventHandler(bool)));
     connect(ui.global_offset_checkbox, SIGNAL(toggled(bool)), this, SLOT(globalOffsetCheckboxToggledEventHandler(bool)));
     connect(ui.unique_rover_colors_checkbox, SIGNAL(toggled(bool)), this, SLOT(uniqueRoverColorsCheckboxToggledEventHandler(bool)));
@@ -189,9 +188,11 @@ namespace rqt_rover_gui
     rover_poll_timer->start(5000);
 
     // Setup the initial display parameters for the map
+    ui.encoder_checkbox->setChecked(true);
+    ui.gps_checkbox->setChecked(false);
+
     ui.map_frame->setMapData(map_data);
     ui.map_frame->createPopoutWindow(map_data); // This has to happen before the display radio buttons are set
-    ui.map_frame->setDisplayGPSData(ui.gps_checkbox->isChecked());
     ui.map_frame->setDisplayEncoderData(ui.encoder_checkbox->isChecked());
     ui.map_frame->setDisplayEKFData(ui.ekf_checkbox->isChecked());
 
@@ -477,49 +478,6 @@ void RoverGUIPlugin::encoderEventHandler(const ros::MessageEvent<const nav_msgs:
 
     // Store map info for the appropriate rover name
    ui.map_frame->addToEncoderRoverPath(rover_name, x, y);
-}
-
-
-void RoverGUIPlugin::GPSEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event)
-{
-    const std::string& publisher_name = event.getPublisherName();
-    const ros::M_string& header = event.getConnectionHeader();
-    ros::Time receipt_time = event.getReceiptTime();
-
-    const boost::shared_ptr<const nav_msgs::Odometry> msg = event.getMessage();
-    float x = msg->pose.pose.position.x;
-    float y = msg->pose.pose.position.y;
-
-    QString x_str; x_str.setNum(x);
-    QString y_str; y_str.setNum(y);
-
-    // Extract rover name from the message source. Publisher is in the format /*rover_name*_NAVSAT
-    size_t found = publisher_name.find("/", 1);
-    string rover_name = publisher_name.substr(1,found-1);
-
-    // Store map info for the appropriate rover name
-    ui.map_frame->addToGPSRoverPath(rover_name, x, y);
-}
-
-void RoverGUIPlugin::GPSNavSolutionEventHandler(const ros::MessageEvent<const ublox_msgs::NavSOL> &event) {
-    const boost::shared_ptr<const ublox_msgs::NavSOL> msg = event.getMessage();
-
-    // Extract rover name from the message source. Publisher is in the format /*rover_name*_UBLOX
-    size_t found = event.getPublisherName().find("/", 1);
-    QString rover_name = event.getPublisherName().substr(1,found-1).c_str();
-
-    // Update the number of sattellites detected for the specified rover
-    rover_numSV_state[rover_name.toStdString()] = msg.get()->numSV;
-
-    // only update the label if a rover is selected by the user in the GUI
-    // and the number of detected satellites is > 0
-    if (selected_rover_name.compare("") != 0 && msg.get()->numSV > 0) {
-        // Update the label in the GUI with the selected rover's information
-        QString newLabelText = QString::number(rover_numSV_state[selected_rover_name]);
-        emit updateNumberOfSatellites("<font color='white'>" + newLabelText + "</font>");
-    } else {
-        emit updateNumberOfSatellites("<font color='white'>---</font>");
-    }
 }
 
  void RoverGUIPlugin::cameraEventHandler(const sensor_msgs::ImageConstPtr& image)
@@ -825,8 +783,6 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
         status_subscribers[*it].shutdown();
         waypoint_subscribers[*it].shutdown();
         encoder_subscribers[*it].shutdown();
-        gps_subscribers[*it].shutdown();
-        gps_nav_solution_subscribers[*it].shutdown();
         ekf_subscribers[*it].shutdown();
         rover_diagnostic_subscribers[*it].shutdown();
 
@@ -834,8 +790,6 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
         status_subscribers.erase(*it);
         waypoint_subscribers.erase(*it);
         encoder_subscribers.erase(*it);
-        gps_subscribers.erase(*it);
-        gps_nav_solution_subscribers.erase(*it);
         ekf_subscribers.erase(*it);
         rover_diagnostic_subscribers.erase(*it);
         
@@ -942,8 +896,6 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
         obstacle_subscribers[*i] = nh.subscribe("/"+*i+"/obstacle", 10, &RoverGUIPlugin::obstacleEventHandler, this);
         encoder_subscribers[*i] = nh.subscribe("/"+*i+"/odom/filtered", 10, &RoverGUIPlugin::encoderEventHandler, this);
         ekf_subscribers[*i] = nh.subscribe("/"+*i+"/odom/ekf", 10, &RoverGUIPlugin::EKFEventHandler, this);
-        gps_subscribers[*i] = nh.subscribe("/"+*i+"/odom/navsat", 10, &RoverGUIPlugin::GPSEventHandler, this);
-        gps_nav_solution_subscribers[*i] = nh.subscribe("/"+*i+"/navsol", 10, &RoverGUIPlugin::GPSNavSolutionEventHandler, this);
         rover_diagnostic_subscribers[*i] = nh.subscribe("/"+*i+"/diagnostics", 1, &RoverGUIPlugin::diagnosticEventHandler, this);
 
         RoverStatus rover_status;
@@ -1226,7 +1178,6 @@ void RoverGUIPlugin::mapSelectionListItemChangedHandler(QListWidgetItem* changed
 
 void RoverGUIPlugin::GPSCheckboxToggledEventHandler(bool checked)
 {
-    ui.map_frame->setDisplayGPSData(checked);
 }
 
 void RoverGUIPlugin::EKFCheckboxToggledEventHandler(bool checked)
@@ -2040,19 +1991,6 @@ void RoverGUIPlugin::clearSimulationButtonEventHandler()
       }
 
     encoder_subscribers.clear();
-
-    for (map<string,ros::Subscriber>::iterator it=gps_subscribers.begin(); it!=gps_subscribers.end(); ++it) {
-      qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-      it->second.shutdown();
-    }
-
-    for (map<string,ros::Subscriber>::iterator it=gps_nav_solution_subscribers.begin(); it!=gps_nav_solution_subscribers.end(); ++it) {
-      qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-      it->second.shutdown();
-    }
-
-    gps_subscribers.clear();
-    gps_nav_solution_subscribers.clear();
 
     for (map<string,ros::Subscriber>::iterator it=ekf_subscribers.begin(); it!=ekf_subscribers.end(); ++it) {
       qApp->processEvents(QEventLoop::ExcludeUserInputEvents);

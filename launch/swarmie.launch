@@ -4,14 +4,12 @@
   <arg name="name" />
   <arg name="simulation" default="True" />
   <arg name="swarmie_dev" default="None" />
-  <arg name="ublox_dev" default="None" />
 
   <group ns="$(arg name)">
     <include file="$(find swarmie)/launch/swarmie.xml">
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
       <arg name="swarmie_dev" value="$(arg swarmie_dev)" />
-      <arg name="ublox_dev" value="$(arg ublox_dev)"  />
     </include>
   </group>
   

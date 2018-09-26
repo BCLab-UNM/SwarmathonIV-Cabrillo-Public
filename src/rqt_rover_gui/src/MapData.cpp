@@ -7,28 +7,6 @@ MapData::MapData()
     display_global_offset = false;
 }
 
-void MapData::addToGPSRoverPath(string rover, float x, float y)
-{
-  // Negate the y direction to orient the map so up is north.
-  y = -y;
-
-    if (x > max_gps_seen_x[rover]) max_gps_seen_x[rover] = x;
-    if (y > max_gps_seen_y[rover]) max_gps_seen_y[rover] = y;
-    if (x < min_gps_seen_x[rover]) min_gps_seen_x[rover] = x;
-    if (y < min_gps_seen_y[rover]) min_gps_seen_y[rover] = y;
-
-    update_mutex.lock();
-
-    float offset_x = rover_global_offsets[rover].first;
-    float offset_y = rover_global_offsets[rover].second;
-    global_offset_gps_rover_path[rover].push_back(pair<float,float>(x+offset_x,y-offset_y));
-
-    gps_rover_path[rover].push_back(pair<float,float>(x,y));
-
-    update_mutex.unlock();
-
-}
-
 void MapData::addToEncoderRoverPath(string rover, float x, float y)
 {
   // Negate the y direction to orient the map so up is north.
@@ -181,12 +159,10 @@ void MapData::clear()
 
     ekf_rover_path.clear();
     encoder_rover_path.clear();
-    gps_rover_path.clear();
     waypoint_path.clear();
 
     global_offset_ekf_rover_path.clear();
     global_offset_encoder_rover_path.clear();
-    global_offset_gps_rover_path.clear();
     global_offset_waypoint_path.clear();
 
     target_locations.clear();
@@ -211,11 +187,6 @@ void MapData::clear(string rover)
     encoder_rover_path.erase(rover);
     global_offset_encoder_rover_path.erase(rover);
 
-    gps_rover_path[rover].clear();
-    global_offset_gps_rover_path[rover].clear();
-    gps_rover_path.erase(rover);
-    global_offset_gps_rover_path.erase(rover);
-
     waypoint_path[rover].clear();
     global_offset_waypoint_path[rover].clear();
     waypoint_path.erase(rover);
@@ -238,16 +209,6 @@ std::vector< std::pair<float,float> >* MapData::getEKFPath(std::string rover_nam
     }
 
     return &ekf_rover_path[rover_name];
-}
-
-std::vector< std::pair<float,float> >* MapData::getGPSPath(std::string rover_name)
-{
-    if(display_global_offset)
-    {
-        return &global_offset_gps_rover_path[rover_name];
-    }
-
-    return &gps_rover_path[rover_name];
 }
 
 std::vector< std::pair<float,float> >* MapData::getEncoderPath(std::string rover_name)
@@ -290,47 +251,6 @@ void MapData::resetWaypointPathForSelectedRover(std::string rover)
 {
    waypoint_path[rover].clear();
    global_offset_waypoint_path[rover].clear();
-}
-
-// These functions report the maximum and minimum map values seen. This is useful for the GUI when it is calculating the map coordinate system.
-float MapData::getMaxGPSX(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return max_gps_seen_x[rover_name] + rover_global_offsets[rover_name].first;
-    }
-
-    return max_gps_seen_x[rover_name];
-}
-
-float MapData::getMaxGPSY(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return max_gps_seen_y[rover_name] - rover_global_offsets[rover_name].second;
-    }
-
-    return max_gps_seen_y[rover_name];
-}
-
-float MapData::getMinGPSX(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return min_gps_seen_x[rover_name] + rover_global_offsets[rover_name].first;
-    }
-
-    return min_gps_seen_x[rover_name];
-}
-
-float MapData::getMinGPSY(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return min_gps_seen_y[rover_name] - rover_global_offsets[rover_name].second;
-    }
-
-    return min_gps_seen_y[rover_name];
 }
 
 float MapData::getMaxEKFX(string rover_name)

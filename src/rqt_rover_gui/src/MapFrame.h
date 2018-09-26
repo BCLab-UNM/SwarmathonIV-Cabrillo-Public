@@ -53,14 +53,12 @@ namespace rqt_rover_gui
       void createPopoutWindow(MapData *map_data);
 
       void setDisplayEncoderData(bool display);
-      void setDisplayGPSData(bool display);
       void setDisplayEKFData(bool display);
       void setGlobalOffset(bool display);
       void setGlobalOffsetForRover(std::string rover, float x, float y);
       void setDisplayUniqueRoverColors(bool display);
       void setUniqueRoverColor(std::string, QColor rover_color);
 
-      void addToGPSRoverPath(std::string rover, float x, float y);
       void addToEncoderRoverPath(std::string rover, float x, float y);
       void addToEKFRoverPath(std::string rover, float x, float y);
 
@@ -118,7 +116,6 @@ namespace rqt_rover_gui
       int frame_width;
       int frame_height;
 
-      bool display_gps_data;
       bool display_ekf_data;
       bool display_encoder_data;
       bool display_global_offset;
