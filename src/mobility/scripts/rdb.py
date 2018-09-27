@@ -48,37 +48,46 @@ if __name__ == '__main__' :
     global quiet 
     quiet = False   
     
-    if len(sys.argv) < 2 :
-         robolist = []
-         for topic in rospy.get_published_topics():
-             if topic[1] == 'sensor_msgs/Imu':
-                 robolist.append(topic[0].split('/')[1])
-         robolist=list(set(robolist))
-         if len(robolist) < 1:
-             print('\033[91m',"No Rovers Detected",'\033[0m')
-             print ('usage:', sys.argv[0], '<rovername>')
-             exit (-1)
-         else: 
-             rover = robolist[0] #in the future view subscribed topics and to pick a different rover
-             print("Detected rovers", robolist)
-             print('\033[92m',"Auto selected:",rover,'\033[0m')
-    else: 
-         rover = rospy.get_namespace()
+    # if len(sys.argv) < 2 :
+    #      robolist = []
+    #      for topic in rospy.get_published_topics():
+    #          if topic[1] == 'sensor_msgs/Imu':
+    #              robolist.append(topic[0].split('/')[1])
+    #      robolist=list(set(robolist))
+    #      if len(robolist) < 1:
+    #          print('\033[91m',"No Rovers Detected",'\033[0m')
+    #          print ('usage:', sys.argv[0], '<rovername>')
+    #          exit (-1)
+    #      else:
+    #          rover = robolist[0] #in the future view subscribed topics and to pick a different rover
+    #          print("Detected rovers", robolist)
+    #          print('\033[92m',"Auto selected:",rover,'\033[0m')
+    # else:
+    #      rover = rospy.get_namespace().strip('/')
 
-    rover = rospy.get_namespace()
-    print("rospy.get_namespace()", rover)
+    namespace = rospy.get_namespace()
+    print("rospy.get_namespace()", namespace)
+    if namespace == '/':
+        print(
+            'ERROR: Attempting to start debugger in global namespace.',
+            "Use: export ROS_NAMESPACE='rovername' in this terminal window",
+            'or pass __ns:=rovername as an argument to this program.',
+            sep='\n'
+        )
+        sys.exit(-1)
+    rover = namespace.strip('/')
 
     swarmie = Swarmie(tf_rover_name=rover)
     print ('Connected.')
     
-    rospy.Subscriber(rover + '/status', String, lambda msg : logHandler('/status:', msg))
-    print ("Subscribed to", rover + '/status')
+    rospy.Subscriber('status', String, lambda msg : logHandler('/status:', msg))
+    print ("Subscribed to", rospy.resolve_name('status'))
 
     rospy.Subscriber('/infoLog', String, lambda msg : logHandler('/infoLog:', msg))
     print ("Subscribed to /infoLog")
     
-    rospy.Subscriber(rover + '/state_machine', String, lambda msg : logHandler('/state_machine:', msg))
-    print ("Subscribed to", rover + '/state_machine')
+    rospy.Subscriber('state_machine', String, lambda msg : logHandler('/state_machine:', msg))
+    print ("Subscribed to", rospy.resolve_name('state_machine'))
 
     signal.signal(signal.SIGQUIT, handle)    
 
