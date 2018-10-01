@@ -2,7 +2,6 @@
 """gohome.py
 Tries to get the rover back to the home nest, while avoiding sonar and cube
 obstacles, and hopefully not dropping the cube in its claw.
-todo: test backup gps gohome functionality
 """
 from __future__ import print_function
 
@@ -25,7 +24,7 @@ from planner import Planner
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
-
+'''
 def get_gps_angle_and_dist():
     global swarmie
 
@@ -45,7 +44,7 @@ def get_gps_angle_and_dist():
     # swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
     # swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
     return angle, dist
-
+'''
 
 def drive_straight_home_odom() :
     global swarmie
@@ -207,8 +206,9 @@ def main(s, **kwargs):
         elif drive_result == MoveResult.OBSTACLE_TAG:
             sys.exit(GOHOME_FOUND_TAG)
     except PathException:
-        pass  # try gps backup
+        pass  # try spiral search?
 
+    ''' #GPS Removal
     # gps backup attempt
     current_loc = swarmie.get_odom_location().get_pose()
     angle, dist = get_gps_angle_and_dist()
@@ -218,8 +218,9 @@ def main(s, **kwargs):
     goal.y = current_loc.y + dist * math.sin(current_loc.theta + angle)
 
     drive_home(has_block, goal)
-
-    print('Starting spiral search with gps location')
+    ''' #GPS Removal
+    print('Starting spiral search')
+    swarmie.print_infoLog(swarmie.rover_name + " Starting spiral search")
     try:
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
