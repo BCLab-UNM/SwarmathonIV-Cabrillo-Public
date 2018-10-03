@@ -936,35 +936,7 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
 
         // Add to the widget list
         ui.map_selection_list->addItem(new_map_selection_item);
-
     }
-    }
-
-    // If rovers have not sent a status message recently mark them as disconnected
-    for(int row = 0; row < ui.rover_list->count(); row++)
-    {
-        QListWidgetItem *rover_item = ui.rover_list->item(row);
-        QListWidgetItem *diags_item = ui.rover_diags_list->item(row);
-
-        // Extract rover name
-        string rover_name_and_status = rover_item->text().toStdString();
-
-        // Rover names start at the begining of the rover name and status string and end at the first space
-        size_t rover_name_length = rover_name_and_status.find_first_of(" ");
-        string ui_rover_name = rover_name_and_status.substr(0, rover_name_length);
-
-        // Check the time of last contact with this rover
-        RoverStatus rover_status = rover_statuses[ui_rover_name];
-        if (ros::Time::now() - rover_status.timestamp < disconnect_threshold)
-        {
-          rover_item->setForeground(Qt::green);
-        }
-        else
-        {
-          rover_item->setForeground(Qt::red);
-          diags_item->setForeground(Qt::red);
-          diags_item->setText("disconnected");
-        }
     }
 }
 

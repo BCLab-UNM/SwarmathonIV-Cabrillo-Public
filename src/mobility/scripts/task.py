@@ -46,6 +46,7 @@ class Task :
         self.has_block = False
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         self.swarmie = Swarmie(node_name='task') 
+        self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
                         
     def print_state(self, msg):
         s = String()
@@ -64,10 +65,8 @@ class Task :
             print ('Task caught unknown exception: ', e)
             traceback.print_exc()
             rval = -100
-
         return rval
-
-    @sync(task_lock)
+    
     def get_task(self) :
         if self.current_state == Task.STATE_IDLE : 
             return "idle"
@@ -85,7 +84,7 @@ class Task :
         
     @sync(task_lock)
     def run_next(self):
-
+        self.status_pub.publish(self.get_task())
         if self.current_state == Task.STATE_IDLE : 
             self.current_state = Task.STATE_INIT 
             
@@ -143,8 +142,6 @@ class Task :
                 self.current_state = Task.STATE_GOHOME
 
 def main() :
-    global taskman
-    
     # Get a manager instance. 
     taskman = Task() 
     while not rospy.is_shutdown():
