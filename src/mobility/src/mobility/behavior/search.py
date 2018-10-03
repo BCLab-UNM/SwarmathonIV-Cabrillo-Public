@@ -142,7 +142,7 @@ def main(s, **kwargs):
     cur_pose = swarmie.get_odom_location().get_pose()
 
     if swarmie.has_search_exit_poses():
-        last_pose, _gps = swarmie.get_search_exit_poses()
+        last_pose = swarmie.get_search_exit_poses()
         dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
                          + (last_pose.y - cur_pose.y) ** 2)
 

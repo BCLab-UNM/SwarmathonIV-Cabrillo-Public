@@ -679,36 +679,6 @@ class Swarmie:
         with swarmie_lock :
             return self.OdomLocation
     
-    def get_gps_location(self):
-        '''Returns a `mobility.swarmie.Location` that is the output of the EKF that fuses GPS.
-        This value has varying accuracy. The accuracy is reported in a covariance matrix. 
-        If you want to wait for a __good__ reading use `mobility.swarmie.Swarmie.wait_for_fix`'''
-        with swarmie_lock :
-            return self.MapLocation
-
-    def wait_for_fix(self, distance=4, time=30):    
-        '''Wait until the GPS fix is reasonably accurate. This could take a while!
-
-        Arguments: 
-
-        * `distance`: (`float`) The desired accuracty (+/- distance meters) with a likelyhood \
-            of 50%. Defaults to 4 meters.
-
-        * `time`: (`int`) The number of seconds to wait for a good GPS measurement before giving up. \
-            Defaults to 30 seconds. 
-
-        Returns: 
-
-        * A `mobility.swarmie.Location` if the fix was successful. None if we waited until the timeout. 
-        '''        
-        for i in xrange(time) : 
-            rospy.sleep(1)
-            loc = self.get_gps_location()
-            vx, vy, vz = loc.get_variances()
-            if math.sqrt(vy) < distance : 
-                return loc 
-        return None
-    
     def get_obstacle_condition(self):
         '''Returns the current obstacle condition. The presence of obstacles is indicated
         by bits in the returned integer. 
@@ -732,36 +702,6 @@ class Swarmie:
         with swarmie_lock : 
             return self.Obstacles
 
-    def set_home_gps_location(self, loc):
-        '''Remember the home GPS location reading. The location can be recalled by other 
-        control programs. 
-        
-        Arguments:
-        
-        * loc: (`mobility.swarmie.Location`) The GPS coordinates to remember. 
-        '''
-        rospy.set_param('home_gps', 
-                        {'x' : loc.Odometry.pose.pose.position.x, 
-                         'y' : loc.Odometry.pose.pose.position.y})
-    
-    def get_home_gps_location(self):
-        '''Recall the home GPS location.
-        
-        Returns: 
-
-        * (`geometry_msgs.msg.Point`) : The location of home.
-        '''
-        return Point(**rospy.get_param('home_gps', {'x' : 0, 'y' : 0})) 
-
-    def has_home_gps_location(self):
-        '''Check to see if the home location parameter is set.
-        
-        Returns:
-        
-        * (`bool`): True if the parameter exists, False otherwise.
-        '''
-        return rospy.has_param('home_gps')
-    
     def set_home_odom_location(self, loc):
         '''Remember the home odometry location. The location can be recalled by other 
         control programs. Set this every time we see the nest to minimize the effect
@@ -905,37 +845,33 @@ class Swarmie:
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
         odom =  self.get_odom_location().get_pose()
-        gps = self.get_gps_location().get_pose()
     
         rospy.set_param(
             'search_exit_poses',
-            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},
-             'gps': {'x': gps.x, 'y': gps.y, 'theta': gps.theta}}
+            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},}
         )
 
     def get_search_exit_poses(self):
-        '''Get the odom and gps poses (location and heading) where search last
+        '''Get the odom (location and heading) where search last
         exited (saw a tag).
 
         Returns:
 
-        * (`geometry_msgs.msg.Pose2D`): odom_pose - The pose in the /odom frame
-        * (`geometry_msgs.msg.Pose2D`): gps_pose - The pose in the /map frame
+        * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
 
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
         Use:
-            odom_pose, gps_pose = swarmie.get_search_exit_poses()
+            odom_pose = swarmie.get_search_exit_poses()
             swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
             swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
         '''
         poses = rospy.get_param(
             'search_exit_poses',
-            {'odom': {'x': 0, 'y': 0, 'theta': 0},
-             'gps': {'x': 0, 'y': 0, 'theta': 0}}
+            {'odom': {'x': 0, 'y': 0, 'theta': 0}, }
         )
-        return ((Pose2D(**poses['odom']), Pose2D(**poses['gps'])))
+        return Pose2D(**poses['odom'])
 
     def has_search_exit_poses(self):
         '''Check to see if the search exit location parameter is set.

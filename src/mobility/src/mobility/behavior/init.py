@@ -18,11 +18,6 @@ def main(swarmie, **kwargs):
     # mobility crashes and is forced to restart. This checks to see 
     # if we've set home location prviously.
     
-    if swarmie.has_home_gps_location() : 
-        # Oops. This must be a restart. Don't assume we're near the 
-        # nest. Just exit and hope... 
-        sys.exit(0)
-
     while not swarmie.imu_is_finished_validating():
         pass  # wait till extended cal file has been loaded in IMU node
 
@@ -41,10 +36,6 @@ def main(swarmie, **kwargs):
         # This could happen if we bump into another rover. 
         # Let's just call it good. 
         pass
-    
-    # Wait up to two minutes for an good GPS fix. 
-    # TODO: Can we ever get a fix this good in real life? 
-    home = swarmie.wait_for_fix(distance=3, time=120) 
 
     current_location = swarmie.get_odom_location()
     current_pose = current_location.get_pose()
@@ -58,11 +49,6 @@ def main(swarmie, **kwargs):
         current_pose.y + 0.5 * math.sin(current_pose.theta)
     )
     swarmie.set_home_odom_location(home_odom)
-
-    if home is None : 
-        swarmie.print_infoLog('Failed to get a GPS fix!')        
-    else:
-        swarmie.set_home_gps_location(home)
 
     if swarmie.imu_needs_calibration():
         swarmie.drive(-0.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
