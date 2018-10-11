@@ -122,7 +122,6 @@ class Task :
                 else:
                     self.print_state('Recalibrated home. Back to searching.')
                     self.current_state = Task.STATE_SEARCH
-
             elif gohome_status == 1 :
                 self.print_state('Go Home interrupted, I found a tag. Do pickup.')
                 self.current_state = Task.STATE_PICKUP
