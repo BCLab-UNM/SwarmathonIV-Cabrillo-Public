@@ -29,29 +29,6 @@ void MapData::addToEncoderRoverPath(string rover, float x, float y)
 
 }
 
-// Expects the input y to be flipped with respect to y the map coordinate system
-void MapData::addToEKFRoverPath(string rover, float x, float y)
-{
-  // Negate the y direction to orient the map so up is north.
-  y = -y;
-
-    if (x > max_ekf_seen_x[rover]) max_ekf_seen_x[rover] = x;
-    if (y > max_ekf_seen_y[rover]) max_ekf_seen_y[rover] = y;
-    if (x < min_ekf_seen_x[rover]) min_ekf_seen_x[rover] = x;
-    if (y < min_ekf_seen_y[rover]) min_ekf_seen_y[rover] = y;
-
-    update_mutex.lock();
-
-    float offset_x = rover_global_offsets[rover].first;
-    float offset_y = rover_global_offsets[rover].second;
-    global_offset_ekf_rover_path[rover].push_back(pair<float,float>(x+offset_x,y-offset_y));
-
-    ekf_rover_path[rover].push_back(pair<float,float>(x,y));
-
-    update_mutex.unlock();
-
-}
-
 // Expects the input y to be consistent with the map coordinate system
 int MapData::addToWaypointPath(string rover, float x, float y)
 {
@@ -157,11 +134,9 @@ void MapData::clear()
 {
     update_mutex.lock();
 
-    ekf_rover_path.clear();
     encoder_rover_path.clear();
     waypoint_path.clear();
 
-    global_offset_ekf_rover_path.clear();
     global_offset_encoder_rover_path.clear();
     global_offset_waypoint_path.clear();
 
@@ -176,11 +151,6 @@ void MapData::clear()
 void MapData::clear(string rover)
 {
     update_mutex.lock();
-
-    ekf_rover_path[rover].clear();
-    global_offset_ekf_rover_path[rover].clear();
-    ekf_rover_path.erase(rover);
-    global_offset_ekf_rover_path.erase(rover);
 
     encoder_rover_path[rover].clear();
     global_offset_encoder_rover_path[rover].clear();
@@ -199,16 +169,6 @@ void MapData::clear(string rover)
     rover_mode.erase(rover);
 
     update_mutex.unlock();
-}
-
-std::vector< std::pair<float,float> >* MapData::getEKFPath(std::string rover_name)
-{
-    if(display_global_offset)
-    {
-        return &global_offset_ekf_rover_path[rover_name];
-    }
-
-    return &ekf_rover_path[rover_name];
 }
 
 std::vector< std::pair<float,float> >* MapData::getEncoderPath(std::string rover_name)
@@ -251,46 +211,6 @@ void MapData::resetWaypointPathForSelectedRover(std::string rover)
 {
    waypoint_path[rover].clear();
    global_offset_waypoint_path[rover].clear();
-}
-
-float MapData::getMaxEKFX(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return max_ekf_seen_x[rover_name] + rover_global_offsets[rover_name].first;
-    }
-
-    return max_ekf_seen_x[rover_name];
-}
-
-float MapData::getMaxEKFY(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return max_ekf_seen_y[rover_name] - rover_global_offsets[rover_name].second;
-    }
-
-    return max_ekf_seen_y[rover_name];
-}
-
-float MapData::getMinEKFX(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return min_ekf_seen_x[rover_name] + rover_global_offsets[rover_name].first;
-    }
-
-    return min_ekf_seen_x[rover_name];
-}
-
-float MapData::getMinEKFY(string rover_name)
-{
-    if(display_global_offset)
-    {
-        return min_ekf_seen_y[rover_name] - rover_global_offsets[rover_name].second;
-    }
-
-    return min_ekf_seen_y[rover_name];
 }
 
 float MapData::getMaxEncoderX(string rover_name)
