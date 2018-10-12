@@ -1,0 +1,5 @@
+[submodule "src/apriltags2_ros"]
+	path = src/apriltags2_ros
+	url = https://github.com:dmalyuta/apriltags2_ros.git
+	branch = master
+
