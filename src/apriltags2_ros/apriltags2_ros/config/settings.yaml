@@ -12,3 +12,4 @@ tag_refine_pose:   0          # default: 0
 tag_debug:         0          # default: 0
 # Other parameters
 publish_tf:        true       # default: false
+remove_duplicates: false

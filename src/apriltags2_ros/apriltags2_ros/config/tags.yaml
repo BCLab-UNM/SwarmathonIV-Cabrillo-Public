@@ -18,7 +18,8 @@
 #     ...
 #   ]
 standalone_tags:
-  [
+  [ {id: 0, size: 0.038},
+    {id: 256, size: 0.038}
   ]
 # ## Tag bundle definitions
 # ### Remarks

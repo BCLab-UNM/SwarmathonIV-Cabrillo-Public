@@ -30,13 +30,14 @@
  */
 
 #include "apriltags2_ros/common_functions.h"
+#include "image_geometry/pinhole_camera_model.h"
 
-#include "common/homography.h"
-#include "tag36h11.h"
-#include "tag36h10.h"
-#include "tag25h9.h"
-#include "tag25h7.h"
-#include "tag16h5.h"
+#include "apriltags2/common/homography.h"
+#include "apriltags2/tag36h11.h"
+#include "apriltags2/tag36h10.h"
+#include "apriltags2/tag25h9.h"
+#include "apriltags2/tag25h7.h"
+#include "apriltags2/tag16h5.h"
 
 namespace apriltags2_ros
 {
@@ -96,6 +97,13 @@ TagDetector::TagDetector(ros::NodeHandle pnh) :
     }
   }
 
+  // Optionally remove duplicate detections in scene. Defaults to removing
+  if(!pnh.getParam("remove_duplicates", remove_duplicates_))
+  {
+    ROS_WARN("remove_duplicates parameter not provided. Defaulting to true");
+    remove_duplicates_ = true;
+  }
+
   // Define the tag family whose tags should be searched for in the camera
   // images
   if (family_ == "tag36h11")
@@ -136,6 +144,8 @@ TagDetector::TagDetector(ros::NodeHandle pnh) :
   td_->refine_decode = refine_decode_;
   td_->refine_pose = refine_pose_;
 
+  detections_ = NULL;
+
   // Get tf frame name to use for the camera
   if (!pnh.getParam("camera_frame", camera_tf_frame_))
   {
@@ -150,7 +160,7 @@ TagDetector::~TagDetector() {
   apriltag_detector_destroy(td_);
 
   // Free memory associated with the array of tag detections
-  zarray_destroy(detections_);
+  apriltag_detections_destroy(detections_);
 
   // free memory associated with tag family
   if (family_ == "tag36h11")
@@ -187,19 +197,31 @@ AprilTagDetectionArray TagDetector::detectTags (
                                   .buf = gray_image.data
   };
 
-  // Get camera intrinsic properties
-  double fx = camera_info->K[0]; // focal length in camera x-direction [px]
-  double fy = camera_info->K[4]; // focal length in camera y-direction [px]
-  double cx = camera_info->K[2]; // optical center x-coordinate [px]
-  double cy = camera_info->K[5]; // optical center y-coordinate [px]
+  image_geometry::PinholeCameraModel camera_model;
+  camera_model.fromCameraInfo(camera_info);
+
+  // Get camera intrinsic properties for rectified image.
+  double fx = camera_model.fx(); // focal length in camera x-direction [px]
+  double fy = camera_model.fy(); // focal length in camera y-direction [px]
+  double cx = camera_model.cx(); // optical center x-coordinate [px]
+  double cy = camera_model.cy(); // optical center y-coordinate [px]
 
   // Run AprilTags 2 algorithm on the image
+  if (detections_)
+  {
+    apriltag_detections_destroy(detections_);
+    detections_ = NULL;
+  }
   detections_ = apriltag_detector_detect(td_, &apriltags2_image);
 
-  // Restriction: any tag ID can appear at most once in the scene. Thus, get all
-  // the tags visible in the scene and remove any tags with IDs of which there
-  // are multiple in the scene
-  removeDuplicates();
+  // If remove_dulpicates_ is set to true, then duplicate tags are not allowed.
+  // Thus any duplicate tag IDs visible in the scene must include at least 1
+  // erroneous detection. Remove any tags with duplicate IDs to ensure removal
+  // of these erroneous detections
+  if (remove_duplicates_)
+  {
+    removeDuplicates();
+  }
 
   // Compute the estimated translation and rotation individually for each
   // detected tag

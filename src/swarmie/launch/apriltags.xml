@@ -2,7 +2,7 @@
   <arg name="name"/>
   <arg name="simulation"/>
 
-  <node name="apriltag" pkg="apriltags_ros" type="apriltag_detector_node" respawn="true">
+ <!-- <node name="apriltag" pkg="apriltags_ros" type="apriltag_detector_node" respawn="true">
 
     <remap from="image_rect" to="camera/image" />
     <remap from="camera_info" to="camera/image_info" />
@@ -17,6 +17,45 @@
     <rosparam param="tag_descriptions">[
     {id: 0, size: 0.038},
     {id: 256, size: 0.038}]</rosparam>
+  </node> -->
+  <!-- Set parameters
+  <rosparam command="load" file="$(find apriltags2_ros)/config/settings.yaml" />
+  <rosparam command="load" file="$(find apriltags2_ros)/config/tags.yaml" />
+  -->
+  <node name="apriltags2" pkg="apriltags2_ros" type="apriltags2_ros_continuous_node" clear_params="true" output="screen" >
+    <!-- Remap topics from those used in code to those on the ROS network -->
+    <rosparam>
+        standalone_tags:
+          [ {id: 0, size: 0.038},
+            {id: 256, size: 0.038}
+          ]
+        tag_bundles:
+          [
+          ]
+    </rosparam>
+    <rosparam>
+          # AprilTags 2 code parameters
+        # Find descriptions in apriltags2/include/apriltag.h:struct apriltag_detector
+        #                      apriltags2/include/apriltag.h:struct apriltag_family
+        tag_family:        'tag36h11' # options: tag36h11, tag36h10, tag25h9, tag25h7, tag16h5
+        tag_border:        1          # default: 1
+        tag_threads:       2          # default: 2
+        tag_decimate:      1.0        # default: 1.0
+        tag_blur:          0.0        # default: 0.0
+        tag_refine_edges:  1          # default: 1
+        tag_refine_decode: 0          # default: 0
+        tag_refine_pose:   0          # default: 0
+        tag_debug:         0          # default: 0
+        # Other parameters
+        publish_tf:        true       # default: false
+        remove_duplicates: false
+    </rosparam>
+  
+    <remap from="image_rect" to="camera/image" />
+    <remap from="camera_info" to="camera/camera_info" />
+    <remap from="tag_detections_image" to="targets/image" />
+    <remap from="tag_detections" to="targets" />
+    <param name="camera_frame" type="str" value="$(arg name)/camera_link" />
+    <param name="publish_tag_detections_image" type="bool" value="true" />      <!-- default: false -->
   </node>
-
 </launch>
