@@ -230,20 +230,20 @@ class Swarmie:
     def _targets(self, msg) : 
         self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
         #adding currently seen tags to the dict
-        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+        self.TargetsDictBuffer.update({(round(tag.pose.pose.pose.position.x, 2),round(tag.pose.pose.pose.position.y, 2),round(tag.pose.pose.pose.position.z, 2)): tag for tag in msg.detections })
         #get the tags from the dict and saves them to Targets
         self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
     
         if self._is_moving():
             self.Targets = msg
             #create a dict of tags as values and rounded coordinates as the key
-            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
+            self.TargetsDict = {(round(tag.pose.pose.pose.position.x, 2),round(tag.pose.pose.pose.position.y, 2),round(tag.pose.pose.pose.position.z, 2)): tag for tag in msg.detections }
             
         else:
             #remove old tags from the dict
             self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
             #adding currently seen tags to the dict
-            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
+            self.TargetsDict.update({(round(tag.pose.pose.pose.position.x, 2),round(tag.pose.pose.pose.position.y, 2),round(tag.pose.pose.pose.position.z, 2)): tag for tag in msg.detections })
             #get the tags from the dict and saves them to Targets
             self.Targets.detections = self.TargetsDict.values() 
     
@@ -825,9 +825,9 @@ class Swarmie:
 
         # Sort blocks by their distance from the camera_link frame
         blocks = sorted(blocks, key=lambda x :
-                        math.sqrt(x.pose.pose.position.x**2
-                                  + x.pose.pose.position.y**2
-                                  + x.pose.pose.position.z**2))
+                        math.sqrt(x.pose.pose.pose.position.x**2
+                                  + x.pose.pose.pose.position.y**2
+                                  + x.pose.pose.pose.position.z**2))
 
         nearest = blocks[0]
 
@@ -835,10 +835,16 @@ class Swarmie:
         if nearest.id==256:
             return None
 
-        self.xform.waitForTransform(self.rover_name + '/odom',
-                        nearest.pose.header.frame_id, nearest.pose.header.stamp,
-                        rospy.Duration(3.0))
-        
+        print("nearest.pose.header.frame_id type:",type(nearest.pose.header.frame_id))
+        print("nearest.pose.header.stamp type:",type(nearest.pose.header.stamp))
+        '''try:
+            self.xform.waitForTransform(self.rover_name + '/odom',
+                            nearest.pose.header.frame_id, 
+                            nearest.pose.header.stamp,
+                            rospy.Duration(4.0))
+        except tf.Exception as e:
+            print("bad news dude:",e)'''
+        rospy.sleep(4)
         # returns the closes block to the rover.
         return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
         
