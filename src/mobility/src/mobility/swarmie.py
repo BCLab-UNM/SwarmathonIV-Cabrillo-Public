@@ -21,7 +21,7 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
-from apriltags_ros.msg import AprilTagDetectionArray 
+from apriltags2_ros.msg import AprilTagDetectionArray 
 from rospy.numpy_msg import numpy_msg
 from grid_map_msgs.msg import GridMap
 from mapping import RoverMap 

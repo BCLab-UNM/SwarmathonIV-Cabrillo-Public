@@ -18,8 +18,8 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-#include <apriltags_ros/AprilTagDetectionArray.h>
-#include <apriltags_ros/AprilTagDetection.h>
+#include <apriltags2_ros/AprilTagDetectionArray.h>
+#include <apriltags2_ros/AprilTagDetection.h>
 #include <grid_map_ros/grid_map_ros.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <grid_map_ros/GridMapRosConverter.hpp>
@@ -647,7 +647,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
  * 2. Update the target maps based on current detections.
  *
  */
-void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+void targetHandler(const apriltags2_ros::AprilTagDetectionArray::ConstPtr& message) {
 	// Measurements defining camera field of view for polygon iterator
 	const double CAMERA_NEAR_ANGLE = 0.28; // radians
 	const double CAMERA_FAR_ANGLE = 0.34;
@@ -744,10 +744,14 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 			);
 
             for (int i=0; i<message->detections.size(); i++) {
-                geometry_msgs::PoseStamped tagpose;
-                cameraTF->transformPose(map_frame,
-                                        message->detections[i].pose,
-                                        tagpose);
+				// make our own detection of the correct type
+				geometry_msgs::PoseStamped detection;
+				detection.header = message->detections[i].pose.header;
+				detection.pose = message->detections[i].pose.pose.pose;
+				geometry_msgs::PoseStamped tagpose;
+				cameraTF->transformPose(map_frame,
+								         detection,
+								         tagpose);
 
                 grid_map::Position pos(tagpose.pose.position.x,
                                        tagpose.pose.position.y);
@@ -756,10 +760,10 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
                 // Only consider TAG_TARGET's far enough away from camera
                 // to avoid marking block in claw as an obstacle.
-                if (message->detections[i].id == 0 &&
-                    message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+                if (message->detections[i].id[0] == 0 &&
+                    message->detections[i].pose.pose.pose.position.z > TAG_IN_CLAW_DIST) {
                     rover_map.at("target", ind) = 1;
-                } else if (message->detections[i].id == 256) {
+                } else if (message->detections[i].id[0] == 256) {
                     rover_map.at("home", ind) = 1;
                 }
 			}
@@ -770,11 +774,11 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
         // Make sure Obstacle messages get published, so do this here, outside
 		// the try/catch block for transforms
 		for (int i=0; i<message->detections.size(); i++) {
-			if (message->detections[i].id == 0 &&
-				message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+			if (message->detections[i].id[0] == 0 &&
+				message->detections[i].pose.pose.pose.position.z > TAG_IN_CLAW_DIST) {
 				next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
 			}
-			else if (message->detections[i].id == 256) {
+			else if (message->detections[i].id[0] == 256) {
 				next_status |= swarmie_msgs::Obstacle::TAG_HOME;
 			}
 		}

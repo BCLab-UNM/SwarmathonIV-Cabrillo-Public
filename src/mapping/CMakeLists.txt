@@ -16,7 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   nav_msgs
   sensor_msgs
-  apriltags_ros
+  apriltags2_ros
   message_generation
   grid_map_ros
   grid_map_msgs
@@ -30,11 +30,11 @@ add_service_files (
 	FILES FindTarget.srv GetMap.srv GetNavPlan.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs grid_map_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags2_ros nav_msgs grid_map_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs 
-  tf apriltags_ros message_runtime 
+  tf apriltags2_ros message_runtime 
   grid_map_ros grid_map_msgs 
   nav_msgs swarmie_msgs cv_bridge 
 )

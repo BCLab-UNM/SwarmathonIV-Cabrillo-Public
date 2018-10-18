@@ -355,7 +355,7 @@ class Planner:
         of the camera's field of view.
 
         Args:
-        * detections - apriltags_ros/AprilTagDetectionArray the list
+        * detections - apriltags2_ros/AprilTagDetectionArray the list
           of detections.
 
         Returns:
@@ -377,7 +377,7 @@ class Planner:
         camera to likely be a block in the claw.
 
         Args:
-        * detections - apriltags_ros/AprilTagDetectionArray the list
+        * detections - apriltags2_ros/AprilTagDetectionArray the list
           of detections.
         * id - the id of the tags to sort (0 - target, 256 - home)
 

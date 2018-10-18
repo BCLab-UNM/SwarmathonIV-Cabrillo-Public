@@ -19,7 +19,7 @@
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
-#include <apriltags_ros/AprilTagDetectionArray.h>
+#include <apriltags2_ros/AprilTagDetectionArray.h>
 #include <std_msgs/Float32MultiArray.h>
 #include "swarmie_msgs/Waypoint.h"
 
