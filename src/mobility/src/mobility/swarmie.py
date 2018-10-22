@@ -20,7 +20,7 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
-from geometry_msgs.msg import Point, Twist, Pose2D
+from geometry_msgs.msg import Point, Twist, Pose2D, PoseStamped
 from apriltags2_ros.msg import AprilTagDetectionArray 
 from rospy.numpy_msg import numpy_msg
 from grid_map_msgs.msg import GridMap
@@ -482,10 +482,10 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
+            z_dist = nearest.pose.pose.pose.position.z 
             if abs(z_dist) < 0.18 :
                 return True 
 
@@ -493,10 +493,10 @@ class Swarmie:
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
+            z_dist = nearest.pose.pose.pose.position.z 
             if abs(z_dist) < 0.15 :
                 return True 
 
@@ -832,21 +832,23 @@ class Swarmie:
         nearest = blocks[0]
 
         # checks for hometag between rover and block.
-        if nearest.id==256:
+        if nearest.id[0]==256:
             return None
-
-        print("nearest.pose.header.frame_id type:",type(nearest.pose.header.frame_id))
-        print("nearest.pose.header.stamp type:",type(nearest.pose.header.stamp))
-        '''try:
+        try:
             self.xform.waitForTransform(self.rover_name + '/odom',
                             nearest.pose.header.frame_id, 
                             nearest.pose.header.stamp,
                             rospy.Duration(4.0))
         except tf.Exception as e:
-            print("bad news dude:",e)'''
-        rospy.sleep(4)
-        # returns the closes block to the rover.
-        return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
+            print("bad newz dude:",e)
+        # returns the closes block to the rover. 
+        # make our own detection of the correct type
+        detection = PoseStamped()
+        detection.header = nearest.pose.header
+        detection.pose = nearest.pose.pose.pose
+        near = self.xform.transformPose(self.rover_name + '/odom', detection)
+        near = near.pose.position
+        return near
         
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
