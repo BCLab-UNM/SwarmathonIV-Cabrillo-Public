@@ -141,7 +141,7 @@
 					<cameraName>/achilles/camera</cameraName>
 					<imageTopicName>/achilles/camera/image</imageTopicName>
 					<cameraInfoTopicName>/achilles/camera/camera_info</cameraInfoTopicName>
-					<frameName>camera_link</frameName>
+					<frameName>achilles/camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>
 					<distortionK2>0.0</distortionK2>

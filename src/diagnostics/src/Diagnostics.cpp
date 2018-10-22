@@ -23,7 +23,7 @@ Diagnostics::Diagnostics() {
   fingerAngleSubscribe = nodeHandle.subscribe("fingerAngle/prev_cmd", 10, &Diagnostics::fingerTimestampUpdate, this);
   wristAngleSubscribe = nodeHandle.subscribe("fingerAngle/prev_cmd", 10, &Diagnostics::wristTimestampUpdate, this);
   imuSubscribe = nodeHandle.subscribe("imu", 10, &Diagnostics::imuTimestampUpdate, this);
-  odometrySubscribe = nodeHandle.subscribe("odom", 10, &Diagnostics::odometryTimestampUpdate, this);
+  //odometrySubscribe = nodeHandle.subscribe("odom", 10, &Diagnostics::odometryTimestampUpdate, this);
   sonarLeftSubscribe = nodeHandle.subscribe("sonarLeft", 10, &Diagnostics::sonarLeftTimestampUpdate, this);
   sonarCenterSubscribe = nodeHandle.subscribe("sonarCenter", 10, &Diagnostics::sonarCenterTimestampUpdate, this);
   sonarRightSubscribe = nodeHandle.subscribe("sonarRight", 10, &Diagnostics::sonarRightTimestampUpdate, this);
@@ -128,10 +128,10 @@ void Diagnostics::wristTimestampUpdate(const geometry_msgs::QuaternionStamped::C
 void Diagnostics::imuTimestampUpdate(const sensor_msgs::Imu::ConstPtr& message) {
 	imuTimestamp = message->header.stamp;
 }
-
+/*
 void Diagnostics::odometryTimestampUpdate(const nav_msgs::Odometry::ConstPtr& message) {
 	odometryTimestamp = message->header.stamp;
-}
+}*/
 
 void Diagnostics::sonarLeftTimestampUpdate(const sensor_msgs::Range::ConstPtr& message) {
 	sonarLeftTimestamp = message->header.stamp;
@@ -176,7 +176,7 @@ void Diagnostics::sensorCheckTimerEventHandler(const ros::TimerEvent& event) {
   checkSonar();
   checkCamera();
   checkGripper();
-  checkOdometry();
+  //checkOdometry();
   
   publishDiagnosticData();
   }
