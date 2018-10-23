@@ -3,7 +3,6 @@ models=$(catkin locate)'/simulation/models/'
 #needs to match rover names in rqt_rover_gui/src/rover_gui_plugin.cpp 
 #QString rovers[8] = {"achilles", "aeneas", "ajax", "diomedes", "hector", "paris", "thor", "zeus"};
 rovers=(achilles aeneas ajax diomedes hector paris thor zeus)
-#rovers=(HopperSim TuringSim LovelaceSim) #hamlton, Bruce Schenier, Diffy
 for rover in "${rovers[@]}"
 do
 	echo 'Creating' $rover
