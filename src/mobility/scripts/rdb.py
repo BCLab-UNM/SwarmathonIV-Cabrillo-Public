@@ -65,7 +65,7 @@ if __name__ == '__main__' :
     else: 
          rover = rospy.get_namespace()
 
-    rover = rospy.get_namespace()
+    rover = rospy.get_namespace().rstrip('/') #remove the /'s at the end
     print("rospy.get_namespace()", rover)
 
     swarmie = Swarmie(tf_rover_name=rover)
