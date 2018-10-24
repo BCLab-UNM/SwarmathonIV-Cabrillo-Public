@@ -19,6 +19,7 @@ import angles
 from geometry_msgs.msg import PoseStamped, Pose2D, Point
 from mapping.srv import GetNavPlanResponse
 
+from apriltags2_ros.msg import AprilTagDetection
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
@@ -54,6 +55,7 @@ class Planner:
     # FAIL_COUNT_LIMIT = 10
 
     def __init__(self, swarmie, use_rviz_nav_goal=False):
+        # type: (Swarmie, bool) -> None
         """Create a new Planner.
         Args:
         * swarmie - the Swarmie object you've already instantiated
@@ -85,12 +87,54 @@ class Planner:
                 queue_size=1
             )
 
+    def _transform_to_frame(self, detection, frame, timeout=3.0):
+        # type: (AprilTagDetection, str, float) -> PoseStamped
+        """Transform AprilTagDetection into the frame requested.
+        Returns PoseStamped in the frame requested.
+
+        Helper to self._transform_to_base_link() and
+        self._transform_to_odom()
+
+        Args:
+        * detection - the AprilTagDetection with the tag's pose in the
+          /camera_link frame
+        * frame - str, the target frame for the transform, ex: 'odom', or
+          'base_link'
+        * timeout - float, the time to wait for the transform
+
+        Returns:
+        * pose - PoseStamped the pose of the tag in the frame requested
+
+        Raises:
+        * tf.Exception if timeout is exceeded
+        """
+        # remove any erroneous slashes and put exactly one back
+        frame = '/' + frame.strip('/')
+
+        # convert the detection's PoseWithCovarianceStamped to a PoseStamped
+        detection_pose = PoseStamped(
+            header=detection.pose.header,
+            pose=detection.pose.pose.pose
+        )
+
+        self.swarmie.xform.waitForTransform(
+            self.rovername + frame,
+            detection_pose.pose.header.frame_id,
+            detection_pose.pose.header.stamp,
+            rospy.Duration(timeout)
+        )
+
+        return self.swarmie.xform.transformPose(self.rovername + frame,
+                                                detection_pose)
+
     def _transform_to_base_link(self, detection, timeout=3.0):
-        """Transform PoseStamped detection into base_link frame.
+        # type: (AprilTagDetection, float) -> PoseStamped
+        """Transform AprilTagDetection into base_link frame.
         Returns PoseStamped in base_link frame.
 
         Args:
-        * detection - PoseStamped the pose of the tag in the /camera_link frame
+        * detection - the AprilTagDetection with the tag's pose in the
+          /camera_link frame
         * timeout - float, the time to wait for the transform
 
         Returns:
@@ -99,22 +143,18 @@ class Planner:
         Raises:
         * tf.Exception if timeout is exceeded
         """
-        self.swarmie.xform.waitForTransform(
-            self.rovername + '/base_link',
-            detection.pose.header.frame_id,
-            detection.pose.header.stamp,
-            rospy.Duration(timeout)
-        )
-
-        return self.swarmie.xform.transformPose(self.rovername + '/base_link',
-                                                detection.pose)
+        return self._transform_to_frame(detection,
+                                        'base_link',
+                                        timeout=timeout)
 
     def _transform_to_odom(self, detection, timeout=3.0):
-        """Transform PoseStamped detection into /odom frame.
+        # type: (AprilTagDetection, float) -> PoseStamped
+        """Transform AprilTagDetection into /odom frame.
         Returns PoseStamped in /odom frame.
 
         Args:
-        * detection - PoseStamped the pose of the tag in the /camera_link frame
+        * detection - AprilTagDetection containing the pose of the tag in the
+          /camera_link frame
         * timeout - float, the time to wait for the transform
 
         Returns:
@@ -123,24 +163,20 @@ class Planner:
         Raises:
         * tf.Exception if timeout is exceeded
         """
-        self.swarmie.xform.waitForTransform(
-            self.rovername + '/odom',
-            detection.pose.header.frame_id,
-            detection.pose.header.stamp,
-            rospy.Duration(timeout)
-        )
-
-        return self.swarmie.xform.transformPose(self.rovername + '/odom',
-                                                detection.pose)
+        return self._transform_to_frame(detection,
+                                        'odom',
+                                        timeout=timeout)
 
     def is_inside_home_ring(self, detections):
+        # type: (List[AprilTagDetection]) -> bool
         """Returns True if it looks like the rover is inside the ring of
         home tags and needs to get out!
 
         Returns False if no home tags in view.
 
         Args:
-        * detections - the AprilTagDetection array of tags currently in view.
+        * detections - List[AprilTagDetection] array of tags currently in
+          view.
 
         Raises:
         * tf.Exception if timeout is exceeded to transform the tag pose into
@@ -151,8 +187,8 @@ class Planner:
         good_orientations = 0
         bad_orientations = 0
 
-        for detection in detections:
-            if detection.id == 256:
+        for detection in detections:  # type: AprilTagDetection
+            if detection.id[0] == 256:
                 see_home_tag = True
                 home_detection = self._transform_to_base_link(detection)
 
@@ -175,13 +211,13 @@ class Planner:
         return bad_orientations >= good_orientations
 
     def get_angle_and_dist_to_escape_home(self, detections):
+        # type: (List[AprilTagDetection]) -> (float, float)
         """Return the angle to turn and distance to drive in order to get
         out of the home area if the rover is trapped in there. Should be
         used in conjuction with Planner.is_inside_home_ring()
 
         Returns:
-        * angle - the angle in radians to turn.
-        * distance - the distance in meters to drive.
+        * the angle in radians to turn, the distance in meters to drive.
         """
         OVERSHOOT_DIST = 0.4  # meters, distance to overshoot target by
         result = {
@@ -190,8 +226,8 @@ class Planner:
         }
         see_home_tag = False
 
-        for detection in detections:
-            if detection.id == 256:
+        for detection in detections:  # type: AprilTagDetection
+            if detection.id[0] == 256:
                 see_home_tag = True
                 home_detection = self._transform_to_base_link(detection)
 
@@ -217,6 +253,7 @@ class Planner:
         return result['angle'], result['dist']
 
     def _get_angle_and_dist_to_avoid(self, detection, direction='left'):
+        # type: (AprilTagDetection, str) -> (float, float)
         """The safe driving pathway is defined to be the space between two
         lines running parallel to the rover's x-axis, at y=0.33m and y=-0.33m.
         Driving between these lines gives the wheels about 10cm of clearance on
@@ -246,7 +283,7 @@ class Planner:
           +y____|
 
         Args:
-        * detection - the PoseStamped detection in the /camera_link frame.
+        * detection - the AprilTagDetection in the /camera_link frame.
           This detection should be the detection whose position it makes the
           most sense to make a turn decision relative to.
         * direction - the direction you want to turn to avoid the tag.
@@ -254,8 +291,7 @@ class Planner:
           'right' turn clockwise, returns a positive angle
 
         Returns:
-        * angle - the angle in radians to turn.
-        * distance - the distance in meters to drive.
+        * the angle in radians to turn, the distance in meters to drive.
         """
         OVERSHOOT_DIST = 0.20  # meters, distance to overshoot target by
         base_link_pose = self._transform_to_base_link(detection)
@@ -281,13 +317,14 @@ class Planner:
                 path_edge_point.x + OVERSHOOT_DIST)
 
     def get_angle_to_face_detection(self, detection):
+        # type: (AprilTagDetection) -> float
         """Get the angle required to turn and face a detection to put it in
         the center of the camera's field of view.
 
         Args:
-        * detection - the PoseStamped detection in the /camera_link frame.
-          This detection should be the detection whose position it makes the
-          most sense to make a turn decision relative to.
+        * detection - the AprilTagDetection with the tag's pose in the
+          /camera_link frame. This detection should be the detection whose
+          position it makes the most sense to make a turn decision relative to.
 
         Returns:
         * angle - the angle in radians to turn.
@@ -307,8 +344,10 @@ class Planner:
         return -self._angle_between(tag_point, center_of_view_point)
 
     def face_home_tag(self):
+        # type: () -> None
         """Turn and face the home tag nearest the center of view if we
-        see one. Does nothing if no home tag is seen."""
+        see one. Does nothing if no home tag is seen.
+        """
         home_detections = self._sort_home_tags_nearest_center(
             self.swarmie.get_latest_targets().detections
         )
@@ -321,18 +360,20 @@ class Planner:
             )
 
     def sees_home_tag(self):
+        # type: () -> bool
         """Returns true if the rover can see a home tag.
         Returns false otherwise.
         """
         detections = self.swarmie.get_latest_targets().detections
 
         for detection in detections:
-            if detection.id == 256:
+            if detection.id[0] == 256:
                 return True
 
         return False
 
     def _angle_between(self, point_1, point_2):
+        # type: (Point, Point) -> float
         """Returns the angle from point_1 on a circle to point_2 on a circle.
         Circle is centered at the origin.
 
@@ -351,11 +392,12 @@ class Planner:
         return angles.shortest_angular_distance(angle_1, angle_2)
 
     def _sort_home_tags_nearest_center(self, detections):
+        # type: (List[AprilTagDetection]) -> List[AprilTagDetection]
         """Sort home tags (id == 256) in view by their distance from the center
         of the camera's field of view.
 
         Args:
-        * detections - apriltags2_ros/AprilTagDetectionArray the list
+        * detections - List[AprilTagDetection] the list
           of detections.
 
         Returns:
@@ -364,21 +406,21 @@ class Planner:
         """
         sorted_detections = []
 
-        for detection in detections:
-            if detection.id == 256:
+        for detection in detections:  # type: AprilTagDetection
+            if detection.id[0] == 256:
                 sorted_detections.append(detection)
 
         return sorted(sorted_detections,
-                      key=lambda x: abs(x.pose.pose.position.x))
+                      key=lambda x: abs(x.pose.pose.pose.position.x))
 
     def _sort_tags_left_to_right(self, detections, id=0):
+        # type: (List[AprilTagDetection], int) -> List[AprilTagDetection]
         """Sort tags in view from left to right (by their x
         position in the camera frame). Removes/ignores tags close enough in the
         camera to likely be a block in the claw.
 
         Args:
-        * detections - apriltags2_ros/AprilTagDetectionArray the list
-          of detections.
+        * detections - List[AprilTagDetection] the list of detections.
         * id - the id of the tags to sort (0 - target, 256 - home)
 
         Returns:
@@ -389,11 +431,11 @@ class Planner:
         sorted_detections = []
 
         for detection in detections:
-            if (detection.id == id and
-                    detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
+            if (detection.id[0] == id and
+                    detection.pose.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
                 sorted_detections.append(detection)
 
-        return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
+        return sorted(sorted_detections, key=lambda x: x.pose.pose.pose.position.x)
 
     def sweep(self, angle=math.pi/4, dist=0.3,
               ignore=Obstacle.PATH_IS_CLEAR, throw=False):
@@ -1261,8 +1303,8 @@ class Planner:
     def set_home_locations(self):
         """Set the rover's home locations in the /odom and /map frames. Can
         be called manually, but is also called from Planner.drive_to() when
-        a home tag is seen."""
-
+        a home tag is seen.
+        """
         current_location = self.swarmie.get_odom_location()
         current_pose = current_location.get_pose()
         home_odom = Location(current_location.Odometry)
@@ -1270,7 +1312,7 @@ class Planner:
         detections = self.swarmie.get_latest_targets().detections
         try:
             for detection in detections:
-                if detection.id == 256:
+                if detection.id[0] == 256:
                     see_home_tag = True
                     home_detection = self._transform_to_odom(detection)
 
