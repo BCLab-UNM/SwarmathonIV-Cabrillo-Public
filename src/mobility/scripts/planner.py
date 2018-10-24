@@ -119,8 +119,8 @@ class Planner:
 
         self.swarmie.xform.waitForTransform(
             self.rovername + frame,
-            detection_pose.pose.header.frame_id,
-            detection_pose.pose.header.stamp,
+            detection_pose.header.frame_id,
+            detection_pose.header.stamp,
             rospy.Duration(timeout)
         )
 
