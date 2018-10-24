@@ -828,26 +828,25 @@ class Swarmie:
                         math.sqrt(x.pose.pose.pose.position.x**2
                                   + x.pose.pose.pose.position.y**2
                                   + x.pose.pose.pose.position.z**2))
-
-        nearest = blocks[0]
-
         # checks for hometag between rover and block.
-        if nearest.id[0]==256:
+        if blocks[0].id[0]==256:
             return None
+        nearest = PoseStamped()
+        nearest.header = blocks[0].pose.header
+        nearest.pose = blocks[0].pose.pose.pose
         try:
             self.xform.waitForTransform(self.rover_name + '/odom',
-                            nearest.pose.header.frame_id, 
-                            nearest.pose.header.stamp,
+                            nearest.header.frame_id, 
+                            nearest.header.stamp,
                             rospy.Duration(4.0))
+            near = self.xform.transformPose(self.rover_name + '/odom', nearest)
+            near = near.pose.position
         except tf.Exception as e:
-            print("bad newz dude:",e)
-        # returns the closes block to the rover. 
-        # make our own detection of the correct type
-        detection = PoseStamped()
-        detection.header = nearest.pose.header
-        detection.pose = nearest.pose.pose.pose
-        near = self.xform.transformPose(self.rover_name + '/odom', detection)
-        near = near.pose.position
+            print("Transform failed in get_nearest_block_location",e)
+            raise()
+        except  Exception as e:
+            print("get_nearest_block_location FAILED:",e)
+            raise()
         return near
         
     def set_search_exit_poses(self):
