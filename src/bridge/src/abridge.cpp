@@ -20,6 +20,7 @@
 #include <std_srvs/Empty.h>
 
 // Project messages
+#include <bridge/PidState.h>
 #include <swarmie_msgs/SwarmieIMU.h>
 
 //Package include
@@ -69,8 +70,12 @@ const double leftWheelCircumference = 0.3651; // avg for 3 rovers (in M)
 const double rightWheelCircumference = 0.3662; // avg for 3 rovers (in M)
 const int cpr = 8400; //"cycles per revolution" -- number of encoder increments per one wheel revolution
 
+// running counts of encoder ticks
 double leftTicks = 0;
 double rightTicks = 0;
+// wheel velocities in ticks/sec
+double leftTickVel = 0;
+double rightTickVel = 0;
 double odomTS = 0;
 
 // Immobilize robot until the first PID configuration.
@@ -89,7 +94,7 @@ ros::Publisher infoLogPublisher;
 ros::Publisher heartbeatPublisher;
 
 ros::Publisher debugPIDPublisher;
-geometry_msgs::Twist dbT;
+bridge::PidState pid_state;
 
 //Subscribers
 ros::Subscriber driveControlSubscriber;
@@ -130,7 +135,7 @@ int main(int argc, char **argv) {
     sonarCenterPublish = aNH.advertise<sensor_msgs::Range>("sonarCenter", 10);
     sonarRightPublish = aNH.advertise<sensor_msgs::Range>("sonarRight", 10);
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
-    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>("bridge/debugPID", 1, false);
+    debugPIDPublisher = aNH.advertise<bridge::PidState>("bridge/debugPID", 1, false);
     heartbeatPublisher = aNH.advertise<std_msgs::String>("bridge/heartbeat", 1, true);
 
     driveControlSubscriber = aNH.subscribe("driveControl", 10, driveCommandHandler);
@@ -268,8 +273,8 @@ void serialActivityTimer(const ros::TimerEvent& e) {
         double left_sp = leftMetersToTicks(speedCommand.linear.x) - angular_sp;
         double right_sp = rightMetersToTicks(speedCommand.linear.x) + angular_sp;
 
-		int l = round(left_pid.step(left_sp, leftTicks, odomTS));
-		int r = round(right_pid.step(right_sp, rightTicks, odomTS));
+		int l = round(left_pid.step(left_sp, leftTickVel, odomTS));
+		int r = round(right_pid.step(right_sp, rightTickVel, odomTS));
 
 		// Feed forward
 		l += ff * left_sp;
@@ -277,15 +282,26 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 
 		// Debugging: Report PID performance for tuning.
 		// Output of the PID is in Linear:
-		dbT.linear.x = l; // sp_linear * ff
-		dbT.linear.y = r;
-		dbT.linear.z = linear_sp;
+		pid_state.header.stamp = ros::Time::now();
+		pid_state.left_wheel.output = l; // sp_linear * ff
+		pid_state.right_wheel.output = r;
+		pid_state.left_wheel.error = left_sp - leftTickVel; // sp - feedback
+		pid_state.right_wheel.error = right_sp - rightTickVel; // sp - feedback
+		pid_state.left_wheel.p_term = left_pid.getP();
+		pid_state.right_wheel.p_term = right_pid.getP();
+		pid_state.left_wheel.i_term = left_pid.getI();
+		pid_state.right_wheel.i_term = right_pid.getI();
+		pid_state.left_wheel.d_term = left_pid.getD();
+		pid_state.right_wheel.d_term = right_pid.getD();
+		pid_state.linear_setpoint = linear_sp;
+		pid_state.left_wheel.setpoint = left_sp;
+		pid_state.right_wheel.setpoint = right_sp;
 
 		// Feedback function is in Angular:
-		dbT.angular.x = angular_sp;
-		dbT.angular.y = leftTicks;
-		dbT.angular.z = rightTicks;
-		debugPIDPublisher.publish(dbT);
+		pid_state.angular_setpoint = angular_sp;
+		pid_state.left_wheel.feedback = leftTickVel;
+		pid_state.right_wheel.feedback = rightTickVel;
+		debugPIDPublisher.publish(pid_state);
 
 		sprintf(moveCmd, "v,%d,%d\n", l, r); //format data for arduino into c string
 		usb.sendData(moveCmd);                      //send movement command to arduino over usb
@@ -387,8 +403,8 @@ void parseData(string str) {
 			    	vy = twistY / deltaT;
 
 			    	// Normalize ticks to ticks/s
-			    	leftTicks = leftTicks / deltaT;
-			    	rightTicks = rightTicks / deltaT;
+			    	leftTickVel = leftTicks / deltaT;
+			    	rightTickVel = rightTicks / deltaT;
 			    }
 		    	lastOdomTS = odomTS;
 

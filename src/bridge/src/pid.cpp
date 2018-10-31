@@ -41,7 +41,7 @@ void PID::reconfig(double p, double i, double d, double db, double st, double wu
 }
 
 void PID::reset() {
-	_out = _sum = _lasterr = _lastsp = _lasttime = 0;
+	_out = _sum = _lasterr = _lastsp = _lasttime = _P = _I = _D = 0;
 }
 
 double PID::getNow() {
@@ -54,16 +54,16 @@ double PID::step(double setpoint, double feedback, double now) {
 
 	double err = setpoint - feedback;
 
-	double P = 0;
-	double I = 0;
-	double D = 0;
+	_P = 0;
+	_I = 0;
+	_D = 0;
 
 	if (now == 0)
 		now = getNow();
 
 	if ( _lasttime != 0) {
 
-		P = err * _kp;
+		_P = err * _kp;
 
 		double elapsed = now - _lasttime;
 
@@ -82,27 +82,41 @@ double PID::step(double setpoint, double feedback, double now) {
 					_sum = _windup;
 			}
 		}
-		I = _sum;
+		_I = _sum;
 
-		D = _kd * ((setpoint - _lastsp) - (err - _lasterr)) / elapsed;
+		_D = _kd * ((err - _lasterr) - (setpoint - _lastsp)) / elapsed;
 		_lasterr = err;
 		_lastsp = setpoint;
 	}
 
 	_lasttime = now;
 
-	double delta = P + I + D;
+	double delta = _P + _I + _D;
 
-	if (fabs(delta) > _dband)
-		_out += delta;
+//	if (fabs(delta) > _dband)
+//		_out += delta;
+//
+//	if (_out > _hi)
+//		_out = _hi;
+//	else if (_out < _lo)
+//		_out = _lo;
+//
+//	if (fabs(_out) < _stiction)
+//	  return 0;
+//	else
+//	  return _out;
 
-	if (_out > _hi)
-		_out = _hi;
-	else if (_out < _lo)
-		_out = _lo;
+	return delta;
+}
 
-	if (fabs(_out) < _stiction)
-	  return 0;
-	else
-	  return _out;
+double PID::getP() {
+	return _P;
+}
+
+double PID::getI() {
+	return _I;
+}
+
+double PID::getD() {
+	return _D;
 }
