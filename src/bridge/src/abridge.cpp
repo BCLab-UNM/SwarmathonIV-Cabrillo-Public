@@ -106,8 +106,9 @@ ros::Subscriber modeSubscriber;
 ros::Timer publishTimer;
 ros::Timer publish_heartbeat_timer;
 
-// Feed-forward constant
-double ff;
+// Feed-forward constants
+double ff_l;
+double ff_r;
 
 //Callback handlers
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event);
@@ -170,7 +171,8 @@ void reconfigure(bridge::pidConfig &cfg, uint32_t level) {
 	db = cfg.groups.pid.db;
 	st = cfg.groups.pid.st;
 	wu = cfg.groups.pid.wu;
-	ff = cfg.groups.pid.ff;
+	ff_l = cfg.groups.pid.ff_l;
+	ff_r = cfg.groups.pid.ff_r;
 
 	left_pid.reconfig(p, i, d, db, st, wu);
 	right_pid.reconfig(p, i, d, db, st, wu);
@@ -277,8 +279,8 @@ void serialActivityTimer(const ros::TimerEvent& e) {
 		int r = round(right_pid.step(right_sp, rightTickVel, odomTS));
 
 		// Feed forward
-		l += ff * left_sp;
-		r += ff * right_sp;
+		l += ff_l * left_sp;
+		r += ff_r * right_sp;
 
 		// Debugging: Report PID performance for tuning.
 		// Output of the PID is in Linear:
@@ -462,7 +464,8 @@ void initialconfig() {
 	nh.getParam("db", initial_config.db);
 	nh.getParam("st", initial_config.st);
 	nh.getParam("wu", initial_config.wu);
-	nh.getParam("ff", initial_config.ff);
+	nh.getParam("ff_l", initial_config.ff_l);
+	nh.getParam("ff_r", initial_config.ff_r);
 
 	// Announce the configuration to the server
 	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client("abridge");

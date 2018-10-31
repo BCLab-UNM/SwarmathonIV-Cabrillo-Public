@@ -52,14 +52,15 @@
 
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
       <param name="device" value="$(arg swarmie_dev)"/>
-      <param name="scale" value="0.001" />
-      <param name="Kp" value="0.1" />
-      <param name="Ki" value="0.0" />
-      <param name="Kd" value="0.0" />
+      <param name="scale" value="0.1" />
+      <param name="Kp" value="0.005" />
+      <param name="Ki" value="0.15" />
+      <param name="Kd" value="0.01" />
       <param name="db" value="0.0" />
       <param name="st" value="0.0" />
       <param name="wu" value="65535" />
-      <param name="ff" value="0.009" />
+      <param name="ff_l" value="0.0095" />
+      <param name="ff_r" value="0.012" />
     </node>
 
     <node name="imu" pkg="mobility" type="cal_imu.py"
