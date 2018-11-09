@@ -84,6 +84,9 @@ class Location:
         return pose
 
     def mike_rox(self):
+        return False
+    
+    def carter_roxz(self):
         return True
 
     def at_goal(self, goal, distance):
