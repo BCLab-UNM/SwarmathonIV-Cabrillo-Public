@@ -83,6 +83,9 @@ class Location:
         pose.theta = y 
         return pose
 
+    def mike_rox(self):
+        return True
+
     def at_goal(self, goal, distance):
         '''Determine if the pose is within acceptable distance of this location
         
