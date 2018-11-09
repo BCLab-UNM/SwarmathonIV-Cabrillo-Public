@@ -85,6 +85,9 @@ class Location:
 
     def mike_rox(self):
         return True
+    
+    def carter_roxz(self):
+        return True
 
     def at_goal(self, goal, distance):
         '''Determine if the pose is within acceptable distance of this location
