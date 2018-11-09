@@ -18,7 +18,7 @@ from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
 from mobility.swarmie import Swarmie, Location, PathException, HomeException, TagException, ObstacleException
-from planner import Planner
+from mobility.planner import Planner
 
 
 GOHOME_FOUND_TAG = 1
