@@ -54,8 +54,8 @@ geometry_msgs::Pose2D currentLocation;
 bool isMoving = false;
 tf::TransformListener *cameraTF;
 
-double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
-double doubleSensorCollisionDist = 0.6; //meters the two sensors will flag obstacles
+double singleSensorCollisionDist = 0.75; // meters a single sensor will flag an obstacle
+double doubleSensorCollisionDist = 1.2; //meters the two sensors will flag obstacles
 const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
 const double MAP_RESOLUTION = 0.5; // map resolution, meters per cell
 unsigned int obstacle_status;
