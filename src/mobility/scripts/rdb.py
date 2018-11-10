@@ -69,7 +69,12 @@ if __name__ == '__main__' :
     print("rospy.get_namespace()", namespace)
     if namespace == '/':
         print(
+            '\033[31;1m',
             'ERROR: Attempting to start debugger in global namespace.',
+            '\033[0m',
+            sep=''
+        )
+        print(
             "Use: export ROS_NAMESPACE='rovername' in this terminal window",
             'or pass __ns:=rovername as an argument to this program.',
             sep='\n'
