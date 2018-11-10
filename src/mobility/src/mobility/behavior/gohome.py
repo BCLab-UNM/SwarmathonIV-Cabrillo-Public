@@ -105,6 +105,7 @@ def main(s, **kwargs):
     global initial_config, param_client
 
     swarmie = s
+    has_block = False
     if 'has_block' in kwargs : 
         has_block = kwargs['has_block']
     
@@ -116,9 +117,6 @@ def main(s, **kwargs):
          'DRIVE_SPEED': 0.25,
          'TURN_SPEED': 0.7
     }
-
-    if len(sys.argv) > 1 and sys.argv[1] == '--has-block':
-        has_block = True
 
     if not has_block:
         swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
@@ -191,5 +189,9 @@ def main(s, **kwargs):
     # didn't find anything
     return GOHOME_FAIL
 
-if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+if __name__ == '__main__' :
+    has_block = False
+    if len(sys.argv) > 1 and sys.argv[1] == '--has-block':
+        has_block = True
+
+    sys.exit(main(Swarmie(), has_block=has_block))
