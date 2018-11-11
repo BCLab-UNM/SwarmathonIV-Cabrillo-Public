@@ -2,6 +2,10 @@
 
 from __future__ import print_function
 
+if __name__ == '__main__':
+    from mobility.namespace import parse_args_and_set_namespace
+    parse_args_and_set_namespace()
+
 import os
 import sys
 import math
@@ -48,38 +52,7 @@ if __name__ == '__main__' :
     global quiet 
     quiet = False   
     
-    # if len(sys.argv) < 2 :
-    #      robolist = []
-    #      for topic in rospy.get_published_topics():
-    #          if topic[1] == 'sensor_msgs/Imu':
-    #              robolist.append(topic[0].split('/')[1])
-    #      robolist=list(set(robolist))
-    #      if len(robolist) < 1:
-    #          print('\033[91m',"No Rovers Detected",'\033[0m')
-    #          print ('usage:', sys.argv[0], '<rovername>')
-    #          exit (-1)
-    #      else:
-    #          rover = robolist[0] #in the future view subscribed topics and to pick a different rover
-    #          print("Detected rovers", robolist)
-    #          print('\033[92m',"Auto selected:",rover,'\033[0m')
-    # else:
-    #      rover = rospy.get_namespace().strip('/')
-
     namespace = rospy.get_namespace()
-    print("rospy.get_namespace()", namespace)
-    if namespace == '/':
-        print(
-            '\033[31;1m',
-            'ERROR: Attempting to start debugger in global namespace.',
-            '\033[0m',
-            sep=''
-        )
-        print(
-            "Use: export ROS_NAMESPACE='rovername' in this terminal window",
-            'or pass __ns:=rovername as an argument to this program.',
-            sep='\n'
-        )
-        sys.exit(-1)
     rover = namespace.strip('/')
 
     swarmie = Swarmie(tf_rover_name=rover)
