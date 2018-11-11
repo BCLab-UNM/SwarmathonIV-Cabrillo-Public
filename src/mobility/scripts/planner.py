@@ -1262,7 +1262,6 @@ class Planner:
         """Set the rover's home locations in the /odom and /map frames. Can
         be called manually, but is also called from Planner.drive_to() when
         a home tag is seen."""
-        self.swarmie.set_home_gps_location(self.swarmie.get_gps_location())
 
         current_location = self.swarmie.get_odom_location()
         current_pose = current_location.get_pose()

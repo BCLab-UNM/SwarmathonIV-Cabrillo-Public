@@ -12,7 +12,6 @@ from mobility.driver import State
 def heartbeat(event):
     global heartbeat_pub, status_pub
     heartbeat_pub.publish("ok")
-    status_pub.publish("okay")
 
 def mode(msg):
     global rover_mode, driver
@@ -42,7 +41,7 @@ def main() :
     launcher = roslaunch.scriptapi.ROSLaunch()
     launcher.start()
     task = None 
-    
+    status_pub.publish("Okay")
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
         if rover_mode > 1 :

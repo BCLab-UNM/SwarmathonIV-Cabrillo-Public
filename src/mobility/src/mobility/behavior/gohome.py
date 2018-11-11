@@ -2,7 +2,6 @@
 """gohome.py
 Tries to get the rover back to the home nest, while avoiding sonar and cube
 obstacles, and hopefully not dropping the cube in its claw.
-todo: test backup gps gohome functionality
 """
 from __future__ import print_function
 
@@ -24,28 +23,6 @@ from planner import Planner
 
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
-
-
-def get_gps_angle_and_dist():
-    global swarmie
-
-    # Use GPS to figure out about where we are.
-    # FIXME: We need to hanlde poor GPS fix.
-    loc = swarmie.wait_for_fix(distance=4, time=60).get_pose()
-    home = swarmie.get_home_gps_location()
-
-
-    dist = math.hypot(loc.y - home.y,
-                      loc.x - home.x)
-
-    angle = angles.shortest_angular_distance(loc.theta,
-                                             math.atan2(home.y - loc.y,
-                                                        home.y - loc.x))
-
-    # swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    # swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    return angle, dist
-
 
 def drive_straight_home_odom() :
     global swarmie
@@ -199,32 +176,14 @@ def main(s, **kwargs):
     except ObstacleException:
         pass # do spiral search
 
-    print('Starting spiral search')
+    swarmie.print_infoLog(swarmie.rover_name + " Starting spiral search")
+
+    print('Starting spiral search with location')
     try:
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
             sys.exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG:
-            sys.exit(GOHOME_FOUND_TAG)
-    except PathException:
-        pass  # try gps backup
-
-    # gps backup attempt
-    current_loc = swarmie.get_odom_location().get_pose()
-    angle, dist = get_gps_angle_and_dist()
-
-    goal = Point()
-    goal.x = current_loc.x + dist * math.cos(current_loc.theta + angle)
-    goal.y = current_loc.y + dist * math.sin(current_loc.theta + angle)
-
-    drive_home(has_block, goal)
-
-    print('Starting spiral search with gps location')
-    try:
-        drive_result = spiral_search(has_block)
-        if drive_result == MoveResult.OBSTACLE_HOME:
-            sys.exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG:
+        elif drive_result == MoveResult.OBSTACLE_TAG: #TODO: This may not actuly work and may make behavor of task restarting go home
             sys.exit(GOHOME_FOUND_TAG)
     except PathException:
         sys.exit(GOHOME_FAIL)
