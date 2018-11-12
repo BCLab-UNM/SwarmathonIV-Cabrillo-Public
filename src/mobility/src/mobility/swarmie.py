@@ -135,7 +135,6 @@ class Swarmie:
         self.rover_name = self.rover_name.strip('/')
            
         self.Obstacles = 0
-        self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
         self.Targets = AprilTagDetectionArray()
         self.TargetsDict = {}
@@ -190,14 +189,12 @@ class Swarmie:
         # These topics only update data. The data is used in other places to initialize
         # these and wait for valid data so that users of this data don't get errors.
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
-        rospy.Subscriber('odom/ekf', Odometry, self._map)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
         try:
             rospy.wait_for_message('odom/filtered', Odometry, 2)
-            rospy.wait_for_message('odom/ekf', Odometry, 2)
         except rospy.ROSException:
             rospy.logwarn(self.rover_name +
                           ': timed out waiting for filtered odometry data.')
@@ -217,10 +214,6 @@ class Swarmie:
     def _odom(self, msg) : 
         self.OdomLocation.Odometry = msg
             
-    @sync(swarmie_lock)
-    def _map(self, msg) : 
-        self.MapLocation.Odometry = msg
-
     @sync(swarmie_lock)
     def _obstacle(self, msg) :
         self.Obstacles &= ~msg.mask 
