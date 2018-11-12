@@ -12,7 +12,7 @@ import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
-from planner import Planner
+from mobility.planner import Planner
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
 '''Searcher node.''' 
