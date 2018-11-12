@@ -5,6 +5,19 @@ obstacles, and hopefully not dropping the cube in its claw.
 """
 from __future__ import print_function
 
+if __name__ == '__main__':
+    from mobility.namespace import parser, set_namespace
+
+    parser.add_argument(
+        '--has-block',
+        action='store_true',
+        help=('whether the rover currently has a block, and should ' +
+              'accordingly either avoid cubes or stop for them')
+    )
+    args = parser.parse_args()
+
+    set_namespace(args.rovername)
+
 import sys
 import math 
 import rospy
@@ -105,6 +118,7 @@ def main(s, **kwargs):
     global initial_config, param_client
 
     swarmie = s
+    has_block = False
     if 'has_block' in kwargs : 
         has_block = kwargs['has_block']
     
@@ -116,9 +130,6 @@ def main(s, **kwargs):
          'DRIVE_SPEED': 0.25,
          'TURN_SPEED': 0.7
     }
-
-    if len(sys.argv) > 1 and sys.argv[1] == '--has-block':
-        has_block = True
 
     if not has_block:
         swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
@@ -191,5 +202,5 @@ def main(s, **kwargs):
     # didn't find anything
     return GOHOME_FAIL
 
-if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+if __name__ == '__main__' :
+    sys.exit(main(Swarmie(), has_block=args.has_block))
