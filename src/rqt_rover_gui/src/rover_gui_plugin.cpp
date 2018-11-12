@@ -194,7 +194,6 @@ namespace rqt_rover_gui
     ui.map_frame->setMapData(map_data);
     ui.map_frame->createPopoutWindow(map_data); // This has to happen before the display radio buttons are set
     ui.map_frame->setDisplayEncoderData(ui.encoder_checkbox->isChecked());
-    ui.map_frame->setDisplayEKFData(ui.ekf_checkbox->isChecked());
 
     ui.joystick_frame->setHidden(false);
 
@@ -434,28 +433,6 @@ void RoverGUIPlugin::joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg)
         joystick_publisher.publish(joy_msg);
      }
 }
-
-void RoverGUIPlugin::EKFEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event)
-{
-    const std::string& publisher_name = event.getPublisherName();
-    const ros::M_string& header = event.getConnectionHeader();
-    ros::Time receipt_time = event.getReceiptTime();
-
-    const boost::shared_ptr<const nav_msgs::Odometry> msg = event.getMessage();
-
-    float x = msg->pose.pose.position.x;
-    float y = msg->pose.pose.position.y;
-
-    QString x_str; x_str.setNum(x);
-    QString y_str; y_str.setNum(y);
-    // Extract rover name from the message source. Publisher is in the format /*rover_name*_MAP
-    size_t found = publisher_name.find("/", 1);
-    string rover_name = publisher_name.substr(1,found-1);
-
-    // Store map info for the appropriate rover name
-    ui.map_frame->addToEKFRoverPath(rover_name, x, y);
-}
-
 
 void RoverGUIPlugin::encoderEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event)
 {
@@ -783,14 +760,12 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
         status_subscribers[*it].shutdown();
         waypoint_subscribers[*it].shutdown();
         encoder_subscribers[*it].shutdown();
-        ekf_subscribers[*it].shutdown();
         rover_diagnostic_subscribers[*it].shutdown();
 
         // Delete the subscribers
         status_subscribers.erase(*it);
         waypoint_subscribers.erase(*it);
         encoder_subscribers.erase(*it);
-        ekf_subscribers.erase(*it);
         rover_diagnostic_subscribers.erase(*it);
         
         // Shudown Publishers
@@ -895,7 +870,6 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
         waypoint_subscribers[*i] = nh.subscribe("/"+*i+"/waypoints", 10, &RoverGUIPlugin::waypointEventHandler, this);
         obstacle_subscribers[*i] = nh.subscribe("/"+*i+"/obstacle", 10, &RoverGUIPlugin::obstacleEventHandler, this);
         encoder_subscribers[*i] = nh.subscribe("/"+*i+"/odom/filtered", 10, &RoverGUIPlugin::encoderEventHandler, this);
-        ekf_subscribers[*i] = nh.subscribe("/"+*i+"/odom/ekf", 10, &RoverGUIPlugin::EKFEventHandler, this);
         rover_diagnostic_subscribers[*i] = nh.subscribe("/"+*i+"/diagnostics", 1, &RoverGUIPlugin::diagnosticEventHandler, this);
 
         RoverStatus rover_status;
@@ -1154,7 +1128,6 @@ void RoverGUIPlugin::GPSCheckboxToggledEventHandler(bool checked)
 
 void RoverGUIPlugin::EKFCheckboxToggledEventHandler(bool checked)
 {
-    ui.map_frame->setDisplayEKFData(checked);
 }
 
 void RoverGUIPlugin::encoderCheckboxToggledEventHandler(bool checked)
@@ -1963,13 +1936,6 @@ void RoverGUIPlugin::clearSimulationButtonEventHandler()
       }
 
     encoder_subscribers.clear();
-
-    for (map<string,ros::Subscriber>::iterator it=ekf_subscribers.begin(); it!=ekf_subscribers.end(); ++it) {
-      qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-      it->second.shutdown();
-    }
-
-    ekf_subscribers.clear();
     us_center_subscriber.shutdown();
     us_left_subscriber.shutdown();
     us_right_subscriber.shutdown();

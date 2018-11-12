@@ -2,7 +2,11 @@
 
 from __future__ import print_function
 
-import sys 
+if __name__ == '__main__':
+    from mobility.namespace import parse_args_and_set_namespace
+    parse_args_and_set_namespace()
+
+import sys
 import math 
 import rospy 
 

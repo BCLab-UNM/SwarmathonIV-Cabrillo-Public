@@ -2,6 +2,10 @@
 
 from __future__ import print_function
 
+if __name__ == '__main__':
+    from mobility.namespace import parse_args_and_set_namespace
+    parse_args_and_set_namespace()
+
 import sys
 import rospy
 import tf
@@ -12,7 +16,7 @@ import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
-from planner import Planner
+from mobility.planner import Planner
 from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
 '''Searcher node.''' 
