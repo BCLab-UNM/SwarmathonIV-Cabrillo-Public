@@ -55,7 +55,7 @@ if __name__ == '__main__' :
     namespace = rospy.get_namespace()
     rover = namespace.strip('/')
 
-    swarmie = Swarmie(tf_rover_name=rover)
+    swarmie = Swarmie(tf_rover_name=rover, node_name='rdb')
     print ('Connected.')
     
     rospy.Subscriber('status', String, lambda msg : logHandler('/status:', msg))
