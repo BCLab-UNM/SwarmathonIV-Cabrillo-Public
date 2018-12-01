@@ -315,10 +315,13 @@ namespace rqt_rover_gui
     	}
     }
 
-    bool singlerover;
-    if (nh.getParam("single", singlerover)) {
-    	if (singlerover) {
-    		ui.override_num_rovers_checkbox->setChecked(true);
+    int numrovers;
+    if (nh.getParam("numrovers", numrovers)) {
+    	ui.override_num_rovers_checkbox->setChecked(true);
+    	if (numrovers > 0 && numrovers <= 8) {
+    		ui.custom_num_rovers_combobox->setCurrentIndex(numrovers);
+    	}
+    	else {
     		ui.custom_num_rovers_combobox->setCurrentIndex(1);
     	}
     }
