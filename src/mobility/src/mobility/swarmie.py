@@ -806,8 +806,6 @@ class Swarmie:
 
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
         '''
-        global rovername, swarmie
-
         # Finds all visible apriltags
         if use_targets_buffer is True:
             blocks = self.get_targets_buffer().detections
