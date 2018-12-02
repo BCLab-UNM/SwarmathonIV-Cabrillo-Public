@@ -1,6 +1,7 @@
 <launch>
 
-  <arg name="world" default="$(env PWD)/simulation/worlds/swarmathon.world"/>
+  <arg name="world"
+       default="$(env PWD)/simulation/worlds/2018_competition_world_files/prelim2.world"/>
   <arg name="round" default="prelim"/>
   <arg name="numrovers" default="1"/>
   <arg name="startsim" default="false"/>
