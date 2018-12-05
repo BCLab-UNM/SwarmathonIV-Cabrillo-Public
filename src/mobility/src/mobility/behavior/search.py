@@ -2,6 +2,11 @@
 
 from __future__ import print_function
 
+speeds = {
+    'linear'  : 0.25,
+    'angular' : 0.7,
+}
+
 if __name__ == '__main__':
     from mobility.namespace import parse_args_and_set_namespace
     parse_args_and_set_namespace()
@@ -26,11 +31,11 @@ def turnaround():
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
 def wander():
-    global swarmie
+    global swarmie, speeds
     try :
         rospy.loginfo("Wandering...")
-        swarmie.turn(random.gauss(0, math.pi/6))
-        swarmie.drive(random.gauss(2.5, 1))
+        swarmie.turn(random.gauss(0, math.pi/6), **speeds)
+        swarmie.drive(random.gauss(2.5, 1), **speeds)
 
         rospy.loginfo("Circling...")
         swarmie.circle()
@@ -79,37 +84,16 @@ def set_search_exit_poses():
 
 
 def main(s, **kwargs):
-    global swarmie, planner, found_tag
-    global initial_config, param_client
+    global swarmie, planner, found_tag, speeds
 
     swarmie = s
     found_tag = False
-    SEARCH_SPEEDS = {
-         'DRIVE_SPEED': 0.25,
-         'TURN_SPEED': 0.7
-    }
 
     planner = Planner(swarmie)
 
     swarmie.fingers_open()
     swarmie.wrist_middle()
 
-    # Change drive and turn speeds for this behavior, and register shutdown
-    # hook to reset them at exit.
-    if not rospy.has_param('search/speeds'):
-        speeds = SEARCH_SPEEDS
-        rospy.set_param('search/speeds', speeds)
-    else:
-        speeds = rospy.get_param('search/speeds',
-                                 default=SEARCH_SPEEDS)
-
-    param_client = dynamic_reconfigure.client.Client('mobility')
-    config = param_client.get_configuration()
-    initial_config = {
-        'DRIVE_SPEED': config['DRIVE_SPEED'],
-        'TURN_SPEED': config['TURN_SPEED']
-    }
-    param_client.update_configuration(speeds)
     rospy.on_shutdown(handle_exit)
 
     if not planner.sees_home_tag():
