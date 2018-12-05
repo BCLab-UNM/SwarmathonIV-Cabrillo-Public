@@ -20,8 +20,8 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
-from geometry_msgs.msg import Point, Twist, Pose2D
-from apriltags2_ros.msg import AprilTagDetectionArray 
+from geometry_msgs.msg import Point, Twist, Pose2D, PoseStamped
+from apriltags2_ros.msg import AprilTagDetectionArray, AprilTagDetection
 from rospy.numpy_msg import numpy_msg
 from grid_map_msgs.msg import GridMap
 from mapping import RoverMap 
@@ -227,11 +227,21 @@ class Swarmie:
         self.Obstacles |= msg.msg 
 
     @sync(swarmie_lock)
-    def _targets(self, msg) : 
+    def _targets(self, msg) :
+        # convert the msg structure back to the old structure(apriltags_ros/AprilTagDetectionArray) from new(apriltags2_ros/AprilTagDetectionArray)
+        newdetections = list()
+        for detection in msg.detections:
+            atd = AprilTagDetection()
+            atd.pose = PoseWithCovarianceStamped_to_PoseStamped(detection.pose)
+            atd.id = detection.id[0]  # Because of the tag bundles, but we only want the first element
+            atd.size = detection.size
+            newdetections.append(atd)
+        msg.detections = newdetections
+        # chuck the old detections
         self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-        #adding currently seen tags to the dict
+        # adding currently seen tags to the dict
         self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-        #get the tags from the dict and saves them to Targets
+        # get the tags from the dict and saves them to Targets
         self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
     
         if self._is_moving():
@@ -963,4 +973,35 @@ class Swarmie:
             return(True)
         else:
             return(False)
-        
+
+#apriltags2_ros/AprilTagDetectionArray
+#std_msgs/Header header
+#  uint32 seq
+#  time stamp
+#  string frame_id
+#apriltags2_ros/AprilTagDetection[] detections
+#  int32[] id
+#  float64[] size
+#  geometry_msgs/PoseWithCovarianceStamped pose
+#    std_msgs/Header header
+#      uint32 seq
+#      time stamp
+#      string frame_id
+#    geometry_msgs/PoseWithCovariance pose
+#      geometry_msgs/Pose pose
+#        geometry_msgs/Point position
+#          float64 x
+#          float64 y
+#          float64 z
+#        geometry_msgs/Quaternion orientation
+#          float64 x
+#          float64 y
+#          float64 z
+#          float64 w
+#      float64[36] covariance
+def PoseWithCovarianceStamped_to_PoseStamped(PwCS):
+    '''Helper function to convert PoseWithCovarianceStamped to PoseStamped this is to resolve the change with apriltags 2'''
+    ps = PoseStamped()
+    ps.header = PwCS.header
+    ps.pose = PwCS.pose.pose
+    return ps #ps
