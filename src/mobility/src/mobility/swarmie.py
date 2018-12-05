@@ -136,11 +136,8 @@ class Swarmie:
            
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.Targets = AprilTagDetectionArray()
-        self.TargetsDict = {}
-        self.TargetsBuffer = AprilTagDetectionArray()
-        self.TargetsDictBuffer = {}
-        self.targets_timeout = 3
+        self.targets = [None]*90  # The rolling buffer of targets messages
+        self.targets_index = 89;  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
         anon = False
@@ -220,28 +217,9 @@ class Swarmie:
         self.Obstacles |= msg.msg 
 
     @sync(swarmie_lock)
-    def _targets(self, msg) : 
-        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-        #adding currently seen tags to the dict
-        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-        #get the tags from the dict and saves them to Targets
-        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
-    
-        if self._is_moving():
-            self.Targets = msg
-            #create a dict of tags as values and rounded coordinates as the key
-            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
-            
-        else:
-            #remove old tags from the dict
-            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-            #adding currently seen tags to the dict
-            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-            #get the tags from the dict and saves them to Targets
-            self.Targets.detections = self.TargetsDict.values() 
-    
-    #self.TargetsBuffer = AprilTagDetectionArray()
-    #self.TargetsDictBuffer = {}
+    def _targets(self, msg):
+        self.targets_index = (self.targets_index + 1) % 90;
+        self.targets[self.targets_index] = msg
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -537,12 +515,33 @@ class Swarmie:
         self.wrist_up()
     
     def get_latest_targets(self) :
-        '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
-        return self.Targets
+        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        and will be affected by twinkeling """
+        # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
+        return self.targets[self.targets_index] 
     
-    def get_targets_buffer(self) :
-        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
-        return self.TargetsBuffer
+    def get_targets_buffer(self, size=90, age=8, cleanup=True) :
+        """ Return a buffer of the target detections from the AprilTagDetectionArray"""
+        buffer = self.targets[self.targets_index]
+        for i in range(1, size):
+            if self.targets[(self.targets_index + i) % 90]:
+                buffer.detections.extend(self.targets[(self.targets_index + i) % 90].detections)
+        if cleanup:
+            buffer.detections = self.detection_cleanup(buffer.detections, age)
+        return buffer
+
+    def detection_cleanup(self, detections, age=8):  # does not need to be in Swarmie, static?
+        """ Returns the detections with the duplicate tags and old tags removed """
+        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
+        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
+        targets_dict = {(round(tag.pose.pose.position.x, 2),
+                        round(tag.pose.pose.position.y, 2),
+                        round(tag.pose.pose.position.z, 2)):
+                        tag for tag in detections
+                        if ((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs)}
+        # get the tags from the dict and saves them to detections
+        detections = targets_dict.values()
+        return detections
     
     def get_obstacle_map(self):
         '''Return a `mapping.msg.RoverMap` that is the obstacle map.
