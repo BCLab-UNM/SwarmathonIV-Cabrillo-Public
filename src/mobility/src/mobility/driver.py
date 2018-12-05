@@ -65,6 +65,9 @@ class State:
     ROTATE_THRESHOLD           = 0
     DRIVE_ANGLE_ABORT          = 0
 
+    DRIVE_SPEED_MAX            = 0.6
+    TURN_SPEED_MAX             = 1.2 
+    
     def __init__(self):
         self.MapLocation = Location(None)
         self.OdomLocation =  Location(None)
@@ -239,6 +242,22 @@ class State:
                     elif req_r < 0 :
                         req_r -= State.GOAL_DISTANCE_OK / 2.0
                     
+                    if self.Doing.request.linear == 0:
+                        self.Doing.request.linear = State.DRIVE_SPEED                        
+                        
+                    if self.Doing.request.linear > State.DRIVE_SPEED_MAX:
+                        self.Doing.request.linear = State.DRIVE_SPEED_MAX
+                    elif self.Doing.request.linear <= 0:
+                        self.Doing.request.linear = State.DRIVE_SPEED
+                        
+                    if self.Doing.request.angular == 0:
+                        self.Doing.request.angular = State.TURN_SPEED 
+
+                    if self.Doing.request.angular > State.TURN_SPEED_MAX:
+                        self.Doing.request.angular = State.TURN_SPEED_MAX
+                    elif self.Doing.request.linear <= 0:
+                        self.Doing.request.angular = State.DRIVE_SPEED
+                                            
                     cur = self.OdomLocation.get_pose()
                     self.Goal = Pose2D()
                     self.Goal.theta = cur.theta + req_theta
@@ -252,7 +271,7 @@ class State:
                         self.CurrentState = State.STATE_TURN
                         
                     self.__check_obstacles()
-                    
+
 
         elif self.CurrentState == State.STATE_TURN :
             self.print_debug('TURN')
@@ -261,9 +280,9 @@ class State:
             heading_error = angles.shortest_angular_distance(cur.theta, self.Goal.theta)
             if abs(heading_error) > State.ROTATE_THRESHOLD :
                 if heading_error < 0 :
-                    self.drive(0, -State.TURN_SPEED, State.DRIVE_MODE_PID)
+                    self.drive(0, -self.Doing.request.angular, State.DRIVE_MODE_PID)
                 else:
-                    self.drive(0, State.TURN_SPEED, State.DRIVE_MODE_PID)
+                    self.drive(0, self.Doing.request.angular, State.DRIVE_MODE_PID)
             else:
                 self.CurrentState = State.STATE_DRIVE
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
@@ -283,7 +302,7 @@ class State:
                 self._stop_now(MoveResult.PATH_FAIL)
                 self.drive(0, 0, State.DRIVE_MODE_STOP)
             else:
-                self.drive(State.DRIVE_SPEED,
+                self.drive(self.Doing.request.linear,
                            heading_error * State.HEADING_RESTORE_FACTOR,
                            State.DRIVE_MODE_PID)
     

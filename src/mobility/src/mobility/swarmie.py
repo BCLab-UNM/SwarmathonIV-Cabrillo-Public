@@ -252,6 +252,12 @@ class Swarmie:
         if 'timeout' in kwargs :
             request.timeout = kwargs['timeout']
 
+        if 'linear' in kwargs:
+            request.linear = kwargs['linear']
+
+        if 'angular' in kwargs:
+            request.angular = kwargs['angular']
+            
         value = self.control([request]).result.result
 
         if 'throw' not in kwargs or kwargs['throw'] : 
@@ -267,7 +273,7 @@ class Swarmie:
                 raise AbortException(value)
             elif value == MoveResult.TIMEOUT :
                 raise TimeoutException(value)
-        
+
         return value
         
     def stop(self):
@@ -332,6 +338,8 @@ class Swarmie:
         * `ignore` (`int`) - Bitmask with Obstacle messages that will be ignored while driving.         
         * `throw` (`bool`) - Raise a DriveException if an obstacle is encountered (default True). 
         * `timeout` (`int`) - The command will fail after this number of seconds (defulat: 120)
+        * `linear` (`float`) - The linear velocity used to execute the command (default is set with DynParam)
+        * `angular` (`flat`) - The angular velocity used to execute the command (default is set with DynParam)
 
         Returns:
             
