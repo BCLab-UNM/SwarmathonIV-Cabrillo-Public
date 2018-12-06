@@ -242,21 +242,15 @@ class State:
                     elif req_r < 0 :
                         req_r -= State.GOAL_DISTANCE_OK / 2.0
                     
-                    if self.Doing.request.linear == 0:
-                        self.Doing.request.linear = State.DRIVE_SPEED                        
-                        
                     if self.Doing.request.linear > State.DRIVE_SPEED_MAX:
                         self.Doing.request.linear = State.DRIVE_SPEED_MAX
                     elif self.Doing.request.linear <= 0:
                         self.Doing.request.linear = State.DRIVE_SPEED
                         
-                    if self.Doing.request.angular == 0:
-                        self.Doing.request.angular = State.TURN_SPEED 
-
                     if self.Doing.request.angular > State.TURN_SPEED_MAX:
                         self.Doing.request.angular = State.TURN_SPEED_MAX
-                    elif self.Doing.request.linear <= 0:
-                        self.Doing.request.angular = State.DRIVE_SPEED
+                    elif self.Doing.request.angular <= 0:
+                        self.Doing.request.angular = State.TURN_SPEED
                                             
                     cur = self.OdomLocation.get_pose()
                     self.Goal = Pose2D()
