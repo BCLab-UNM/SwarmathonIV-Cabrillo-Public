@@ -22,7 +22,7 @@ from mapping.srv import GetNavPlanResponse
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, HomeException, TagException, PathException, ObstacleException
+from mobility.swarmie import swarmie, Location, HomeException, TagException, PathException, ObstacleException
 
 
 class Planner:
@@ -53,7 +53,7 @@ class Planner:
     # as a part of its avoidance behavior. It seems to work for the most part.
     # FAIL_COUNT_LIMIT = 10
 
-    def __init__(self, swarmie, use_rviz_nav_goal=False):
+    def __init__(self, use_rviz_nav_goal=False):
         """Create a new Planner.
         Args:
         * swarmie - the Swarmie object you've already instantiated
@@ -62,7 +62,6 @@ class Planner:
           those goals using Planner.drive_to()
         """
         self.rovername = swarmie.rover_name
-        self.swarmie = swarmie
         self.current_state = Planner.STATE_IDLE
         self.prev_state = Planner.STATE_IDLE
         self.cur_loc = Location(None)
@@ -99,14 +98,14 @@ class Planner:
         Raises:
         * tf.Exception if timeout is exceeded
         """
-        self.swarmie.xform.waitForTransform(
+        swarmie.xform.waitForTransform(
             self.rovername + '/base_link',
             detection.pose.header.frame_id,
             detection.pose.header.stamp,
             rospy.Duration(timeout)
         )
 
-        return self.swarmie.xform.transformPose(self.rovername + '/base_link',
+        return swarmie.xform.transformPose(self.rovername + '/base_link',
                                                 detection.pose)
 
     def _transform_to_odom(self, detection, timeout=3.0):
@@ -123,14 +122,14 @@ class Planner:
         Raises:
         * tf.Exception if timeout is exceeded
         """
-        self.swarmie.xform.waitForTransform(
+        swarmie.xform.waitForTransform(
             self.rovername + '/odom',
             detection.pose.header.frame_id,
             detection.pose.header.stamp,
             rospy.Duration(timeout)
         )
 
-        return self.swarmie.xform.transformPose(self.rovername + '/odom',
+        return swarmie.xform.transformPose(self.rovername + '/odom',
                                                 detection.pose)
 
     def is_inside_home_ring(self, detections):
@@ -310,12 +309,12 @@ class Planner:
         """Turn and face the home tag nearest the center of view if we
         see one. Does nothing if no home tag is seen."""
         home_detections = self._sort_home_tags_nearest_center(
-            self.swarmie.get_latest_targets().detections
+            swarmie.get_latest_targets().detections
         )
         if len(home_detections) > 0:
             angle = self.get_angle_to_face_detection(home_detections[0])
-            current_heading = self.swarmie.get_odom_location().get_pose().theta
-            self.swarmie.set_heading(
+            current_heading = swarmie.get_odom_location().get_pose().theta
+            swarmie.set_heading(
                 current_heading + angle,
                 ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
             )
@@ -324,7 +323,7 @@ class Planner:
         """Returns true if the rover can see a home tag.
         Returns false otherwise.
         """
-        detections = self.swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets().detections
 
         for detection in detections:
             if detection.id == 256:
@@ -421,26 +420,26 @@ class Planner:
         * mobility.Swarmie.ObstacleException - if sonar is blocked, throw=True,
           and sonar isn't being ignored.
         """
-        start_heading = self.swarmie.get_odom_location().get_pose().theta
+        start_heading = swarmie.get_odom_location().get_pose().theta
         ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
 
         try:
-            self.swarmie.set_heading(start_heading - angle, ignore=ignore)
-            self.swarmie.drive(dist, ignore=ignore)
-            self.swarmie.drive(-dist, ignore=ignore)
-            self.swarmie.set_heading(start_heading + angle, ignore=ignore)
-            self.swarmie.drive(dist, ignore=ignore)
-            self.swarmie.drive(-dist, ignore=ignore)
-            self.swarmie.set_heading(start_heading, ignore=ignore)
-            # self.swarmie.timed_drive(time, linear, -angular, ignore=ignore)
-            # self.swarmie.timed_drive(time, -linear, angular, ignore=ignore)
+            swarmie.set_heading(start_heading - angle, ignore=ignore)
+            swarmie.drive(dist, ignore=ignore)
+            swarmie.drive(-dist, ignore=ignore)
+            swarmie.set_heading(start_heading + angle, ignore=ignore)
+            swarmie.drive(dist, ignore=ignore)
+            swarmie.drive(-dist, ignore=ignore)
+            swarmie.set_heading(start_heading, ignore=ignore)
+            # swarmie.timed_drive(time, linear, -angular, ignore=ignore)
+            # swarmie.timed_drive(time, -linear, angular, ignore=ignore)
 
             # physical rover doesn't go left as well
-            # if not self.swarmie.simulator_running():
+            # if not swarmie.simulator_running():
             #     angular *= 1.5
             #     linear *= 1.2
-            # self.swarmie.timed_drive(time, linear, angular, ignore=ignore)
-            # self.swarmie.timed_drive(time, -linear, -angular, ignore=ignore)
+            # swarmie.timed_drive(time, linear, angular, ignore=ignore)
+            # swarmie.timed_drive(time, -linear, -angular, ignore=ignore)
 
         except HomeException:
             if throw:
@@ -483,17 +482,17 @@ class Planner:
         * mobility.Swarmie.TagException - if targets tags aren't being
           ignored, throw=True, and a target is seen.
         """
-        start_heading = self.swarmie.get_odom_location().get_pose().theta
+        start_heading = swarmie.get_odom_location().get_pose().theta
         ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
 
         # Planner._clear() uses Swarmie.set_heading(), which doesn't have
         # an option to return the MoveResult instead of raising an
         # exception. So catch exceptions, and return appropriate result.
         try:
-            self.swarmie.set_heading(start_heading - angle, ignore=ignore)
-            self.swarmie.set_heading(start_heading + angle, ignore=ignore)
+            swarmie.set_heading(start_heading - angle, ignore=ignore)
+            swarmie.set_heading(start_heading + angle, ignore=ignore)
             if reset_heading:
-                self.swarmie.set_heading(start_heading, ignore=ignore)
+                swarmie.set_heading(start_heading, ignore=ignore)
         except HomeException:
             if throw:
                 raise
@@ -524,13 +523,13 @@ class Planner:
             # be in view inside the home nest.
             ignore |= Obstacle.TAG_TARGET | Obstacle.TAG_HOME
 
-        cur_heading = self.swarmie.get_odom_location().get_pose().theta
-        turn_result = self.swarmie.set_heading(
+        cur_heading = swarmie.get_odom_location().get_pose().theta
+        turn_result = swarmie.set_heading(
             cur_heading + angle,
             ignore=ignore,
             throw=False
         )
-        drive_result = self.swarmie.drive(dist,
+        drive_result = swarmie.drive(dist,
                                           ignore=Obstacle.SONAR_BLOCK,
                                           throw=False)
 
@@ -545,7 +544,7 @@ class Planner:
         Returns:
         * angle - the angle you need to turn, in radians
         """
-        start = self.swarmie.get_odom_location().get_pose()
+        start = swarmie.get_odom_location().get_pose()
         return angles.shortest_angular_distance(
             start.theta,
             math.atan2(point.y - start.y, point.x - start.x)
@@ -563,7 +562,7 @@ class Planner:
         Swarmie.get_nearest_block_location() and does nothing.
         """
         try:
-            block = self.swarmie.get_nearest_block_location(
+            block = swarmie.get_nearest_block_location(
                 use_targets_buffer=True
             )
         except tf.Exception:
@@ -573,7 +572,7 @@ class Planner:
 
         if block is not None:
             angle = self.get_angle_to_face_point(block)
-            self.swarmie.turn(angle, ignore=Obstacle.IS_VISION, throw=False)
+            swarmie.turn(angle, ignore=Obstacle.IS_VISION, throw=False)
 
         return
 
@@ -592,7 +591,7 @@ class Planner:
 
         for i in range(4):
             try:
-                self.plan = self.swarmie.get_plan(
+                self.plan = swarmie.get_plan(
                     self.goal,
                     tolerance=self.tolerance,
                     use_home_layer=self.avoid_home
@@ -640,7 +639,7 @@ class Planner:
         right = 0
 
         for i in range(count):
-            obstacle = self.swarmie.get_obstacle_condition()
+            obstacle = swarmie.get_obstacle_condition()
 
             if obstacle & Obstacle.SONAR_LEFT == Obstacle.SONAR_LEFT:
                 left += 1
@@ -670,19 +669,19 @@ class Planner:
         * drive_result - MoveResult of the avoidance attempt
         """
         sorted_detections = self._sort_tags_left_to_right(
-            self.swarmie.get_latest_targets().detections,
+            swarmie.get_latest_targets().detections,
             id=id
         )
 
         # if count == 3:  # last resort
         #     self.current_state = Planner.STATE_DRIVE
         #     angle = self._get_angle_to_face(point)
-        #     self.swarmie.turn(
+        #     swarmie.turn(
         #         angle,
         #         ignore=Obstacle.TAG_TARGET,
         #         throw=False
         #     )
-        #     self.result = self.swarmie.drive(
+        #     self.result = swarmie.drive(
         #         .75,
         #         ignore=Obstacle.TAG_TARGET,
         #         throw=False
@@ -694,7 +693,7 @@ class Planner:
                   "and clearing.")
             self.prev_state = self.current_state
             self.current_state = Planner.STATE_DRIVE
-            self.swarmie.drive(
+            swarmie.drive(
                 0.1,
                 ignore=Obstacle.SONAR_BLOCK,
                 throw=False
@@ -770,8 +769,8 @@ class Planner:
         """
         # Only back up if we're far enough away from home for it
         # to be safe. Don't want to back up into the nest!
-        home_loc = self.swarmie.get_home_odom_location()
-        current_loc = self.swarmie.get_odom_location().get_pose()
+        home_loc = swarmie.get_home_odom_location()
+        current_loc = swarmie.get_odom_location().get_pose()
         dist = math.sqrt((home_loc.x - current_loc.x) ** 2
                          + (home_loc.y - current_loc.y) ** 2)
         if dist > 1.5:
@@ -812,7 +811,7 @@ class Planner:
             # turning right, pay attention to right sensor only
             cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT
 
-        drive_result = self.swarmie.turn(
+        drive_result = swarmie.turn(
             turn_angle,
             ignore=cur_ignore,
             throw=False
@@ -830,7 +829,7 @@ class Planner:
                     self.prev_state == Planner.STATE_AVOID_RIGHT or
                     self.prev_state == Planner.STATE_AVOID_REVERSE):
                 dist = -0.25
-            self.swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
+            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
 
             turn_angle = self.get_angle_to_face_point(point)
             if turn_angle > 0:
@@ -840,7 +839,7 @@ class Planner:
                 cur_ignore = (ignore |
                               Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT)
 
-            drive_result = self.swarmie.turn(
+            drive_result = swarmie.turn(
                 turn_angle,
                 ignore=cur_ignore,
                 throw=False
@@ -857,7 +856,7 @@ class Planner:
                     self.prev_state == Planner.STATE_AVOID_RIGHT or
                     self.prev_state == Planner.STATE_AVOID_REVERSE):
                 dist = -0.25
-            self.swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
+            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
 
         turn_angle = self.get_angle_to_face_point(point)
 
@@ -888,7 +887,7 @@ class Planner:
             turns.append(turn_angle)
 
         for turn in turns:
-            drive_result = self.swarmie.turn(
+            drive_result = swarmie.turn(
                 turn,
                 ignore=cur_ignore,
                 throw=False
@@ -978,7 +977,7 @@ class Planner:
         self.goal.x = goal.x
         self.goal.y = goal.y
 
-        self.cur_loc = self.swarmie.get_odom_location()
+        self.cur_loc = swarmie.get_odom_location()
         self.current_state = Planner.STATE_IDLE
         self.prev_state = Planner.STATE_IDLE
 
@@ -1004,7 +1003,7 @@ class Planner:
             )
 
             if self.result == MoveResult.SUCCESS:
-                self.result = self.swarmie.drive_to(
+                self.result = swarmie.drive_to(
                     point,
                     ignore=Obstacle.SONAR_BLOCK,
                     throw=False
@@ -1036,25 +1035,25 @@ class Planner:
                     count += 1
                     self.fail_count += 1
 
-                    detections = self.swarmie.get_latest_targets().detections
+                    detections = swarmie.get_latest_targets().detections
                     inside_home = self.is_inside_home_ring(detections)
                     if inside_home:
                         print('\nGetting out of the home ring!!')
                         angle, dist = self.get_angle_and_dist_to_escape_home(
                             detections
                         )
-                        self.swarmie.turn(
+                        swarmie.turn(
                             angle,
                             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
                         )
-                        self.result = self.swarmie.drive(
+                        self.result = swarmie.drive(
                             dist,
                             ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
                         )
 
                         if self.avoid_home is False:
                             # turn back around
-                            self.swarmie.turn(
+                            swarmie.turn(
                                 math.pi,
                                 ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
                             )
@@ -1094,7 +1093,7 @@ class Planner:
                 # Check for home and tag obstacles just to be safe, because
                 # sonar MoveResults take priority, and would mask a home or
                 # target tag in view.
-                obstacle = self.swarmie.get_obstacle_condition()
+                obstacle = swarmie.get_obstacle_condition()
 
                 if (obstacle & Obstacle.TAG_HOME == Obstacle.TAG_HOME and
                         self.avoid_home is False):
@@ -1122,28 +1121,28 @@ class Planner:
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
                     self._go_around(math.pi / 4, 0.7)
-                    # self.swarmie.drive_to(point, throw=False)
+                    # swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and center_blocked and not right_blocked:
                     print('Right looks clear, turning right.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
                     self._go_around(-math.pi / 4, 0.7)
-                    # self.swarmie.drive_to(point, throw=False)
+                    # swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and not center_blocked and not right_blocked:
                     print('Only left blocked, turning a little right.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
                     self._go_around(-math.pi / 6, 0.6)
-                    # self.swarmie.drive_to(point, throw=False)
+                    # swarmie.drive_to(point, throw=False)
 
                 elif not left_blocked and not center_blocked and right_blocked:
                     print('Only right blocked, turning a little left.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
                     self._go_around(math.pi / 6, 0.6)
-                    # self.swarmie.drive_to(point, throw=False)
+                    # swarmie.drive_to(point, throw=False)
 
                 else:
                     print('Neither left or right look clear.')
@@ -1152,7 +1151,7 @@ class Planner:
                     # to be safe. Don't want to back up into the nest!
                     if self._is_safe_to_back_up():
                         print('Backing up.')
-                        self.swarmie.drive(
+                        swarmie.drive(
                             -0.3,
                             ignore=Obstacle.IS_SONAR,
                             throw=False
@@ -1180,13 +1179,13 @@ class Planner:
                 print('\nPath Failure. Backing up.')
                 self.prev_state = self.current_state
                 self.current_state = Planner.STATE_AVOID_REVERSE
-                self.swarmie.drive(
+                swarmie.drive(
                     -0.5,
                     ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION,
                     throw=False
                 )
 
-            self.cur_loc = self.swarmie.get_odom_location()
+            self.cur_loc = swarmie.get_odom_location()
 
             if self.fail_count >= max_attempts:
                 print('Failed to drive to goal {} times.'.format(
@@ -1241,7 +1240,7 @@ class Planner:
         * rospy.ServiceException if /map/get_plan fails. See drive_to() for
           more information.
         """
-        self.cur_loc = self.swarmie.get_odom_location()
+        self.cur_loc = swarmie.get_odom_location()
         start = self.cur_loc.get_pose()
 
         goal = Point()
@@ -1263,11 +1262,11 @@ class Planner:
         be called manually, but is also called from Planner.drive_to() when
         a home tag is seen."""
 
-        current_location = self.swarmie.get_odom_location()
+        current_location = swarmie.get_odom_location()
         current_pose = current_location.get_pose()
         home_odom = Location(current_location.Odometry)
 
-        detections = self.swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets().detections
         try:
             for detection in detections:
                 if detection.id == 256:
@@ -1289,7 +1288,7 @@ class Planner:
                     home_odom.Odometry.pose.pose.position.y = float(
                         home_detection.pose.position.y + 0.5 * math.sin(yaw)
                     )
-                    self.swarmie.set_home_odom_location(home_odom)
+                    swarmie.set_home_odom_location(home_odom)
                     return
 
         except tf.Exception:
@@ -1302,7 +1301,7 @@ class Planner:
         home_odom.Odometry.pose.pose.position.y = (
             current_pose.y + 0.5 * math.sin(current_pose.theta)
         )
-        self.swarmie.set_home_odom_location(home_odom)
+        swarmie.set_home_odom_location(home_odom)
         return
 
     def _get_spiral_points(self, start_distance, distance_step, num_legs=10):
@@ -1317,7 +1316,7 @@ class Planner:
         Returns:
         * points - the list of waypoints
         """
-        start_loc = self.swarmie.get_odom_location().get_pose()
+        start_loc = swarmie.get_odom_location().get_pose()
         points = []
         distance = start_distance
         angle = math.pi / 2
@@ -1391,7 +1390,7 @@ class Planner:
         MAX_CONSECUTIVE_FAILURES = 3
         fail_count = 0
 
-        start_loc = self.swarmie.get_odom_location().get_pose()
+        start_loc = swarmie.get_odom_location().get_pose()
 
         for index, point in enumerate(points):
             # Stop if rover gets further away than it should currently be
@@ -1439,9 +1438,9 @@ def main():
         exit(-1)
 
     rovername = args.rovername
-    swarmie = Swarmie(rovername)
+    swarmie.start(tf_rover_name=rovername)
 
-    planner = Planner(swarmie, use_rviz_nav_goal=True)
+    planner = Planner(use_rviz_nav_goal=True)
     rospy.spin()
 
 
