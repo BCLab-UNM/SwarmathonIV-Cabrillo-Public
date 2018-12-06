@@ -339,7 +339,7 @@ class Swarmie:
         * `throw` (`bool`) - Raise a DriveException if an obstacle is encountered (default True). 
         * `timeout` (`int`) - The command will fail after this number of seconds (defulat: 120)
         * `linear` (`float`) - The linear velocity used to execute the command (default is set with DynParam)
-        * `angular` (`flat`) - The angular velocity used to execute the command (default is set with DynParam)
+        * `angular` (`float`) - The angular velocity used to execute the command (default is set with DynParam)
 
         Returns:
             
