@@ -14,11 +14,10 @@ import tf
 from geometry_msgs.msg import Pose2D
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie
+from mobility.swarmie import swarmie
 
 def look_for_tags():
     '''Looks pi/6 in either direction, then oreient to corner if it exisits or to area with the most amount of home tags '''
-    global swarmie
     start_heading = swarmie.get_odom_location().get_pose().theta
     turnTheta = math.pi/6
     targets = []
@@ -33,7 +32,6 @@ def look_for_tags():
 
 
 def convert_to_Pose2D(t):
-    global swarmie
     swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(5.0))
     odom_pose = swarmie.xform.transformPose(swarmie.rover_name + '/odom', t.pose)
     quat = [odom_pose.pose.orientation.x, odom_pose.pose.orientation.y,
@@ -98,11 +96,8 @@ def find_center(tags):
     return(mid_point(*get_furthest_side_hometags_location(tags))) #this will return the middle of the 2 furthest tags on one side
 
 
-def main(s, **kwargs):
+def main(**kwargs):
     '''Dropoff throws IndexError when no tags near swarmie '''
-    global swarmie 
-    
-    swarmie = s 
     
     #move wrist down but not so down that the resource hits the ground
     swarmie.wrist_middle()
@@ -142,4 +137,5 @@ def main(s, **kwargs):
     return 0 
 
 if __name__ == '__main__' :
-    sys.exit(main(Swarmie()))
+    swarmie.start(node_name='dropoff')
+    sys.exit(main())

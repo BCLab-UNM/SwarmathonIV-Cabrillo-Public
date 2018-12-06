@@ -19,12 +19,11 @@ from geometry_msgs.msg import Point
 from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 '''Pickup node.''' 
 
 def approach():
-    global swarmie
     global claw_offset_distance
     print ("Attempting a pickup.")
     try:
@@ -50,7 +49,7 @@ def approach():
             if swarmie.simulator_running():
                 finger_close_angle = 0
             else:
-              finger_close_angle = 0.5
+                finger_close_angle = 0.5
               
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
@@ -82,7 +81,6 @@ def approach():
     return False
 
 def recover():
-    global swarmie 
     global claw_offset_distance
     claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
@@ -107,11 +105,9 @@ def recover():
     except: 
         print("Oh no, we have an exception!")
 
-def main(s, **kwargs):
-    global swarmie 
+def main(**kwargs):
     global claw_offset_distance
     
-    swarmie = s
     claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
@@ -129,4 +125,5 @@ def main(s, **kwargs):
     return 1
 
 if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+    swarmie.start(node_name='pickup')
+    sys.exit(main())

@@ -115,18 +115,62 @@ class Swarmie:
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
     ''' 
-    
-    def __init__(self, **kwargs):
+
+    def __init__(self):
         '''Constructor.
-
-        Args:
-
-        * `rover` (`string`) - Name of the rover.
-
-        Keyword arguments:
-
-        * `anonymous` (`bool`) - Launch an anonymous node. Use this for debugging nodes. 
         '''
+
+        self.rover_name = None
+        self.Obstacles = 0
+        self.OdomLocation = Location(None)
+        self.Targets = AprilTagDetectionArray()
+        self.TargetsDict = {}
+        self.TargetsBuffer = AprilTagDetectionArray()
+        self.TargetsDictBuffer = {}
+        self.targets_timeout = 3
+
+        self.sm_publisher = None
+        self.status_publisher = None
+        self.info_publisher = None
+        self.mode_publisher = None
+        self.finger_publisher = None
+        self.wrist_publisher = None
+
+
+        # Numpy-ify the GridMap
+        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
+
+        self.control = None
+        self._get_map = None
+        self._get_plan = None
+        self._imu_is_finished_validating = None
+        self._imu_needs_calibration =  None
+        self._start_imu_calibration = None
+        self._start_misalignment_calibration = None
+        self._start_gyro_bias_calibration = None
+        self._start_gyro_scale_calibration = None
+        self._store_imu_calibration = None
+
+        self.xform = None
+
+
+    def start(self, **kwargs):
+        """
+        Start rover services. This initializes the ROS node.
+
+        kwargs:
+
+            tf_rover_name: (str) The name of the rover used for transforms. If
+                not specified the result of rospy.get_namespace() will determine
+                the value.
+
+            node_name: (str) The name of the ROS node to be given to rospy.init().
+                If not specified the node will be called "controller".
+
+            anonymous: (bool) Tell ROS to create an anonymous node. You can read about
+                anonymous nodes here: http://wiki.ros.org/rospy/Overview/Initialization%20and%20Shutdown#Initializing_your_ROS_Node
+        """
+
         if 'tf_rover_name' in kwargs :
             self.rover_name = kwargs['tf_rover_name']
         else:
@@ -142,12 +186,13 @@ class Swarmie:
         # Intialize this ROS node.
         anon = False
         if 'anonymous' in kwargs : 
-            anon = True
-            
+            anon = kwargs['anonymous']
+
+        node_name = 'controller'
         if 'node_name' in kwargs :
-            rospy.init_node(kwargs['node_name'], anonymous=anon)
-        else :
-            rospy.init_node('controller', anonymous=anon)
+            node_name = kwargs['node_name']
+
+        rospy.init_node(node_name, anonymous=anon)
         
         # Create publishiers.
         self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
@@ -163,9 +208,6 @@ class Swarmie:
         rospy.wait_for_service('map/get_map')
         rospy.wait_for_service('map/get_plan')
 
-        # Numpy-ify the GridMap 
-        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
-        
         # Connect to services.
         self.control = rospy.ServiceProxy('control', Core)
         self._get_map = rospy.ServiceProxy('map/get_map', GetMap)
@@ -954,3 +996,14 @@ class Swarmie:
         else:
             return(False)
         
+
+#
+# Global singleton instance. No code should make a new instance
+# of swarmie. Instead it should access this instance instead as shown
+# below.
+#
+# from movility.swarmie import swarmie
+#
+# swarmie.drive()
+#
+swarmie = Swarmie()

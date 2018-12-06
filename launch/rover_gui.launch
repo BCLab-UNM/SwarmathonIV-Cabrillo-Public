@@ -1,8 +1,9 @@
 <launch>
 
-  <arg name="world" default="$(env PWD)/simulation/worlds/swarmathon.world"/>
+  <arg name="world"
+       default="$(env PWD)/simulation/worlds/2018_competition_world_files/prelim2.world"/>
   <arg name="round" default="prelim"/>
-  <arg name="single" default="true"/>
+  <arg name="numrovers" default="1"/>
   <arg name="startsim" default="false"/>
   <arg name="gazebo" default="false"/>
 
@@ -14,7 +15,7 @@
 
     <param name="world" value="$(arg world)"/>
     <param name="round" value="$(arg round)"/>
-    <param name="single" value="$(arg single)"/>
+    <param name="numrovers" type="int" value="$(arg numrovers)"/>
     <param name="startsim" value="$(arg startsim)"/>
     <param name="gazebo" value="$(arg gazebo)"/>
   </node>
