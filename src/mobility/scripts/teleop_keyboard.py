@@ -32,14 +32,14 @@ import rospy
 import dynamic_reconfigure.client
 from sensor_msgs.msg import Joy
 from swarmie_msgs.msg import Obstacle
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 
 class Teleop(object):
     """Teleop base class."""
 
     def __init__(self, rovername):
-        self.swarmie = Swarmie(node_name='teleop_keyboard')
+        # self.swarmie = Swarmie(node_name='teleop_keyboard')
 
         self.params = {}
         self.param_client = dynamic_reconfigure.client.Client(
@@ -51,11 +51,11 @@ class Teleop(object):
 
         # Keybindings common to both derived classes:
         self.claw_bindings = {
-            'O': self.swarmie.fingers_open,
-            'U': self.swarmie.fingers_close,
-            't': self.swarmie.wrist_up,
-            'g': self.swarmie.wrist_middle,
-            'b': self.swarmie.wrist_down,
+            'O': swarmie.fingers_open,
+            'U': swarmie.fingers_close,
+            't': swarmie.wrist_up,
+            'g': swarmie.wrist_middle,
+            'b': swarmie.wrist_down,
         }
         self.param_bindings = {
             '1': ['drive_speed', 0.9],
@@ -212,12 +212,12 @@ class TeleopSwarmie(Teleop):
                         dist = self.params['drive_dist']
                         if self.drive_bindings[key] < 0:
                             dist = -dist
-                        self.swarmie.drive(dist, ignore=self.ignore_obst)
+                        swarmie.drive(dist, ignore=self.ignore_obst)
                     elif key in self.turn_bindings.keys():
                         theta = self.params['turn_theta']
                         if self.turn_bindings[key] < 0:
                             theta = -theta
-                        self.swarmie.turn(theta, ignore=self.ignore_obst)
+                        swarmie.turn(theta, ignore=self.ignore_obst)
                     elif key in self.claw_bindings.keys():
                         self.claw_bindings[key]()
                     elif key in self.param_bindings.keys():
@@ -369,6 +369,7 @@ class TeleopKey(Teleop):
 
 def main(use_swarmie=False):
     rovername = rospy.get_namespace().strip('/')
+    swarmie.start(node_name='teleop')
 
     if use_swarmie:
         teleop = TeleopSwarmie(rovername)
