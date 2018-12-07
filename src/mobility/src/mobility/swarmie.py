@@ -114,8 +114,7 @@ class Swarmie:
     
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
-    ''' 
-
+    '''
     def __init__(self):
         '''Constructor.
         '''
@@ -123,12 +122,6 @@ class Swarmie:
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.Targets = AprilTagDetectionArray()
-        self.TargetsDict = {}
-        self.TargetsBuffer = AprilTagDetectionArray()
-        self.TargetsDictBuffer = {}
-        self.targets_timeout = 3
-
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -180,8 +173,9 @@ class Swarmie:
            
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.targets = [None]*90  # The rolling buffer of targets messages
-        self.targets_index = 89;  # Used to keep track of the most recent targets index, holds the values 0-89
+        self.CONST_CIRCULAR_BUFFER_SIZE = 90
+        self.targets = [AprilTagDetectionArray()]*self.CONST_CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs
+        self.targets_index = 0;  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
         anon = False
@@ -260,8 +254,9 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg):
-        self.targets_index = (self.targets_index + 1) % 90;
+        self.targets_index = (self.targets_index + 1) % self.CONST_CIRCULAR_BUFFER_SIZE;
         self.targets[self.targets_index] = msg
+
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -495,11 +490,11 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
+        blocks = sorted(blocks.detections, key=lambda x: abs(x.pose.pose.position.z))
+        if len(blocks) > 0:
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18 :
+            if abs(z_dist) < 0.18:
                 return True 
 
         # Second test: Can we see a bock that's close to the camera with the wrist up.
@@ -521,7 +516,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return(False) #self.sees_resource(6)
+        return False  # self.sees_resource(6)
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -542,11 +537,10 @@ class Swarmie:
         rospy.sleep(1)
         self.set_wrist_angle(1)
         rospy.sleep(.7)
-        
-        self.set_finger_angle(finger_close_angle) #close
+        self.set_finger_angle(finger_close_angle) # close
         rospy.sleep(1)
         self.wrist_up()
-        return(self.has_block())
+        return self.has_block()
        
     def putdown(self):
         '''Puts the block down'''
@@ -562,17 +556,17 @@ class Swarmie:
         # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
         return self.targets[self.targets_index] 
     
-    def get_targets_buffer(self, size=90, age=8, cleanup=True) :
+    def get_targets_buffer(self, age=8, cleanup=True):
         """ Return a buffer of the target detections from the AprilTagDetectionArray"""
         buffer = self.targets[self.targets_index]
-        for i in range(1, size):
-            if self.targets[(self.targets_index + i) % 90]:
-                buffer.detections.extend(self.targets[(self.targets_index + i) % 90].detections)
+        for i in range(1, self.CONST_CIRCULAR_BUFFER_SIZE):
+            if self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE]:
+                buffer.detections.extend(self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE].detections)
         if cleanup:
-            buffer.detections = self.detection_cleanup(buffer.detections, age)
+            buffer.detections = self._detection_cleanup(buffer.detections, age)
         return buffer
 
-    def detection_cleanup(self, detections, age=8):  # does not need to be in Swarmie, static?
+    def _detection_cleanup(self, detections, age=8):  # does not need to be in Swarmie, static?
         """ Returns the detections with the duplicate tags and old tags removed """
         # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
         # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
