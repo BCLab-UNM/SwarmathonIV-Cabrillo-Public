@@ -40,7 +40,7 @@ elif [ "$exe" == "dev.sh" ]; then
     get_rover
     echo "Connecting to rover $rover"
     ROS_NAMESPACE="/$rover" rosrun mobility "$@"
-elif [ "$exe" == "debug.sh" ]; then
+elif [ "$exe" == "rdb.sh" ]; then
     get_rover
     echo "Connecting to rover $rover"
     ROS_NAMESPACE="/$rover" rosrun mobility rdb.py
