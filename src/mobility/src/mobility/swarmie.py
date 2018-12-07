@@ -12,7 +12,7 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, GetMap, GetNavPlan, GetNavPlanRequest
+from mapping.srv import GetNavPlan, GetNavPlanRequest
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
@@ -22,9 +22,6 @@ from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
-from rospy.numpy_msg import numpy_msg
-from grid_map_msgs.msg import GridMap
-from mapping import RoverMap 
 
 import threading 
 
@@ -136,12 +133,7 @@ class Swarmie:
         self.finger_publisher = None
         self.wrist_publisher = None
 
-
-        # Numpy-ify the GridMap
-        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
-
         self.control = None
-        self._get_map = None
         self._get_plan = None
         self._imu_is_finished_validating = None
         self._imu_needs_calibration =  None
@@ -200,12 +192,10 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service('control')
-        rospy.wait_for_service('map/get_map')
         rospy.wait_for_service('map/get_plan')
 
         # Connect to services.
         self.control = rospy.ServiceProxy('control', Core)
-        self._get_map = rospy.ServiceProxy('map/get_map', GetMap)
         self._get_plan = rospy.ServiceProxy('map/get_plan', GetNavPlan)
         self._imu_is_finished_validating = rospy.ServiceProxy('imu/is_finished_validating', QueryCalibrationState)
         self._imu_needs_calibration = rospy.ServiceProxy('imu/needs_calibration', QueryCalibrationState)
@@ -553,16 +543,6 @@ class Swarmie:
         '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
         return self.TargetsBuffer
     
-    def get_obstacle_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the obstacle map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_obstacle_map())
-
-    def get_target_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the targets map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_target_map())
-
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 
