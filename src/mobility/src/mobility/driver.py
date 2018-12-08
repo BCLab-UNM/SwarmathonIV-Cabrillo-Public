@@ -65,8 +65,7 @@ class State:
     ROTATE_THRESHOLD           = 0
     DRIVE_ANGLE_ABORT          = 0
 
-    def __init__(self, rover):
-        self.rover = rover
+    def __init__(self):
         self.MapLocation = Location(None)
         self.OdomLocation =  Location(None)
         self.CurrentState = State.STATE_IDLE
@@ -90,18 +89,18 @@ class State:
         State.DRIVE_ANGLE_ABORT = rospy.get_param("DRIVE_ANGLE_ABORT", default=math.pi/4)
 
         # Subscribers
-        rospy.Subscriber(rover + '/joystick', Joy, self._joystick, queue_size=10)
-        rospy.Subscriber(rover + '/obstacle', Obstacle, self._obstacle)
-        rospy.Subscriber(rover + '/odom/filtered', Odometry, self._odom)
+        rospy.Subscriber('joystick', Joy, self._joystick, queue_size=10)
+        rospy.Subscriber('obstacle', Obstacle, self._obstacle)
+        rospy.Subscriber('odom/filtered', Odometry, self._odom)
 
         # Services 
-        self.control = rospy.Service(rover + '/control', Core, self._control);
+        self.control = rospy.Service('control', Core, self._control);
         
         # Publishers
-        self.state_machine = rospy.Publisher(rover + '/state_machine', String, queue_size=1, latch=True)
-        self.fingerAngle = rospy.Publisher(rover + '/fingerAngle', Float32, queue_size=1, latch=True)
-        self.wristAngle = rospy.Publisher(rover + '/wristAngle', Float32, queue_size=1, latch=True)
-        self.driveControl = rospy.Publisher(rover + '/driveControl', Twist, queue_size=10)
+        self.state_machine = rospy.Publisher('state_machine', String, queue_size=1, latch=True)
+        self.fingerAngle = rospy.Publisher('fingerAngle', Float32, queue_size=1, latch=True)
+        self.wristAngle = rospy.Publisher('wristAngle', Float32, queue_size=1, latch=True)
+        self.driveControl = rospy.Publisher('driveControl', Twist, queue_size=10)
 
         # Configuration 
         self.config_srv = Server(driveConfig, self._reconfigure)
@@ -331,6 +330,6 @@ class State:
             "ROTATE_THRESHOLD": State.ROTATE_THRESHOLD,
             "DRIVE_ANGLE_ABORT": State.DRIVE_ANGLE_ABORT,
             }
-        dyn_client = Client(self.rover + '_MOBILITY') 
+        dyn_client = Client('mobility') 
         dyn_client.update_configuration(params)
         print ('Initial configuration sent.')

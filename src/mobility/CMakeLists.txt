@@ -46,14 +46,9 @@ catkin_install_python (
 	PROGRAMS 
 	scripts/core.py 
 	scripts/rdb.py 
-	scripts/init.py 
-	scripts/search.py 
-	scripts/pickup.py 
-	scripts/gohome.py 
-	scripts/dropoff.py
 	scripts/cal_imu.py
-	scripts/planner.py
 	scripts/test_square.py
+	scripts/task.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

@@ -2,52 +2,60 @@
 
 from __future__ import print_function
 
-import sys
 import rospy 
+import roslaunch
 
 from std_msgs.msg import String, UInt8
 
 from mobility.driver import State
-from mobility.task import Task 
 
 def heartbeat(event):
-    global heartbeat_pub, status_pub, task
+    global heartbeat_pub, status_pub
     heartbeat_pub.publish("ok")
-    status_pub.publish("+ (Cabrillo) cab110:" + task.get_task())
 
 def mode(msg):
-    global driver, task 
+    global rover_mode, driver
+    rover_mode = msg.data 
     driver.set_mode(msg)
-    task.set_mode(msg) 
-        
+
 def main() :     
-    global driver, task, status_pub, info_pub, heartbeat_pub
+    global driver, heartbeat_pub, rover_mode, status_pub
     
-    if len(sys.argv) < 2 :
-        print('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
+    rover_mode = 0 
     
-    rover = sys.argv[1]
-    rospy.init_node(rover + '_MOBILITY')
+    rospy.init_node('mobility')
 
     # Start the driver code. 
-    driver = State(rover)
-    task = Task(rover) 
+    driver = State()
     
-    heartbeat_pub = rospy.Publisher(rover + '/mobility/heartbeat', String, queue_size=1, latch=True)
-    status_pub = rospy.Publisher(rover + '/status', String, queue_size=1, latch=True)
-    info_pub = rospy.Publisher('/infoLog', String, queue_size=1, latch=True)
+    heartbeat_pub = rospy.Publisher('mobility/heartbeat', String, queue_size=1, latch=True)
+    status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
 
     # Subscribers 
-    rospy.Subscriber(rover + '/mode', UInt8, mode)
+    rospy.Subscriber('mode', UInt8, mode)
 
     # Timers
     rospy.Timer(rospy.Duration(1), heartbeat)
 
+    launcher = roslaunch.scriptapi.ROSLaunch()
+    launcher.start()
+    task = None 
+    status_pub.publish("Okay")
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
+        if rover_mode > 1 :
+            if task is None: 
+                node = roslaunch.core.Node('mobility', 'task.py', namespace=rospy.get_namespace())
+                task = launcher.launch(node)
+            else:
+                if not task.is_alive() : 
+                    task = None
+        else :
+            if task is not None and task.is_alive() :
+                task.stop()
+                task = None 
+                
         driver.run() 
-        task.run()
         r.sleep()
 
 if __name__ == '__main__' : 

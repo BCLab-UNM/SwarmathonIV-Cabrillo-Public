@@ -12,17 +12,15 @@ import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
-from planner import Planner
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
+from mobility.planner import Planner
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
 '''Searcher node.''' 
 
 def turnaround(): 
-    global swarmie
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
 def wander():
-    global swarmie
     try :
         rospy.loginfo("Wandering...")
         swarmie.turn(random.gauss(0, math.pi/6))
@@ -37,7 +35,7 @@ def wander():
 
 
 def escape_home(detections):
-    global swarmie, planner
+    global planner
 
     print('\nGetting out of the home ring!!')
     angle, dist = planner.get_angle_and_dist_to_escape_home(detections)
@@ -52,7 +50,7 @@ def escape_home(detections):
 
 
 def handle_exit():
-    global planner, swarmie, found_tag
+    global planner, found_tag
 
     reset_speeds()
 
@@ -70,12 +68,11 @@ def reset_speeds():
 
 
 def set_search_exit_poses():
-    global swarmie
     swarmie.set_search_exit_poses()
 
 
-def main():
-    global swarmie, planner, rovername, found_tag
+def main(**kwargs):
+    global planner, found_tag
     global initial_config, param_client
 
     found_tag = False
@@ -84,27 +81,21 @@ def main():
          'TURN_SPEED': 0.7
     }
 
-    if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
-    planner = Planner(swarmie)
+    planner = Planner()
 
     swarmie.fingers_open()
     swarmie.wrist_middle()
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    if not rospy.has_param('/' + rovername + '/search/speeds'):
+    if not rospy.has_param('search/speeds'):
         speeds = SEARCH_SPEEDS
-        rospy.set_param('/' + rovername + '/search/speeds', speeds)
+        rospy.set_param('search/speeds', speeds)
     else:
-        speeds = rospy.get_param('/' + rovername + '/search/speeds',
+        speeds = rospy.get_param('search/speeds',
                                  default=SEARCH_SPEEDS)
 
-    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    param_client = dynamic_reconfigure.client.Client('mobility')
     config = param_client.get_configuration()
     initial_config = {
         'DRIVE_SPEED': config['DRIVE_SPEED'],
@@ -131,7 +122,7 @@ def main():
                     found_tag = True
                     # print('Found a tag! Turning to face.')
                     # planner.face_nearest_block()
-                    exit(0)  # found a tag?
+                    sys.exit(0)  # found a tag?
             except tf.Exception:
                 pass
     else:
@@ -147,7 +138,7 @@ def main():
     cur_pose = swarmie.get_odom_location().get_pose()
 
     if swarmie.has_search_exit_poses():
-        last_pose, _gps = swarmie.get_search_exit_poses()
+        last_pose = swarmie.get_search_exit_poses()
         dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
                          + (last_pose.y - cur_pose.y) ** 2)
 
@@ -202,7 +193,7 @@ def main():
                 found_tag = True
                 # print('Found a tag! Turning to face.')
                 # planner.face_nearest_block()
-                exit(0)
+                sys.exit(0)
         except HomeException:
             # Just move onto random search, but this shouldn't really happen
             # either.
@@ -214,7 +205,7 @@ def main():
     try:
         for move in range(30) :
             if rospy.is_shutdown() :
-                exit(-1)
+                sys.exit(-1)
             try:
                 wander()
 
@@ -238,11 +229,11 @@ def main():
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
             # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
-            exit(0)
+            sys.exit(0)
 
     print ("I'm homesick!")
-    exit(1)
+    return 1 
 
 if __name__ == '__main__' : 
-    main()
-
+    swarmie.start(node_name='search')
+    sys.exit(main())

@@ -1,9 +1,12 @@
-# Put mobility related libraries here.
+"""Put mobility related libraries here.
+
+Any ROS module imports here will break namespace.py's ability to modify
+namespaces.
+"""
 from __future__ import print_function
 
 import threading 
 import math 
-import tf
 
 from functools import wraps
 

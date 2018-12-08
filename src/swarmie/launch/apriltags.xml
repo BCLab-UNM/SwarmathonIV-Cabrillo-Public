@@ -1,0 +1,22 @@
+<launch>
+  <arg name="name"/>
+  <arg name="simulation"/>
+
+  <node name="apriltag" pkg="apriltags_ros" type="apriltag_detector_node" respawn="true">
+
+    <remap from="image_rect" to="camera/image" />
+    <remap from="camera_info" to="camera/image_info" />
+    <remap from="tag_detections" to="targets" />
+    <remap from="tag_detections_image" to="targets/image" />
+    
+    <param name="image_transport" type="str" value="theora" if="$(arg simulation)"/>
+    <param name="image_transport" type="str" value="raw" unless="$(arg simulation)"/>
+    <param name="tag_family" type="str" value="36h11" />
+    <param name="sensor_frame_id" type="str" value="$(arg name)/camera_link" />
+
+    <rosparam param="tag_descriptions">[
+    {id: 0, size: 0.038},
+    {id: 256, size: 0.038}]</rosparam>
+  </node>
+
+</launch>

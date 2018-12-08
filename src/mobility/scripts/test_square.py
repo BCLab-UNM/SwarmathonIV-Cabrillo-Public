@@ -9,9 +9,9 @@ import rospy
 from swarmie_msgs.msg import Obstacle
 from geometry_msgs.msg import Pose2D, Point
 
-from mobility.swarmie import Swarmie
+from mobility.swarmie import swarmie
 
-def dumb_square(swarmie, distance):
+def dumb_square(distance):
     swarmie.drive(distance, ignore=Obstacle.IS_VISION)   
     swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION)   
 
@@ -24,7 +24,7 @@ def dumb_square(swarmie, distance):
     swarmie.drive(distance, ignore=Obstacle.IS_VISION)   
     swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION)   
 
-def smart_square(swarmie, distance):    
+def smart_square(distance):
     # Compute a square based on the current heading. 
     start_pose = swarmie.get_odom_location().get_pose()
     start = Point()
@@ -50,7 +50,7 @@ def smart_square(swarmie, distance):
     
     swarmie.set_heading(start_pose.theta)
     
-def abs_square(swarmie, distance):
+def abs_square(distance):
     
     start_pose = swarmie.get_odom_location().get_pose()
     
@@ -67,7 +67,6 @@ def abs_square(swarmie, distance):
     swarmie.set_heading(start_pose.theta, ignore=-1)
 
 def main():
-    global swarmie 
     global rovername 
     
     if len(sys.argv) < 3 :
@@ -75,10 +74,10 @@ def main():
         exit (-1)
 
     rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     distance = float(sys.argv[2])
 
     smart_square(swarmie, distance)
     
 if __name__ == '__main__' : 
+    swarmie.start(node_name='square')
     main()

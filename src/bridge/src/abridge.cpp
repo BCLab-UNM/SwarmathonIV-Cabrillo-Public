@@ -55,7 +55,6 @@ char moveCmd[16];
 char host[128];
 const float deltaTime = 0.1; //abridge's update interval
 int currentMode = 0;
-string publishedName;
 geometry_msgs::Twist speedCommand;
 
 // Allowing messages to be sent to the arduino too fast causes a disconnect
@@ -112,13 +111,10 @@ void modeHandler(const std_msgs::UInt8::ConstPtr& message);
 
 int main(int argc, char **argv) {
     
-    gethostname(host, sizeof (host));
-    string hostname(host);
-    ros::init(argc, argv, (hostname + "_ABRIDGE"));
+    ros::init(argc, argv, "abridge");
     
-    ros::NodeHandle param("~");
     string devicePath;
-    param.param("device", devicePath, string("/dev/ttyUSB0"));
+    ros::param::param("~device", devicePath, string("/dev/ttyUSB0"));
     usb.openUSBPort(devicePath, baud);
     void modeHandler(const std_msgs::UInt8::ConstPtr& message);
     
@@ -126,37 +122,28 @@ int main(int argc, char **argv) {
     
     ros::NodeHandle aNH;
     
-    if (argc >= 2) {
-        publishedName = argv[1];
-        cout << "Welcome to the world of tomorrow " << publishedName << "!  ABridge module started." << endl;
-    } else {
-        publishedName = hostname;
-        cout << "No Name Selected. Default is: " << publishedName << endl;
-    }
-    
-    fingerAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/fingerAngle/prev_cmd"), 10);
-    wristAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>((publishedName + "/wristAngle/prev_cmd"), 10);
-    imuRawPublish = aNH.advertise<swarmie_msgs::SwarmieIMU>((publishedName + "/imu/raw"), 10);
-    odomPublish = aNH.advertise<nav_msgs::Odometry>((publishedName + "/odom"), 10);
-    sonarLeftPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarLeft"), 10);
-    sonarCenterPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarCenter"), 10);
-    sonarRightPublish = aNH.advertise<sensor_msgs::Range>((publishedName + "/sonarRight"), 10);
+    fingerAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>("fingerAngle/prev_cmd", 10);
+    wristAnglePublish = aNH.advertise<geometry_msgs::QuaternionStamped>("wristAngle/prev_cmd", 10);
+    imuRawPublish = aNH.advertise<swarmie_msgs::SwarmieIMU>("imu/raw", 10);
+    odomPublish = aNH.advertise<nav_msgs::Odometry>("odom", 10);
+    sonarLeftPublish = aNH.advertise<sensor_msgs::Range>("sonarLeft", 10);
+    sonarCenterPublish = aNH.advertise<sensor_msgs::Range>("sonarCenter", 10);
+    sonarRightPublish = aNH.advertise<sensor_msgs::Range>("sonarRight", 10);
     infoLogPublisher = aNH.advertise<std_msgs::String>("/infoLog", 1, true);
-    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>((publishedName + "/bridge/debugPID"), 1, false);
-    heartbeatPublisher = aNH.advertise<std_msgs::String>((publishedName + "/bridge/heartbeat"), 1, true);
+    debugPIDPublisher = aNH.advertise<geometry_msgs::Twist>("bridge/debugPID", 1, false);
+    heartbeatPublisher = aNH.advertise<std_msgs::String>("bridge/heartbeat", 1, true);
 
-    driveControlSubscriber = aNH.subscribe((publishedName + "/driveControl"), 10, driveCommandHandler);
-    fingerAngleSubscriber = aNH.subscribe((publishedName + "/fingerAngle/cmd"), 1, fingerAngleHandler);
-    wristAngleSubscriber = aNH.subscribe((publishedName + "/wristAngle/cmd"), 1, wristAngleHandler);
-    modeSubscriber = aNH.subscribe((publishedName + "/mode"), 1, modeHandler);
+    driveControlSubscriber = aNH.subscribe("driveControl", 10, driveCommandHandler);
+    fingerAngleSubscriber = aNH.subscribe("fingerAngle/cmd", 1, fingerAngleHandler);
+    wristAngleSubscriber = aNH.subscribe("wristAngle/cmd", 1, wristAngleHandler);
+    modeSubscriber = aNH.subscribe("mode", 1, modeHandler);
 
     publishTimer = aNH.createTimer(ros::Duration(deltaTime), serialActivityTimer);
     publish_heartbeat_timer = aNH.createTimer(ros::Duration(heartbeat_publish_interval), publishHeartBeatTimerEventHandler);
     
-    imuRaw.header.frame_id = publishedName+"/base_link";
-
-    odom.header.frame_id = publishedName+"/odom";
-    odom.child_frame_id = publishedName+"/base_link";
+    ros::param::param<std::string>("odom_frame", odom.header.frame_id, "odom");
+    ros::param::param<std::string>("base_link_frame", odom.child_frame_id, "base_link");
+    imuRaw.header.frame_id = odom.child_frame_id;
 
     // configure dynamic reconfiguration
     dynamic_reconfigure::Server<bridge::pidConfig> config_server;
@@ -462,7 +449,7 @@ void initialconfig() {
 	nh.getParam("ff", initial_config.ff);
 
 	// Announce the configuration to the server
-	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client(publishedName + "_ABRIDGE");
+	dynamic_reconfigure::Client<bridge::pidConfig> dyn_client("abridge");
 	dyn_client.setConfiguration(initial_config);
 
 	cout << "Initial configuration sent." << endl;

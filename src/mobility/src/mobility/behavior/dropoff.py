@@ -10,11 +10,10 @@ import tf
 from geometry_msgs.msg import Pose2D
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie
+from mobility.swarmie import swarmie
 
 def look_for_tags():
     '''Looks pi/6 in either direction, then oreient to corner if it exisits or to area with the most amount of home tags '''
-    global swarmie
     start_heading = swarmie.get_odom_location().get_pose().theta
     turnTheta = math.pi/6
     targets = []
@@ -29,7 +28,6 @@ def look_for_tags():
 
 
 def convert_to_Pose2D(t):
-    global swarmie
     swarmie.xform.waitForTransform(swarmie.rover_name + '/odom', t.pose.header.frame_id, t.pose.header.stamp, rospy.Duration(5.0))
     odom_pose = swarmie.xform.transformPose(swarmie.rover_name + '/odom', t.pose)
     quat = [odom_pose.pose.orientation.x, odom_pose.pose.orientation.y,
@@ -94,15 +92,8 @@ def find_center(tags):
     return(mid_point(*get_furthest_side_hometags_location(tags))) #this will return the middle of the 2 furthest tags on one side
 
 
-def main():
+def main(**kwargs):
     '''Dropoff throws IndexError when no tags near swarmie '''
-    global swarmie 
-    
-    if len(sys.argv) < 2:
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    swarmie = Swarmie(sys.argv[1])
     
     #move wrist down but not so down that the resource hits the ground
     swarmie.wrist_middle()
@@ -128,7 +119,10 @@ def main():
     try:
         swarmie.set_wrist_angle(.7)
         rospy.sleep(.4)
-        swarmie.set_finger_angle(1)
+        if(swarmie.simulator_running()):
+            swarmie.fingers_open()
+        else:
+            swarmie.set_finger_angle(1)
         rospy.sleep(.4)
         swarmie.set_wrist_angle(0)
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
@@ -136,6 +130,8 @@ def main():
         swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
         raise
 
-if __name__ == '__main__' :
-    main()
+    return 0 
 
+if __name__ == '__main__' :
+    swarmie.start(node_name='dropoff')
+    sys.exit(main())

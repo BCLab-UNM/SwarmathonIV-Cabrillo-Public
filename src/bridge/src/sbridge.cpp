@@ -26,8 +26,6 @@ ros::Subscriber driveControlSubscriber;
 
 ros::Timer heartbeatTimer;
 
-string rover;
-
 const double wheelBase = 0.278; //distance between left and right wheels (in M)
 
 void publishHeartBeatTimerEventHandler(const ros::TimerEvent& event) {
@@ -44,33 +42,20 @@ void cmdHandler(const geometry_msgs::Twist::ConstPtr& message) {
 }
 
 int main(int argc, char **argv) {
-    sleep(10);
 
-    char host[128];
-    gethostname(host, sizeof (host));
-    string hostname(host);
-
-    if (argc >= 2) {
-        rover = argv[1];
-        cout << "Welcome to the world of tomorrow " << rover << "!  SBridge module started." << endl;
-    } else {
-    	cout << "Specify rover name." << endl;
-    	return 1;
-    }
-
-    ros::init(argc, argv, (rover + "_SBRIDGE"), ros::init_options::NoSigintHandler);
+    ros::init(argc, argv, "sbridge");
 
     ros::NodeHandle sNH;
 
-    driveControlSubscriber = sNH.subscribe((rover + "/driveControl"), 10, &cmdHandler);
+    driveControlSubscriber = sNH.subscribe("driveControl", 10, &cmdHandler);
 
-    heartbeatPublisher = sNH.advertise<std_msgs::String>((rover + "/bridge/heartbeat"), 1, false);
-    skidsteerPublisher = sNH.advertise<geometry_msgs::Twist>((rover + "/skidsteer"), 10);
+    heartbeatPublisher = sNH.advertise<std_msgs::String>("bridge/heartbeat", 1, false);
+    skidsteerPublisher = sNH.advertise<geometry_msgs::Twist>("skidsteer", 10);
     infoLogPublisher = sNH.advertise<std_msgs::String>("/infoLog", 1, true);
 
     heartbeatTimer = sNH.createTimer(ros::Duration(2), publishHeartBeatTimerEventHandler);
 
     ros::spin();
 
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

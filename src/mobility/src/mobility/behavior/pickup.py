@@ -15,12 +15,11 @@ from geometry_msgs.msg import Point
 from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 '''Pickup node.''' 
 
 def approach():
-    global swarmie
     global claw_offset_distance
     print ("Attempting a pickup.")
     try:
@@ -33,7 +32,7 @@ def approach():
         except tf.Exception as e:
             print("Something went wrong and we can't locate the block. ", e)
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
 
         if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
@@ -44,13 +43,14 @@ def approach():
             # Grab - minimal pickup with sim_check.
             
             if swarmie.simulator_running():
-                finger_close_angle = 0.5
+                finger_close_angle = 0
             else:
-              finger_close_angle = 0
+                finger_close_angle = 0.5
               
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
             swarmie.wrist_up()
+            rospy.sleep(.5)
             # did we succesuflly grab a block?
             if swarmie.has_block():
                 swarmie.wrist_middle()
@@ -66,18 +66,17 @@ def approach():
         else:
             print("No legal blocks detected.")
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
     except rospy.ServiceException as e:
         print ("There doesn't seem to be any blocks on the map. ", e)
         swarmie.wrist_up()
-        exit(1)
+        sys.exit(1)
 
     # otherwise reset claw and return Falase
     swarmie.wrist_up()
     return False
 
 def recover():
-    global swarmie 
     global claw_offset_distance
     claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
@@ -90,7 +89,7 @@ def recover():
         except tf.Exception as e:
             print("Something went wrong recovering and we can't locate the block. ", e)
             swarmie.wrist_up()
-            exit(1)
+            sys.exit(1)
         if block is not None:
             pass
         else:
@@ -102,33 +101,25 @@ def recover():
     except: 
         print("Oh no, we have an exception!")
 
-def main():
-    global swarmie 
-    global rovername
+def main(**kwargs):
     global claw_offset_distance
     
-    if len(sys.argv) < 2:
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
 
     print ('Waiting for camera/base_link tf to become available.')
-    swarmie.xform.waitForTransform(rovername + '/base_link', rovername + '/camera_link', rospy.Time(), rospy.Duration(10))
+    swarmie.xform.waitForTransform(swarmie.rover_name + '/base_link', swarmie.rover_name + '/camera_link', rospy.Time(), rospy.Duration(10))
 
     for i in range(3): 
         if approach():
             print ("Got it!")
-            exit(0)        
+            sys.exit(0)        
         recover()
         
     print ("Giving up after too many attempts.")
-    exit(1)
+    return 1
 
 if __name__ == '__main__' : 
-    main()
-
+    swarmie.start(node_name='pickup')
+    sys.exit(main())

@@ -2,7 +2,6 @@
 """gohome.py
 Tries to get the rover back to the home nest, while avoiding sonar and cube
 obstacles, and hopefully not dropping the cube in its claw.
-todo: test backup gps gohome functionality
 """
 from __future__ import print_function
 
@@ -12,44 +11,21 @@ import rospy
 import tf
 import angles
 import dynamic_reconfigure.client
+import argparse 
 
 from geometry_msgs.msg import Point
 
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, PathException, HomeException, TagException, ObstacleException
-from planner import Planner
+from mobility.swarmie import swarmie, Location, PathException, HomeException, TagException, ObstacleException
+from mobility.planner import Planner
 
 
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
-
-def get_gps_angle_and_dist():
-    global swarmie
-
-    # Use GPS to figure out about where we are.
-    # FIXME: We need to hanlde poor GPS fix.
-    loc = swarmie.wait_for_fix(distance=4, time=60).get_pose()
-    home = swarmie.get_home_gps_location()
-
-
-    dist = math.hypot(loc.y - home.y,
-                      loc.x - home.x)
-
-    angle = angles.shortest_angular_distance(loc.theta,
-                                             math.atan2(home.y - loc.y,
-                                                        home.y - loc.x))
-
-    # swarmie.turn(angle, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    # swarmie.drive(dist, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
-    return angle, dist
-
-
 def drive_straight_home_odom() :
-    global swarmie
-
     # We remember home in the Odom frame when we see it. Unlike GPS
     # there's no need to translate the location into r and theta. The
     # swarmie's drive_to function takes a point in odometry space.
@@ -81,11 +57,11 @@ def drive_home(has_block, home_loc):
             if counter < 2:
                 pass
             else:
-                exit(GOHOME_FAIL)
+                sys.exit(GOHOME_FAIL)
 
 
 def spiral_search(has_block):
-    global planner, swarmie
+    global planner
 
     # no map waypoints
     try:
@@ -123,11 +99,14 @@ def reset_speeds():
     param_client.update_configuration(initial_config)
 
 
-def main():
-    global planner, swarmie, rovername, use_waypoints
+def main(**kwargs):
+    global planner, use_waypoints
     global initial_config, param_client
 
     has_block = False
+    if 'has_block' in kwargs : 
+        has_block = kwargs['has_block']
+    
     # Whether to use waypoints from searching the map. Can be set to False if
     # the map service fails.
     use_waypoints = True
@@ -137,30 +116,21 @@ def main():
          'TURN_SPEED': 0.7
     }
 
-    if len(sys.argv) < 2 :
-        print ('usage:', sys.argv[0], '<rovername>')
-        exit (-1)
-    if len(sys.argv) >= 3 and sys.argv[2] == '--has-block':
-        has_block = True
-
-    rovername = sys.argv[1]
-    swarmie = Swarmie(rovername)
     if not has_block:
-        swarmie.print_infoLog(rovername +
-                              ": I don't have a block. Not avoiding targets.")
+        swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
 
-    planner = Planner(swarmie)
+    planner = Planner()
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
-    if not rospy.has_param('/' + rovername + '/gohome/speeds'):
+    if not rospy.has_param('gohome/speeds'):
         speeds = GOHOME_SPEEDS
-        rospy.set_param('/' + rovername + '/gohome/speeds', speeds)
+        rospy.set_param('gohome/speeds', speeds)
     else:
-        speeds = rospy.get_param('/' + rovername + '/gohome/speeds',
+        speeds = rospy.get_param('gohome/speeds',
                                  default=GOHOME_SPEEDS)
 
-    param_client = dynamic_reconfigure.client.Client(rovername + '_MOBILITY')
+    param_client = dynamic_reconfigure.client.Client('mobility')
     config = param_client.get_configuration()
     initial_config = {
         'DRIVE_SPEED': config['DRIVE_SPEED'],
@@ -180,7 +150,7 @@ def main():
     if planner.sees_home_tag():
         # victory!
         planner.face_home_tag()
-        exit(0)
+        sys.exit(0)
 
     # Look to the right and left before starting spiral search, which goes
     # left:
@@ -196,44 +166,36 @@ def main():
         planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
         planner.face_home_tag()
-        exit(0)
+        sys.exit(0)
     except TagException:
-        exit(GOHOME_FOUND_TAG)
+        sys.exit(GOHOME_FOUND_TAG)
     except ObstacleException:
         pass # do spiral search
 
-    print('Starting spiral search')
+    swarmie.print_infoLog(swarmie.rover_name + " Starting spiral search")
+
+    print('Starting spiral search with location')
     try:
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
-            exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG:
-            exit(GOHOME_FOUND_TAG)
+            sys.exit(0)
+        elif drive_result == MoveResult.OBSTACLE_TAG: #TODO: This may not actuly work and may make behavor of task restarting go home
+            sys.exit(GOHOME_FOUND_TAG)
     except PathException:
-        pass  # try gps backup
-
-    # gps backup attempt
-    current_loc = swarmie.get_odom_location().get_pose()
-    angle, dist = get_gps_angle_and_dist()
-
-    goal = Point()
-    goal.x = current_loc.x + dist * math.cos(current_loc.theta + angle)
-    goal.y = current_loc.y + dist * math.sin(current_loc.theta + angle)
-
-    drive_home(has_block, goal)
-
-    print('Starting spiral search with gps location')
-    try:
-        drive_result = spiral_search(has_block)
-        if drive_result == MoveResult.OBSTACLE_HOME:
-            exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG:
-            exit(GOHOME_FOUND_TAG)
-    except PathException:
-        exit(GOHOME_FAIL)
+        sys.exit(GOHOME_FAIL)
 
     # didn't find anything
-    exit(GOHOME_FAIL)
+    return GOHOME_FAIL
 
-if __name__ == '__main__' : 
-    main()
+if __name__ == '__main__' :
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '--has-block',
+        help=('whether the rover currently has a block, and should ' +
+              'accordingly either avoid cubes or stop for them')
+    )
+    args = parser.parse_args()
+    swarmie.start(node_name='gohome')
+    sys.exit(main(has_block=args.has_block))

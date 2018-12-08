@@ -9,25 +9,26 @@
 using namespace std;
 using namespace gazebo;
 
-Diagnostics::Diagnostics(std::string name) {
+Diagnostics::Diagnostics() {
 
   node_heartbeat_timeout = 5.0;
   device_heartbeat_timeout = 2.0;
   diagnostics_start_time = ros::Time::now();
   node_start_delay = 20;
 
-  this->publishedName = name;
+  ros::param::param<std::string>("rover_name", publishedName, "noname");
+
   diagLogPublisher = nodeHandle.advertise<std_msgs::String>("/diagsLog", 1, true);
-  diagnosticDataPublisher  = nodeHandle.advertise<std_msgs::Float32MultiArray>("/"+publishedName+"/diagnostics", 1);
-  fingerAngleSubscribe = nodeHandle.subscribe(publishedName + "/fingerAngle/prev_cmd", 10, &Diagnostics::fingerTimestampUpdate, this);
-  wristAngleSubscribe = nodeHandle.subscribe(publishedName + "/fingerAngle/prev_cmd", 10, &Diagnostics::wristTimestampUpdate, this);
-  imuSubscribe = nodeHandle.subscribe(publishedName + "/imu", 10, &Diagnostics::imuTimestampUpdate, this);
-  odometrySubscribe = nodeHandle.subscribe(publishedName + "/odom", 10, &Diagnostics::odometryTimestampUpdate, this);
-  sonarLeftSubscribe = nodeHandle.subscribe(publishedName + "/sonarLeft", 10, &Diagnostics::sonarLeftTimestampUpdate, this);
-  sonarCenterSubscribe = nodeHandle.subscribe(publishedName + "/sonarCenter", 10, &Diagnostics::sonarCenterTimestampUpdate, this);
-  sonarRightSubscribe = nodeHandle.subscribe(publishedName + "/sonarRight", 10, &Diagnostics::sonarRightTimestampUpdate, this);
-  bdridgeNodeSubscribe = nodeHandle.subscribe(publishedName + "/bridge/heartbeat", 1, &Diagnostics::bridgeNode,this);
-  ubloxNodeSubscribe = nodeHandle.subscribe(publishedName + "/fix" , 1, &Diagnostics::ubloxNode,this);
+  diagnosticDataPublisher  = nodeHandle.advertise<std_msgs::Float32MultiArray>("diagnostics", 1);
+  fingerAngleSubscribe = nodeHandle.subscribe("fingerAngle/prev_cmd", 10, &Diagnostics::fingerTimestampUpdate, this);
+  wristAngleSubscribe = nodeHandle.subscribe("fingerAngle/prev_cmd", 10, &Diagnostics::wristTimestampUpdate, this);
+  imuSubscribe = nodeHandle.subscribe("imu", 10, &Diagnostics::imuTimestampUpdate, this);
+  odometrySubscribe = nodeHandle.subscribe("odom", 10, &Diagnostics::odometryTimestampUpdate, this);
+  sonarLeftSubscribe = nodeHandle.subscribe("sonarLeft", 10, &Diagnostics::sonarLeftTimestampUpdate, this);
+  sonarCenterSubscribe = nodeHandle.subscribe("sonarCenter", 10, &Diagnostics::sonarCenterTimestampUpdate, this);
+  sonarRightSubscribe = nodeHandle.subscribe("sonarRight", 10, &Diagnostics::sonarRightTimestampUpdate, this);
+  bdridgeNodeSubscribe = nodeHandle.subscribe("bridge/heartbeat", 1, &Diagnostics::bridgeNode,this);
+  ubloxNodeSubscribe = nodeHandle.subscribe("fix" , 1, &Diagnostics::ubloxNode,this);
 
   // Initialize the variables we use to track the simulation update rate
   prevRealTime = common::Time(0.0);
