@@ -550,31 +550,40 @@ class Swarmie:
         rospy.sleep(1)
         self.wrist_up()
     
-    def get_latest_targets(self) :
+    def get_latest_targets(self,id=-1):
         """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
-        and will be affected by twinkeling """
+        and will be affected by twinkeling with an optional id flag"""
         # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
-        return self.targets[self.targets_index] 
+        if id == -1:  # all of the tags
+            return self.targets[self.targets_index]
+        else:  # only the specified tags with id
+            detection_array= self.targets[self.targets_index]
+            detection_array.detections = [tag for tag in self.targets[self.targets_index].detections if tag.id == id]
+            return detection_array
     
-    def get_targets_buffer(self, age=8, cleanup=True):
-        """ Return a buffer of the target detections from the AprilTagDetectionArray"""
+    def get_targets_buffer(self, age=8, cleanup=True, id=-1):
+        """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
         buffer = self.targets[self.targets_index]
         for i in range(1, self.CONST_CIRCULAR_BUFFER_SIZE):
             if self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE]:
                 buffer.detections.extend(self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE].detections)
         if cleanup:
-            buffer.detections = self._detection_cleanup(buffer.detections, age)
+            buffer.detections = self._detection_cleanup(buffer.detections, age, id)
         return buffer
 
-    def _detection_cleanup(self, detections, age=8):  # does not need to be in Swarmie, static?
+    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
         """ Returns the detections with the duplicate tags and old tags removed """
         # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
         # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
+        if id == -1:
+            id = [0, 256]  # resource & home
+        else:
+            id = [id]
         targets_dict = {(round(tag.pose.pose.position.x, 2),
                         round(tag.pose.pose.position.y, 2),
                         round(tag.pose.pose.position.z, 2)):
                         tag for tag in detections
-                        if ((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs)}
+                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
         # get the tags from the dict and saves them to detections
         detections = targets_dict.values()
         return detections
