@@ -21,25 +21,28 @@ import mobility.behavior.search
 import mobility.behavior.pickup
 import mobility.behavior.gohome
 import mobility.behavior.dropoff
+import mobility.behavior.escape_home
 
-from mobility.swarmie import swarmie, AbortException
+from mobility.swarmie import swarmie, AbortException, InsideHomeException
 
 '''Node that coordinates the overall robot task''' 
 
 class Task : 
     
-    STATE_IDLE     = 0 
-    STATE_INIT     = 1 
-    STATE_SEARCH   = 2 
-    STATE_PICKUP   = 3 
-    STATE_GOHOME   = 4 
-    STATE_DROPOFF  = 5 
+    STATE_IDLE        = 0
+    STATE_INIT        = 1
+    STATE_SEARCH      = 2
+    STATE_PICKUP      = 3
+    STATE_GOHOME      = 4
+    STATE_DROPOFF     = 5
+    STATE_ESCAPE_HOME = 6
     
-    PROG_INIT      = 'init.py'
-    PROG_SEARCH    = 'search.py'
-    PROG_PICKUP    = 'pickup.py'
-    PROG_GOHOME    = 'gohome.py'
-    PROG_DROPOFF   = 'dropoff.py'
+    PROG_INIT        = 'init.py'
+    PROG_SEARCH      = 'search.py'
+    PROG_PICKUP      = 'pickup.py'
+    PROG_GOHOME      = 'gohome.py'
+    PROG_DROPOFF     = 'dropoff.py'
+    PROG_ESCAPE_HOME = 'escape_home.py'
 
     def __init__(self):
         self.current_state = Task.STATE_IDLE 
@@ -59,7 +62,12 @@ class Task :
         except SystemExit as e: 
             rval = e.code
         except AbortException as e:
-            sys.exit(0) 
+            sys.exit(0)
+        except InsideHomeException:
+            # Momentarily interrupt the state machine's flow in order to get
+            # out of the home ring.
+            mobility.behavior.escape_home.main(has_block=self.has_block)
+            rval = -99
         except Exception as e: 
             print ('Task caught unknown exception: ', e)
             traceback.print_exc()
@@ -78,7 +86,9 @@ class Task :
         elif self.current_state == Task.STATE_GOHOME : 
             return "gohome"
         elif self.current_state == Task.STATE_DROPOFF : 
-            return "dropoff"        
+            return "dropoff"
+        elif self.current_state == Task.STATE_ESCAPE_HOME :
+            return "escape_home"
         return "unknown"
         
     @sync(task_lock)

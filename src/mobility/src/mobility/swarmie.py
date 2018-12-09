@@ -42,6 +42,9 @@ class TagException(VisionException):
 class HomeException(VisionException):
     pass
 
+class InsideHomeException(VisionException):
+    pass
+
 class ObstacleException(DriveException):
     pass 
 
@@ -271,6 +274,8 @@ class Swarmie:
         request.obstacles = ~0
         if 'ignore' in kwargs :
             request.obstacles = ~kwargs['ignore']
+            if kwargs['ignore'] & Obstacle.INSIDE_HOME == Obstacle.INSIDE_HOME:
+                rospy.logwarn('Ignoring INSIDE_HOME exceptions.')
 
         request.timeout = 120
         if 'timeout' in kwargs :
@@ -291,6 +296,8 @@ class Swarmie:
                 raise AbortException(value)
             elif value == MoveResult.TIMEOUT :
                 raise TimeoutException(value)
+            elif value == MoveResult.INSIDE_HOME:
+                raise InsideHomeException(value)
         
         return value
         
@@ -386,6 +393,8 @@ class Swarmie:
             * `mobility.swarmie.TimeoutException` - Exception caused when the drive command fails to \
             complete in the amount of time specified with the `timeout=` argument. 
              
+            * `mobility.swarmie.InsideHomeException` - Exception caused when the rover thinks it's inside \
+            of the home ring.
         '''
         req = MoveRequest(
             r=distance, 
@@ -675,11 +684,12 @@ class Swarmie:
             bit 4: SONAR_BLOCK
             bit 8: TAG_TARGET
             bit 9: TAG_HOME
+            bit 10: INSIDE_HOME
 
         Bit masks:
         
             IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
-            IS_VISION = TAG_TARGET | TAG_HOME 
+            IS_VISION = TAG_TARGET | TAG_HOME | INSIDE_HOME
         '''
         with swarmie_lock : 
             return self.Obstacles
@@ -778,7 +788,33 @@ class Swarmie:
         if (self.OdomLocation.Odometry is None):
             return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
-                
+
+    def transform_pose(self, target_frame, pose, timeout=3.0):
+        """Transform PoseStamped into the target frame of reference.
+        Returns a PoseStamped in the target frame.
+
+        Args:
+        * target_frame (`string`) - the frame of reference to transform to. Ex: '/odom' or `/base_link`
+        * pose (`PoseStamped`) - the pose of the tag in the /camera_link frame
+        * timeout (`float`) - the time to wait for the transform
+
+        Returns:
+        * pose - PoseStamped the pose of the tag in the /odom frame
+
+        Raises:
+        * tf.Exception if timeout is exceeded
+        """
+        target_frame = self.rover_name + '/' + target_frame.strip('/')
+
+        swarmie.xform.waitForTransform(
+            target_frame,
+            pose.header.frame_id,
+            pose.header.stamp,
+            rospy.Duration(timeout)
+        )
+
+        return swarmie.xform.transformPose(target_frame, pose)
+
     def get_nearest_block_location(self, use_targets_buffer=False):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
@@ -815,13 +851,10 @@ class Swarmie:
         if nearest.id==256:
             return None
 
-        self.xform.waitForTransform(self.rover_name + '/odom',
-                        nearest.pose.header.frame_id, nearest.pose.header.stamp,
-                        rospy.Duration(3.0))
-        
-        # returns the closes block to the rover.
-        return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
-        
+        result = self.transform_pose('/odom', nearest.pose, timeout=3.0)
+
+        return result.pose.position
+
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
         odom =  self.get_odom_location().get_pose()
@@ -842,10 +875,16 @@ class Swarmie:
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
-        Use:
-            odom_pose = swarmie.get_search_exit_poses()
-            swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-            swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        Examples:
+        >>> odom_pose = swarmie.get_search_exit_poses()
+        >>> swarmie.drive_to(
+        >>>     odom_pose,
+        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+        >>> )
+        >>> swarmie.set_heading(
+        >>>     odom_pose.theta,
+        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+        >>> )
         '''
         poses = rospy.get_param(
             'search_exit_poses',

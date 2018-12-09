@@ -84,137 +84,6 @@ class Planner:
                 queue_size=1
             )
 
-    def _transform_to_base_link(self, detection, timeout=3.0):
-        """Transform PoseStamped detection into base_link frame.
-        Returns PoseStamped in base_link frame.
-
-        Args:
-        * detection - PoseStamped the pose of the tag in the /camera_link frame
-        * timeout - float, the time to wait for the transform
-
-        Returns:
-        * pose - PoseStamped the pose of the tag in the /base_link frame
-
-        Raises:
-        * tf.Exception if timeout is exceeded
-        """
-        swarmie.xform.waitForTransform(
-            self.rovername + '/base_link',
-            detection.pose.header.frame_id,
-            detection.pose.header.stamp,
-            rospy.Duration(timeout)
-        )
-
-        return swarmie.xform.transformPose(self.rovername + '/base_link',
-                                                detection.pose)
-
-    def _transform_to_odom(self, detection, timeout=3.0):
-        """Transform PoseStamped detection into /odom frame.
-        Returns PoseStamped in /odom frame.
-
-        Args:
-        * detection - PoseStamped the pose of the tag in the /camera_link frame
-        * timeout - float, the time to wait for the transform
-
-        Returns:
-        * pose - PoseStamped the pose of the tag in the /odom frame
-
-        Raises:
-        * tf.Exception if timeout is exceeded
-        """
-        swarmie.xform.waitForTransform(
-            self.rovername + '/odom',
-            detection.pose.header.frame_id,
-            detection.pose.header.stamp,
-            rospy.Duration(timeout)
-        )
-
-        return swarmie.xform.transformPose(self.rovername + '/odom',
-                                                detection.pose)
-
-    def is_inside_home_ring(self, detections):
-        """Returns True if it looks like the rover is inside the ring of
-        home tags and needs to get out!
-
-        Returns False if no home tags in view.
-
-        Args:
-        * detections - the AprilTagDetection array of tags currently in view.
-
-        Raises:
-        * tf.Exception if timeout is exceeded to transform the tag pose into
-          the /base_link frame
-        """
-        YAW_THRESHOLD = 1.3  # radians
-        see_home_tag = False
-        good_orientations = 0
-        bad_orientations = 0
-
-        for detection in detections:
-            if detection.id == 256:
-                see_home_tag = True
-                home_detection = self._transform_to_base_link(detection)
-
-                quat = [home_detection.pose.orientation.x,
-                        home_detection.pose.orientation.y,
-                        home_detection.pose.orientation.z,
-                        home_detection.pose.orientation.w]
-                _r, _p, y = tf.transformations.euler_from_quaternion(quat)
-                y -= math.pi / 2
-                y = angles.normalize_angle(y)
-
-                if abs(y) < YAW_THRESHOLD:
-                    bad_orientations += 1
-                else:
-                    good_orientations += 1
-
-        if not see_home_tag:
-            return False
-
-        return bad_orientations >= good_orientations
-
-    def get_angle_and_dist_to_escape_home(self, detections):
-        """Return the angle to turn and distance to drive in order to get
-        out of the home area if the rover is trapped in there. Should be
-        used in conjuction with Planner.is_inside_home_ring()
-
-        Returns:
-        * angle - the angle in radians to turn.
-        * distance - the distance in meters to drive.
-        """
-        OVERSHOOT_DIST = 0.4  # meters, distance to overshoot target by
-        result = {
-            'angle': sys.maxint,
-            'dist': None
-        }
-        see_home_tag = False
-
-        for detection in detections:
-            if detection.id == 256:
-                see_home_tag = True
-                home_detection = self._transform_to_base_link(detection)
-
-                quat = [home_detection.pose.orientation.x,
-                        home_detection.pose.orientation.y,
-                        home_detection.pose.orientation.z,
-                        home_detection.pose.orientation.w]
-                _r, _p, y = tf.transformations.euler_from_quaternion(quat)
-                y -= math.pi / 2
-                y = angles.normalize_angle(y)
-
-                if abs(y) < result['angle']:
-                    result['angle'] = y
-                    result['dist'] = \
-                        (math.sqrt(home_detection.pose.position.x ** 2
-                                   + home_detection.pose.position.y **2)
-                         + OVERSHOOT_DIST)
-
-        if not see_home_tag:
-            # doesn't make sense to turn or drive if no home tags were seen
-            return 0, 0
-
-        return result['angle'], result['dist']
-
     def _get_angle_and_dist_to_avoid(self, detection, direction='left'):
         """The safe driving pathway is defined to be the space between two
         lines running parallel to the rover's x-axis, at y=0.33m and y=-0.33m.
@@ -257,7 +126,7 @@ class Planner:
         * distance - the distance in meters to drive.
         """
         OVERSHOOT_DIST = 0.20  # meters, distance to overshoot target by
-        base_link_pose = self._transform_to_base_link(detection)
+        base_link_pose = swarmie.transform_pose('/base_link', detection.pose)
         radius = math.sqrt(base_link_pose.pose.position.x ** 2
                            + base_link_pose.pose.position.y ** 2)
         tag_point = Point(x=base_link_pose.pose.position.x,
@@ -291,7 +160,7 @@ class Planner:
         Returns:
         * angle - the angle in radians to turn.
         """
-        base_link_pose = self._transform_to_base_link(detection)
+        base_link_pose = swarmie.transform_pose('/base_link', detection.pose)
         radius = math.sqrt(base_link_pose.pose.position.x ** 2
                            + base_link_pose.pose.position.y ** 2)
         tag_point = Point(x=base_link_pose.pose.position.x,
@@ -316,7 +185,7 @@ class Planner:
             current_heading = swarmie.get_odom_location().get_pose().theta
             swarmie.set_heading(
                 current_heading + angle,
-                ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
+                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET|Obstacle.TAG_HOME
             )
 
     def sees_home_tag(self):
@@ -572,7 +441,9 @@ class Planner:
 
         if block is not None:
             angle = self.get_angle_to_face_point(block)
-            swarmie.turn(angle, ignore=Obstacle.IS_VISION, throw=False)
+            swarmie.turn(angle,
+                         ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET,
+                         throw=False)
 
         return
 
@@ -1035,36 +906,11 @@ class Planner:
                     count += 1
                     self.fail_count += 1
 
-                    detections = swarmie.get_latest_targets().detections
-                    inside_home = self.is_inside_home_ring(detections)
-                    if inside_home:
-                        print('\nGetting out of the home ring!!')
-                        angle, dist = self.get_angle_and_dist_to_escape_home(
-                            detections
-                        )
-                        swarmie.turn(
-                            angle,
-                            ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-                        )
-                        self.result = swarmie.drive(
-                            dist,
-                            ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-                        )
+                    if self.avoid_home is False:
+                        print('Obstacle: Found Home.')
+                        return MoveResult.OBSTACLE_HOME
 
-                        if self.avoid_home is False:
-                            # turn back around
-                            swarmie.turn(
-                                math.pi,
-                                ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-                            )
-                            print('Obstacle: Found Home.')
-                            return MoveResult.OBSTACLE_HOME
-                    else:
-                        if self.avoid_home is False:
-                            print('Obstacle: Found Home.')
-                            return MoveResult.OBSTACLE_HOME
-
-                        self.result = self._avoid_tag(id=256,
+                    self.result = self._avoid_tag(id=256,
                                                   ignore=current_ignore)
 
             elif self.result == MoveResult.OBSTACLE_TAG:
@@ -1181,7 +1027,7 @@ class Planner:
                 self.current_state = Planner.STATE_AVOID_REVERSE
                 swarmie.drive(
                     -0.5,
-                    ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION,
+                    ignore=Obstacle.IS_SONAR|Obstacle.TAG_HOME|Obstacle.TAG_TARGET,
                     throw=False
                 )
 
@@ -1271,7 +1117,8 @@ class Planner:
             for detection in detections:
                 if detection.id == 256:
                     see_home_tag = True
-                    home_detection = self._transform_to_odom(detection)
+                    home_detection = swarmie.transform_pose('/odom',
+                                                            detection.pose)
 
                     quat = [home_detection.pose.orientation.x,
                             home_detection.pose.orientation.y,
