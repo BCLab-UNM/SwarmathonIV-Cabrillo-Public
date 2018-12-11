@@ -208,7 +208,7 @@ double cost(grid_map::GridMap& map,
 	}
 
     for (GridLocation direction : DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+        GridLocation next{to_node.x + direction.x, to_node.y + direction.y};
 		index(0) = next.x;
 		index(1) = next.y;
         if (in_bounds(map, next)) {
@@ -224,7 +224,7 @@ double cost(grid_map::GridMap& map,
     }
 
     for (GridLocation direction : TWO_STEP_DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+        GridLocation next{to_node.x + direction.x, to_node.y + direction.y};
 		index(0) = next.x;
 		index(1) = next.y;
         if (in_bounds(map, next)) {
