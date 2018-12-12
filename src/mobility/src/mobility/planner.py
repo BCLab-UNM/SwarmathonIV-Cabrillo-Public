@@ -309,7 +309,7 @@ class Planner:
         """Turn and face the home tag nearest the center of view if we
         see one. Does nothing if no home tag is seen."""
         home_detections = self._sort_home_tags_nearest_center(
-            swarmie.get_latest_targets().detections
+            swarmie.get_latest_targets()
         )
         if len(home_detections) > 0:
             angle = self.get_angle_to_face_detection(home_detections[0])
@@ -323,7 +323,7 @@ class Planner:
         """Returns true if the rover can see a home tag.
         Returns false otherwise.
         """
-        detections = swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets()
 
         for detection in detections:
             if detection.id == 256:
@@ -669,7 +669,7 @@ class Planner:
         * drive_result - MoveResult of the avoidance attempt
         """
         sorted_detections = self._sort_tags_left_to_right(
-            swarmie.get_latest_targets().detections,
+            swarmie.get_latest_targets(),
             id=id
         )
 
@@ -1035,7 +1035,7 @@ class Planner:
                     count += 1
                     self.fail_count += 1
 
-                    detections = swarmie.get_latest_targets().detections
+                    detections = swarmie.get_latest_targets()
                     inside_home = self.is_inside_home_ring(detections)
                     if inside_home:
                         print('\nGetting out of the home ring!!')
@@ -1266,7 +1266,7 @@ class Planner:
         current_pose = current_location.get_pose()
         home_odom = Location(current_location.Odometry)
 
-        detections = swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets()
         try:
             for detection in detections:
                 if detection.id == 256:

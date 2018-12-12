@@ -113,7 +113,7 @@ def main(**kwargs):
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
             # get out of from inside home if it ever happens
-            detections = swarmie.get_latest_targets().detections
+            detections = swarmie.get_latest_targets()
             if planner.is_inside_home_ring(detections):
                 escape_home(detections)
             else:
@@ -131,7 +131,7 @@ def main(**kwargs):
                 pass
     else:
         # get out of from inside home if it ever happens
-        detections = swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets()
         if planner.is_inside_home_ring(detections):
             escape_home(detections)
         else:
@@ -218,7 +218,7 @@ def main(**kwargs):
                 planner.set_home_locations()
 
                 # get out of from inside home if it ever happens
-                detections = swarmie.get_latest_targets().detections
+                detections = swarmie.get_latest_targets()
                 if planner.is_inside_home_ring(detections):
                     escape_home(detections)
 

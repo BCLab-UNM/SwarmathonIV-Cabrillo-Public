@@ -174,7 +174,7 @@ class Swarmie:
         self.Obstacles = 0
         self.OdomLocation = Location(None)
         self.CONST_CIRCULAR_BUFFER_SIZE = 90
-        self.targets = [AprilTagDetectionArray()]*self.CONST_CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs
+        self.targets = [[]]*self.CONST_CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
         self.targets_index = 0;  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
@@ -255,7 +255,7 @@ class Swarmie:
     @sync(swarmie_lock)
     def _targets(self, msg):
         self.targets_index = (self.targets_index + 1) % self.CONST_CIRCULAR_BUFFER_SIZE;
-        self.targets[self.targets_index] = msg
+        self.targets[self.targets_index] = msg.detections
 
 
     def __drive(self, request, **kwargs):
@@ -490,7 +490,7 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x: abs(x.pose.pose.position.z))
+        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
         if len(blocks) > 0:
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
@@ -501,7 +501,7 @@ class Swarmie:
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
@@ -557,18 +557,13 @@ class Swarmie:
         if id == -1:  # all of the tags
             return self.targets[self.targets_index]
         else:  # only the specified tags with id
-            detection_array= self.targets[self.targets_index]
-            detection_array.detections = [tag for tag in self.targets[self.targets_index].detections if tag.id == id]
-            return detection_array
-    
+            return [tag for tag in self.targets[self.targets_index] if tag.id == id]
+
     def get_targets_buffer(self, age=8, cleanup=True, id=-1):
         """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
-        buffer = self.targets[self.targets_index]
-        for i in range(1, self.CONST_CIRCULAR_BUFFER_SIZE):
-            if self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE]:
-                buffer.detections.extend(self.targets[(self.targets_index + i) % self.CONST_CIRCULAR_BUFFER_SIZE].detections)
+        buffer = sum(self.targets, [])
         if cleanup:
-            buffer.detections = self._detection_cleanup(buffer.detections, age, id)
+            buffer = self._detection_cleanup(buffer, age, id)
         return buffer
 
     def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
@@ -852,9 +847,9 @@ class Swarmie:
         '''
         # Finds all visible apriltags
         if use_targets_buffer is True:
-            blocks = self.get_targets_buffer().detections
+            blocks = self.get_targets_buffer()
         else:
-            blocks = self.get_latest_targets().detections
+            blocks = self.get_latest_targets()
         if len(blocks) == 0 :
             return None
 
