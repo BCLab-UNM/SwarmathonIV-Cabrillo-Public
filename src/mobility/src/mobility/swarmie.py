@@ -516,7 +516,7 @@ class Swarmie:
                 return True
         return False
 
-      def pickup(self):
+    def pickup(self):
         '''Picks up the block'''
         #finger_close_angle = .5
         #if self.simulator_running():
