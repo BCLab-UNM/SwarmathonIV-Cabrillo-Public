@@ -42,7 +42,7 @@ def convert_to_Pose2D(t):
 
 
 def get_center_pose_list(id):
-    return [convert_to_Pose2D(tag) for tag in swarmie.get_targets_buffer() if tag.id is id ]
+    return [convert_to_Pose2D(tag) for tag in swarmie.get_targets_buffer(id=id)]
  
       
 def get_furthest_side_hometags_location(tags):
