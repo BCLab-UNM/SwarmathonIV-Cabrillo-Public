@@ -173,8 +173,8 @@ class Swarmie:
            
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.CONST_CIRCULAR_BUFFER_SIZE = 90
-        self.targets = [[]]*self.CONST_CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
+        self.CIRCULAR_BUFFER_SIZE = 90
+        self.targets = [[]]*self.CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
         self.targets_index = 0;  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
@@ -254,7 +254,7 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg):
-        self.targets_index = (self.targets_index + 1) % self.CONST_CIRCULAR_BUFFER_SIZE;
+        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE;
         self.targets[self.targets_index] = msg.detections
 
 
