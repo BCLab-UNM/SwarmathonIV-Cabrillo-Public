@@ -59,19 +59,10 @@ class Task :
     def launch(self, prog):
         try: 
             rval = prog(has_block=self.has_block)
+            if rval is None:
+                rval = 0
         except SystemExit as e: 
             rval = e.code
-        except AbortException as e:
-            sys.exit(0)
-        except InsideHomeException:
-            # Momentarily interrupt the state machine's flow in order to get
-            # out of the home ring.
-            mobility.behavior.escape_home.main(has_block=self.has_block)
-            rval = -99
-        except Exception as e: 
-            print ('Task caught unknown exception: ', e)
-            traceback.print_exc()
-            rval = -100
         return rval
     
     def get_task(self) :
@@ -94,60 +85,87 @@ class Task :
     @sync(task_lock)
     def run_next(self):
         self.status_pub.publish(self.get_task())
-        if self.current_state == Task.STATE_IDLE : 
-            self.current_state = Task.STATE_INIT 
-            
-        elif self.current_state == Task.STATE_INIT : 
-            if self.launch(mobility.behavior.init.main) == 0:
-                self.print_state('Init succeeded. Starting search.')
-                self.current_state = Task.STATE_SEARCH
-            else:
-                # FIXME: What should happen when init fails? 
-                self.print_state('Init failed! FIXME!.')
-                            
-        elif self.current_state == Task.STATE_SEARCH :
-            if self.launch(mobility.behavior.search.main) == 0 : 
-                self.print_state('Search succeeded. Do pickup.')
-                self.current_state = Task.STATE_PICKUP 
-            else: 
-                self.print_state('Search failed. Going back home.')
-                self.current_state = Task.STATE_GOHOME 
-            
-        elif self.current_state == Task.STATE_PICKUP : 
-            if self.launch(mobility.behavior.pickup.main) == 0 :
-                self.print_state('Pickup success. Going back home.')
-                self.has_block = True
-                self.current_state = Task.STATE_GOHOME 
-            else:
-                self.print_state('Pickup failed. Back to search.')
-                self.current_state = Task.STATE_SEARCH 
-                
-        elif self.current_state == Task.STATE_GOHOME : 
-            gohome_status = self.launch(mobility.behavior.gohome.main)
-            if gohome_status == 0 :
-                if self.has_block : 
-                    self.print_state('Home found and I have a block. Do drop off.')
-                    self.current_state = Task.STATE_DROPOFF
-                else:
-                    self.print_state('Recalibrated home. Back to searching.')
+
+        try:
+            if self.current_state == Task.STATE_IDLE:
+                self.current_state = Task.STATE_INIT
+
+            elif self.current_state == Task.STATE_INIT:
+                if self.launch(mobility.behavior.init.main) == 0:
+                    self.print_state('Init succeeded. Starting search.')
                     self.current_state = Task.STATE_SEARCH
-            elif gohome_status == 1 :
-                self.print_state('Go Home interrupted, I found a tag. Do pickup.')
-                self.current_state = Task.STATE_PICKUP
-                    
-            else:
-                # FIXME: What happens when we don't find home?
-                self.print_state('Home NOT found. Try again.')
-                self.current_state = Task.STATE_GOHOME 
-                        
-        elif self.current_state == Task.STATE_DROPOFF : 
-            if self.launch(mobility.behavior.dropoff.main) == 0 :
-                self.print_state('Dropoff complete. Back to searching.')
-                self.has_block = False
-                self.current_state = Task.STATE_SEARCH
-            else:
-                self.print_state('Dropoff failed. Back to searching for home.')
-                self.current_state = Task.STATE_GOHOME
+                else:
+                    # FIXME: What should happen when init fails?
+                    self.print_state('Init failed! FIXME!.')
+
+            elif self.current_state == Task.STATE_SEARCH:
+                if self.launch(mobility.behavior.search.main) == 0:
+                    self.print_state('Search succeeded. Do pickup.')
+                    self.current_state = Task.STATE_PICKUP
+                else:
+                    self.print_state('Search failed. Going back home.')
+                    self.current_state = Task.STATE_GOHOME
+
+            elif self.current_state == Task.STATE_PICKUP:
+                if self.launch(mobility.behavior.pickup.main) == 0:
+                    self.print_state('Pickup success. Going back home.')
+                    self.has_block = True
+                    self.current_state = Task.STATE_GOHOME
+                else:
+                    self.print_state('Pickup failed. Back to search.')
+                    self.current_state = Task.STATE_SEARCH
+
+            elif self.current_state == Task.STATE_GOHOME:
+                gohome_status = self.launch(mobility.behavior.gohome.main)
+                if gohome_status == 0:
+                    if self.has_block:
+                        self.print_state('Home found and I have a block. Do drop off.')
+                        self.current_state = Task.STATE_DROPOFF
+                    else:
+                        self.print_state('Recalibrated home. Back to searching.')
+                        self.current_state = Task.STATE_SEARCH
+                elif gohome_status == 1:
+                    self.print_state('Go Home interrupted, I found a tag. Do pickup.')
+                    self.current_state = Task.STATE_PICKUP
+
+                else:
+                    # FIXME: What happens when we don't find home?
+                    self.print_state('Home NOT found. Try again.')
+                    self.current_state = Task.STATE_GOHOME
+
+            elif self.current_state == Task.STATE_DROPOFF:
+                if self.launch(mobility.behavior.dropoff.main) == 0:
+                    self.print_state('Dropoff complete. Back to searching.')
+                    self.has_block = False
+                    self.current_state = Task.STATE_SEARCH
+                else:
+                    self.print_state('Dropoff failed. Back to searching for home.')
+                    self.current_state = Task.STATE_GOHOME
+
+            elif self.current_state == Task.STATE_ESCAPE_HOME:
+                self.print_state("EMERGENCY: I'm in the home ring, escape!")
+                escape_status = self.launch(mobility.behavior.escape_home.main)
+                if escape_status == 0 :
+                    self.print_state('Escape is complete. Resume searching.')
+                    self.has_block = False
+                    self.current_state = Task.STATE_SEARCH
+                else:
+                    # FIXME: What should be done here?
+                    self.print_state('EMERGENCY: Bad to worse escape reports failure. Searching...')
+                    sys.exit(-1)
+
+        except AbortException as e:
+            self.print_state('STOP! Entering manual mode.')
+            sys.exit(0)
+
+        except InsideHomeException:
+            self.current_state = Task.STATE_ESCAPE_HOME
+
+        except Exception as e:
+            # FIXME: What do we do with bugs in task code?
+            print ('Task caught unknown exception: ', e)
+            traceback.print_exc()
+            sys.exit(-2)
 
 def main() :
     swarmie.start(node_name='task')
