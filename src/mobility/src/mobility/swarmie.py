@@ -12,7 +12,7 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, GetMap, GetNavPlan, GetNavPlanRequest
+from mapping.srv import GetNavPlan, GetNavPlanRequest
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
@@ -22,9 +22,6 @@ from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
-from rospy.numpy_msg import numpy_msg
-from grid_map_msgs.msg import GridMap
-from mapping import RoverMap 
 
 import threading 
 
@@ -129,12 +126,7 @@ class Swarmie:
         self.finger_publisher = None
         self.wrist_publisher = None
 
-
-        # Numpy-ify the GridMap
-        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
-
         self.control = None
-        self._get_map = None
         self._get_plan = None
         self._imu_is_finished_validating = None
         self._imu_needs_calibration =  None
@@ -199,12 +191,10 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service('control')
-        rospy.wait_for_service('map/get_map')
         rospy.wait_for_service('map/get_plan')
 
         # Connect to services.
         self.control = rospy.ServiceProxy('control', Core)
-        self._get_map = rospy.ServiceProxy('map/get_map', GetMap)
         self._get_plan = rospy.ServiceProxy('map/get_plan', GetNavPlan)
         self._imu_is_finished_validating = rospy.ServiceProxy('imu/is_finished_validating', QueryCalibrationState)
         self._imu_needs_calibration = rospy.ServiceProxy('imu/needs_calibration', QueryCalibrationState)
@@ -526,7 +516,7 @@ class Swarmie:
                 return True
         return False
 
-    def pickup(self):
+      def pickup(self):
         '''Picks up the block'''
         #finger_close_angle = .5
         #if self.simulator_running():
@@ -549,7 +539,7 @@ class Swarmie:
         self.set_finger_angle(2) #open
         rospy.sleep(1)
         self.wrist_up()
-    
+
     def get_latest_targets(self,id=-1):
         """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
         and will be affected by twinkeling with an optional id flag"""
@@ -583,16 +573,6 @@ class Swarmie:
         detections = targets_dict.values()
         return detections
     
-    def get_obstacle_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the obstacle map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_obstacle_map())
-
-    def get_target_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the targets map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_target_map())
-
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 
@@ -911,88 +891,6 @@ class Swarmie:
         * (`bool`): True if the parameter exists, False otherwise.
         '''
         return rospy.has_param('search_exit_poses')
-    
-
-    def sees_resource(self, required_matches,crop=True):
-        '''Check to see if a resource can be seen between the grippers
-        Args:
-        * (`int`): the minimum number of matches required to return true
-        Returns:
-        * (`bool`): True if the number of required matches has been met, False otherwise.
-        '''
-        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
-        ### TODO crop the image on where the tag in the claws would be
-        from sensor_msgs.msg import CompressedImage
-        import numpy as np
-        import cv2
-        
-        try:
-            test = rospy.wait_for_message('camera/image/compressed', CompressedImage, timeout=3)
-        except(rospy.ROSException), e:
-            print("Camera Broke?")
-            print("Error message: ", e)
-        np_arr = np.fromstring(test.data, np.uint8)
-        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        import pickle
-        img2 = pickle.load( open(rospy.get_param('april_tag_resource_pickel'), "rb" ) ) #this 
-        if(crop):       #(y1:y2, x1:x2)
-            img1 = img1[60:220, 50:220]
-        ''' #for testing1
-        cv2.imshow("cropped", img1)
-        cv2.waitKey(0)        
-        ''' #end for testing1
-        
-        # Initiate SIFT detector
-        #sift = cv2.SIFT() #for opencv2
-        sift = cv2.xfeatures2d.SIFT_create()
-
-        # find the keypoints and descriptors with SIFT
-        kp1, des1 = sift.detectAndCompute(img1,None)
-        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
-        '''
-        Throws
-        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
-        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
-        '''
-
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-        search_params = dict(checks = 50)
-
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-        matches = flann.knnMatch(des1,des2,k=2)
-
-        # store all the good matches as per Lowe's ratio test.
-        good = []
-        for m,n in matches:
-            if m.distance < 0.7*n.distance:
-                good.append(m)
-                
-        '''#for testing2 ###############################################
-        from matplotlib import pyplot as plt
-        # Need to draw only good matches, so create a mask
-        matchesMask = [[0,0] for i in xrange(len(matches))]
-
-        # ratio test as per Lowe's paper
-        for i,(m,n) in enumerate(matches):
-            if m.distance < 0.7*n.distance:
-                matchesMask[i]=[1,0]
-
-        draw_params = dict(matchColor = (0,255,0),
-                           singlePointColor = (255,0,0),
-                           matchesMask = matchesMask,
-                           flags = 0)
-        img3 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,matches,None,**draw_params)
-        plt.imshow(img3,),plt.show()
-        '''#end for testing2   ###############################################
-        
-        print("Seen a resource with",len(good)*5,"% confidence")
-        
-        if len(good)>required_matches-1:
-            return(True)
-        else:
-            return(False)
         
 
 #

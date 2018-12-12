@@ -5,25 +5,13 @@ obstacles, and hopefully not dropping the cube in its claw.
 """
 from __future__ import print_function
 
-if __name__ == '__main__':
-    from mobility.namespace import parser, set_namespace
-
-    parser.add_argument(
-        '--has-block',
-        action='store_true',
-        help=('whether the rover currently has a block, and should ' +
-              'accordingly either avoid cubes or stop for them')
-    )
-    args = parser.parse_args()
-
-    set_namespace(args.rovername)
-
 import sys
 import math 
 import rospy
 import tf
 import angles
 import dynamic_reconfigure.client
+import argparse 
 
 from geometry_msgs.msg import Point
 
@@ -200,5 +188,14 @@ def main(**kwargs):
     return GOHOME_FAIL
 
 if __name__ == '__main__' :
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '--has-block',
+        help=('whether the rover currently has a block, and should ' +
+              'accordingly either avoid cubes or stop for them')
+    )
+    args = parser.parse_args()
     swarmie.start(node_name='gohome')
     sys.exit(main(has_block=args.has_block))

@@ -13,19 +13,7 @@ import termios
 import textwrap
 import traceback
 import tty
-
-if __name__ == '__main__':
-    from mobility.namespace import parser, set_namespace
-
-    parser.add_argument(
-        '-s',
-        '--swarmie',
-        action='store_true',
-        help='use Swarmie API instead to issue driving commands'
-    )
-    args = parser.parse_args()
-
-    set_namespace(args.rovername)
+import argparse
 
 import rospy
 
@@ -380,5 +368,14 @@ def main(use_swarmie=False):
 
 
 if __name__== '__main__':
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '-s',
+        '--swarmie',
+        action='store_true',
+        help='use Swarmie API instead to issue driving commands'
+    )
+    args = parser.parse_args()
     main(use_swarmie=args.swarmie)
-
