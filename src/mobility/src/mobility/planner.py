@@ -151,7 +151,6 @@ class Planner:
         bad_orientations = 0
 
         for detection in detections:
-            if detection.id == 256:
                 see_home_tag = True
                 home_detection = self._transform_to_base_link(detection)
 
@@ -190,7 +189,6 @@ class Planner:
         see_home_tag = False
 
         for detection in detections:
-            if detection.id == 256:
                 see_home_tag = True
                 home_detection = self._transform_to_base_link(detection)
 
@@ -308,8 +306,8 @@ class Planner:
     def face_home_tag(self):
         """Turn and face the home tag nearest the center of view if we
         see one. Does nothing if no home tag is seen."""
-        home_detections = self._sort_home_tags_nearest_center(
-            swarmie.get_latest_targets()
+        home_detections = self._sort_tags_nearest_center(
+            swarmie.get_latest_targets(id=256)
         )
         if len(home_detections) > 0:
             angle = self.get_angle_to_face_detection(home_detections[0])
@@ -323,13 +321,7 @@ class Planner:
         """Returns true if the rover can see a home tag.
         Returns false otherwise.
         """
-        detections = swarmie.get_latest_targets()
-
-        for detection in detections:
-            if detection.id == 256:
-                return True
-
-        return False
+        return bool(swarmie.get_latest_targets(id=256))
 
     def _angle_between(self, point_1, point_2):
         """Returns the angle from point_1 on a circle to point_2 on a circle.
@@ -349,8 +341,8 @@ class Planner:
         angle_2 = math.atan2(point_2.y, point_2.x)
         return angles.shortest_angular_distance(angle_1, angle_2)
 
-    def _sort_home_tags_nearest_center(self, detections):
-        """Sort home tags (id == 256) in view by their distance from the center
+    def _sort_tags_nearest_center(self, detections):
+        """Sort args tags by their distance from the center
         of the camera's field of view.
 
         Args:
@@ -358,16 +350,10 @@ class Planner:
           of detections.
 
         Returns:
-        * sorted_detections - sorted list of AprilTagDetections in view. Will
+        * sorted detections  sorted list of AprilTagDetections in view. Will
           be empty if no tags are in view.
         """
-        sorted_detections = []
-
-        for detection in detections:
-            if detection.id == 256:
-                sorted_detections.append(detection)
-
-        return sorted(sorted_detections,
+         return sorted(detections,
                       key=lambda x: abs(x.pose.pose.position.x))
 
     def _sort_tags_left_to_right(self, detections, id=0):
@@ -1035,7 +1021,7 @@ class Planner:
                     count += 1
                     self.fail_count += 1
 
-                    detections = swarmie.get_latest_targets()
+                    detections = swarmie.get_latest_targets(id=256)
                     inside_home = self.is_inside_home_ring(detections)
                     if inside_home:
                         print('\nGetting out of the home ring!!')
@@ -1266,10 +1252,9 @@ class Planner:
         current_pose = current_location.get_pose()
         home_odom = Location(current_location.Odometry)
 
-        detections = swarmie.get_latest_targets()
+        detections = swarmie.get_latest_targets(id=256)
         try:
             for detection in detections:
-                if detection.id == 256:
                     see_home_tag = True
                     home_detection = self._transform_to_odom(detection)
 
