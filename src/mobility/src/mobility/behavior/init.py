@@ -2,16 +2,16 @@
 
 from __future__ import print_function
 
-import sys 
+import sys
 import math 
 import rospy 
 
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location
+from mobility.swarmie import swarmie, Location
 
-def main(swarmie, **kwargs):
+def main(**kwargs):
 
     # During a normal startup the rover will be facing the center and
     # close to the nest. But there's no guarantee where we will be if 
@@ -73,5 +73,5 @@ def main(swarmie, **kwargs):
     return 0 
 
 if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
-    
+    swarmie.start(node_name='init')
+    sys.exit(main())

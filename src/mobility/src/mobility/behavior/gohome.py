@@ -11,22 +11,21 @@ import rospy
 import tf
 import angles
 import dynamic_reconfigure.client
+import argparse 
 
 from geometry_msgs.msg import Point
 
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import Swarmie, Location, PathException, HomeException, TagException, ObstacleException
-from planner import Planner
+from mobility.swarmie import swarmie, Location, PathException, HomeException, TagException, ObstacleException
+from mobility.planner import Planner
 
 
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
 def drive_straight_home_odom() :
-    global swarmie
-
     # We remember home in the Odom frame when we see it. Unlike GPS
     # there's no need to translate the location into r and theta. The
     # swarmie's drive_to function takes a point in odometry space.
@@ -62,7 +61,7 @@ def drive_home(has_block, home_loc):
 
 
 def spiral_search(has_block):
-    global planner, swarmie
+    global planner
 
     # no map waypoints
     try:
@@ -100,11 +99,11 @@ def reset_speeds():
     param_client.update_configuration(initial_config)
 
 
-def main(s, **kwargs):
-    global planner, swarmie, use_waypoints
+def main(**kwargs):
+    global planner, use_waypoints
     global initial_config, param_client
 
-    swarmie = s
+    has_block = False
     if 'has_block' in kwargs : 
         has_block = kwargs['has_block']
     
@@ -117,13 +116,10 @@ def main(s, **kwargs):
          'TURN_SPEED': 0.7
     }
 
-    if len(sys.argv) > 1 and sys.argv[1] == '--has-block':
-        has_block = True
-
     if not has_block:
         swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
 
-    planner = Planner(swarmie)
+    planner = Planner()
 
     # Change drive and turn speeds for this behavior, and register shutdown
     # hook to reset them at exit.
@@ -191,5 +187,15 @@ def main(s, **kwargs):
     # didn't find anything
     return GOHOME_FAIL
 
-if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+if __name__ == '__main__' :
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '--has-block',
+        help=('whether the rover currently has a block, and should ' +
+              'accordingly either avoid cubes or stop for them')
+    )
+    args = parser.parse_args()
+    swarmie.start(node_name='gohome')
+    sys.exit(main(has_block=args.has_block))
