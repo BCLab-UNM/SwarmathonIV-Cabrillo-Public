@@ -41,13 +41,7 @@ addCollectionZone() {
 
 addGroundPlane() {
 setsid rosrun gazebo_ros spawn_model -sdf -file $PWD/simulation/models/concrete_ground_plane/model.sdf \
-			   -model concrete_ground_plane \
-			   -x 0 \
-			   -y 0 \
-			   -z 0 \
-			   -R 0 \
-			   -P 0 \
-			   -Y 0
+					-model concrete_ground_plane -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0
 	echo "Attempted to add concrete ground plane: name=concrete_ground_plane, x=0, y=0, z=0, roll=0, pitch=0, yaw=0"
 } #end addGroundPlane
 
@@ -79,13 +73,7 @@ addRover()
 	local yaw=$7
 	
 	setsid rosrun gazebo_ros spawn_model -sdf -file $PWD/simulation/models/$rover_name/model.sdf \
-		   -model $rover_name \
-		   -x $x \
-		   -y $y \
-		   -z $z \
-		   -R $roll \
-		   -P $pitch \
-		   -Y $yaw
+				-model $rover_name -x $x -y $y -z $z -R $roll -P $pitch -Y $yaw
 	echo "Attempted to add rover: name=$rover_name, x=$x, y=$y, z=$z, roll=$roll, pitch=$pitch, yaw=$yaw"
 }
 
