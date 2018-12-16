@@ -83,6 +83,7 @@ double lethal_cost;
 // Not yet mapped obstacle layer cells will take this neutral value. This
 // helps to make the search prefer previously visited areas.
 double neutral_cost;
+bool visualize_frontier;
 
 unsigned int obstacle_status;
 
@@ -917,6 +918,18 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 
 	bool success = a_star_search(rover_map, start, goal, tolerance,
 								 use_home_layer, came_from, cost_so_far);
+
+	if (visualize_frontier) {
+		rover_map.clear("frontier");
+		grid_map::Index frontier_index;
+
+		for (auto const &item : came_from) {
+			frontier_index(0) = item.first.x;
+			frontier_index(1) = item.first.y;
+			rover_map.at("frontier", frontier_index) = 1.0;
+		}
+	}
+
 	if (!success) {
 		return false;
 	}
@@ -1046,6 +1059,7 @@ int main(int argc, char **argv) {
     double map_resolution;
     ros::param::param<double>("~map_size", map_size, 25.0);
     ros::param::param<double>("~map_resolution", map_resolution, 0.5);
+    ros::param::param<bool>("~visualize_frontier", visualize_frontier, false);
 
     // Setup dynamic reconfigure server, which also automatically reads any
     // initial parameters put on the parameter server at startup.
@@ -1095,7 +1109,12 @@ int main(int argc, char **argv) {
 	ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
     // Initialize the maps.
-    rover_map = grid_map::GridMap({"obstacle", "target", "home"});
+    std::vector<std::string> layers({"obstacle", "target", "home"});
+    if (visualize_frontier) {
+        layers.emplace_back("frontier");
+        ROS_INFO("Visualizing A* search frontier.");
+    }
+    rover_map = grid_map::GridMap(layers);
     rover_map.setFrameId(map_frame);
 
     ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",

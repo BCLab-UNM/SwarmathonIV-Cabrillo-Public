@@ -43,6 +43,7 @@
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
     <param name="map_size" value="25.0"/>
     <param name="map_resolution" value="0.5"/>
+    <param name="visualize_frontier" value="false"/>
 
     <param name="sonar_angle" value="0.436332"/> <!-- 25 degrees -->
     <param name="single_sensor_obstacle_dist" value="0.35"/>
