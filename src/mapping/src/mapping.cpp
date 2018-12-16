@@ -108,14 +108,6 @@ const std::array<GridLocation, 8> DIRECTIONS =
 		 GridLocation{1, 0}, GridLocation{1, -1},
 		 GridLocation{0, -1}, GridLocation{-1, -1}};
 
-// 2-step away neighbors for an 8-connected grid
-const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
-		{GridLocation{-2, 0}, GridLocation{-2, 1}, GridLocation{-2, 2},
-		 GridLocation{-1, 2}, GridLocation{0, 2}, GridLocation{1, 2},
-		 GridLocation{2, 2}, GridLocation{2, 1}, GridLocation{2, 0},
-		 GridLocation{2, -1}, GridLocation{2, -2}, GridLocation{1, -2},
-		 GridLocation{0, -2}, GridLocation{-1, -2}, GridLocation{-2, -2},
-		 GridLocation{-2, -1}};
 
 /*
  * Check if location and it's neighbors obstacle values are all below threshold.
@@ -223,21 +215,6 @@ double cost(grid_map::GridMap& map,
         }
     }
 
-    for (GridLocation direction : TWO_STEP_DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + direction.y};
-		index(0) = next.x;
-		index(1) = next.y;
-        if (in_bounds(map, next)) {
-            if (map.isValid(index, "obstacle")) {
-                cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
-                        map.at("obstacle", index);
-            }
-            if (use_home_layer && map.isValid(index, "home")) {
-                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
-                        map.at("home", index);
-            }
-        }
-    }
 
 	if (cost > LETHAL_COST) {
 		cost = LETHAL_COST;
