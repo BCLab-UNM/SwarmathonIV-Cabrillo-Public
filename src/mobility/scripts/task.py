@@ -45,7 +45,8 @@ class Task :
     PROG_ESCAPE_HOME = 'escape_home.py'
 
     def __init__(self):
-        self.current_state = Task.STATE_IDLE 
+        self.current_state = Task.STATE_IDLE
+        self.prev_state = None
         self.has_block = False
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
@@ -146,9 +147,16 @@ class Task :
                 self.print_state("EMERGENCY: I'm in the home ring, escape!")
                 escape_status = self.launch(mobility.behavior.escape_home.main)
                 if escape_status == 0 :
-                    self.print_state('Escape is complete. Resume searching.')
-                    self.has_block = False
-                    self.current_state = Task.STATE_SEARCH
+                    self.print_state('Escape is complete.')
+
+                    if self.prev_state == Task.STATE_INIT:
+                        self.current_state = Task.STATE_INIT
+                    elif self.has_block:
+                        self.current_state = Task.STATE_GOHOME
+                    else:
+                        self.current_state = Task.STATE_SEARCH
+
+                    self.prev_state = None
                 else:
                     # FIXME: What should be done here?
                     self.print_state('EMERGENCY: Bad to worse escape reports failure. Searching...')
@@ -159,6 +167,7 @@ class Task :
             sys.exit(0)
 
         except InsideHomeException:
+            self.prev_state = self.current_state
             self.current_state = Task.STATE_ESCAPE_HOME
 
         except Exception as e:
