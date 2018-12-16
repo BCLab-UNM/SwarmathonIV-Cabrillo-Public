@@ -41,6 +41,19 @@
   </node>
 
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
+    <param name="map_size" value="25.0"/>
+    <param name="map_resolution" value="0.5"/>
+
+    <param name="sonar_angle" value="0.436332"/> <!-- 25 degrees -->
+    <param name="single_sensor_obstacle_dist" value="0.35"/>
+    <param name="double_sensor_obstacle_dist" value="0.6"/>
+    <param name="sonar_view_range" value="1.0"/>
+    <param name="sonar_obstacle_depth" value="0.75"/>
+
+    <param name="obstacle_threshold" value="0.1"/>
+    <param name="inflation_pct" value="0.7"/>
+    <param name="lethal_cost" value="255"/>
+    <param name="neutral_cost" value="50"/>
   </node>
     
   <group if="$(arg simulation)">

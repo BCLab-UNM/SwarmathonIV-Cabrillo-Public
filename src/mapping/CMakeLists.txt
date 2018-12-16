@@ -22,9 +22,14 @@ find_package(catkin REQUIRED COMPONENTS
   grid_map_msgs
   swarmie_msgs
   cv_bridge
+  dynamic_reconfigure
 )
 
 catkin_python_setup()
+
+generate_dynamic_reconfigure_options(
+  cfg/mapping.cfg
+)
 
 add_service_files (
 	FILES FindTarget.srv GetMap.srv GetNavPlan.srv
@@ -36,11 +41,12 @@ catkin_package(
   CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs 
   tf apriltags_ros message_runtime 
   grid_map_ros grid_map_msgs 
-  nav_msgs swarmie_msgs cv_bridge 
+  nav_msgs swarmie_msgs cv_bridge dynamic_reconfigure
 )
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
 )
 
 add_executable(
@@ -48,7 +54,8 @@ add_executable(
   src/mapping.cpp
 )
 
-add_dependencies(mapping ${catkin_EXPORTED_TARGETS} mapping_gencpp)
+add_dependencies(mapping ${catkin_EXPORTED_TARGETS} mapping_gencpp
+  ${PROJECT_NAME}_gencfg)
 
 target_link_libraries(
   mapping
