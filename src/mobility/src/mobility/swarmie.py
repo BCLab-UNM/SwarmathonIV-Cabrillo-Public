@@ -12,7 +12,7 @@ import angles
 import tf 
 
 from mobility.srv import Core
-from mapping.srv import FindTarget, GetMap, GetNavPlan, GetNavPlanRequest
+from mapping.srv import GetNavPlan, GetNavPlanRequest
 from mobility.msg import MoveResult, MoveRequest
 from swarmie_msgs.msg import Obstacle 
 
@@ -114,19 +114,51 @@ class Swarmie:
     
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
-    ''' 
-    
-    def __init__(self, **kwargs):
+    '''
+    def __init__(self):
         '''Constructor.
-
-        Args:
-
-        * `rover` (`string`) - Name of the rover.
-
-        Keyword arguments:
-
-        * `anonymous` (`bool`) - Launch an anonymous node. Use this for debugging nodes. 
         '''
+
+        self.rover_name = None
+        self.Obstacles = 0
+        self.OdomLocation = Location(None)
+        self.sm_publisher = None
+        self.status_publisher = None
+        self.info_publisher = None
+        self.mode_publisher = None
+        self.finger_publisher = None
+        self.wrist_publisher = None
+
+        self.control = None
+        self._get_plan = None
+        self._imu_is_finished_validating = None
+        self._imu_needs_calibration =  None
+        self._start_imu_calibration = None
+        self._start_misalignment_calibration = None
+        self._start_gyro_bias_calibration = None
+        self._start_gyro_scale_calibration = None
+        self._store_imu_calibration = None
+
+        self.xform = None
+
+
+    def start(self, **kwargs):
+        """
+        Start rover services. This initializes the ROS node.
+
+        kwargs:
+
+            tf_rover_name: (str) The name of the rover used for transforms. If
+                not specified the result of rospy.get_namespace() will determine
+                the value.
+
+            node_name: (str) The name of the ROS node to be given to rospy.init().
+                If not specified the node will be called "controller".
+
+            anonymous: (bool) Tell ROS to create an anonymous node. You can read about
+                anonymous nodes here: http://wiki.ros.org/rospy/Overview/Initialization%20and%20Shutdown#Initializing_your_ROS_Node
+        """
+
         if 'tf_rover_name' in kwargs :
             self.rover_name = kwargs['tf_rover_name']
         else:
@@ -135,23 +167,21 @@ class Swarmie:
         self.rover_name = self.rover_name.strip('/')
            
         self.Obstacles = 0
-        self.MapLocation = Location(None)
         self.OdomLocation = Location(None)
-        self.Targets = AprilTagDetectionArray()
-        self.TargetsDict = {}
-        self.TargetsBuffer = AprilTagDetectionArray()
-        self.TargetsDictBuffer = {}
-        self.targets_timeout = 3
+        self.CIRCULAR_BUFFER_SIZE = 90
+        self.targets = [[]]*self.CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
+        self.targets_index = 0;  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
         anon = False
         if 'anonymous' in kwargs : 
-            anon = True
-            
+            anon = kwargs['anonymous']
+
+        node_name = 'controller'
         if 'node_name' in kwargs :
-            rospy.init_node(kwargs['node_name'], anonymous=anon)
-        else :
-            rospy.init_node('controller', anonymous=anon)
+            node_name = kwargs['node_name']
+
+        rospy.init_node(node_name, anonymous=anon)
         
         # Create publishiers.
         self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
@@ -164,15 +194,10 @@ class Swarmie:
         # Wait for necessary services to be online. 
         # Services are APIs calls to other neodes. 
         rospy.wait_for_service('control')
-        rospy.wait_for_service('map/get_map')
         rospy.wait_for_service('map/get_plan')
 
-        # Numpy-ify the GridMap 
-        GetMap._response_class = rospy.numpy_msg.numpy_msg(GridMap)
-        
         # Connect to services.
         self.control = rospy.ServiceProxy('control', Core)
-        self._get_map = rospy.ServiceProxy('map/get_map', GetMap)
         self._get_plan = rospy.ServiceProxy('map/get_plan', GetNavPlan)
         self._imu_is_finished_validating = rospy.ServiceProxy('imu/is_finished_validating', QueryCalibrationState)
         self._imu_needs_calibration = rospy.ServiceProxy('imu/needs_calibration', QueryCalibrationState)
@@ -190,14 +215,12 @@ class Swarmie:
         # These topics only update data. The data is used in other places to initialize
         # these and wait for valid data so that users of this data don't get errors.
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
-        rospy.Subscriber('odom/ekf', Odometry, self._map)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
         try:
             rospy.wait_for_message('odom/filtered', Odometry, 2)
-            rospy.wait_for_message('odom/ekf', Odometry, 2)
         except rospy.ROSException:
             rospy.logwarn(self.rover_name +
                           ': timed out waiting for filtered odometry data.')
@@ -218,47 +241,15 @@ class Swarmie:
         self.OdomLocation.Odometry = msg
             
     @sync(swarmie_lock)
-    def _map(self, msg) : 
-        self.MapLocation.Odometry = msg
-
-    @sync(swarmie_lock)
     def _obstacle(self, msg) :
         self.Obstacles &= ~msg.mask 
         self.Obstacles |= msg.msg 
 
     @sync(swarmie_lock)
-    def _targets(self, msg) :
-        # convert the msg structure back to the old structure(apriltags_ros/AprilTagDetectionArray) from new(apriltags2_ros/AprilTagDetectionArray)
-        newdetections = list()
-        for detection in msg.detections:
-            atd = AprilTagDetection()
-            atd.pose = PoseWithCovarianceStamped_to_PoseStamped(detection.pose)
-            atd.id = detection.id[0]  # Because of the tag bundles, but we only want the first element
-            atd.size = detection.size
-            newdetections.append(atd)
-        msg.detections = newdetections
-        # chuck the old detections
-        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-        # adding currently seen tags to the dict
-        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-        # get the tags from the dict and saves them to Targets
-        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
-    
-        if self._is_moving():
-            self.Targets = msg
-            #create a dict of tags as values and rounded coordinates as the key
-            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
-            
-        else:
-            #remove old tags from the dict
-            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-            #adding currently seen tags to the dict
-            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-            #get the tags from the dict and saves them to Targets
-            self.Targets.detections = self.TargetsDict.values() 
-    
-    #self.TargetsBuffer = AprilTagDetectionArray()
-    #self.TargetsDictBuffer = {}
+    def _targets(self, msg):
+        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE;
+        self.targets[self.targets_index] = msg.detections
+
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -492,18 +483,18 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
+        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
+        if len(blocks) > 0:
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18 :
+            if abs(z_dist) < 0.18:
                 return True 
 
         # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
@@ -518,7 +509,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return(False) #self.sees_resource(6)
+        return False  # self.sees_resource(6)
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -539,11 +530,10 @@ class Swarmie:
         rospy.sleep(1)
         self.set_wrist_angle(1)
         rospy.sleep(.7)
-        
-        self.set_finger_angle(finger_close_angle) #close
+        self.set_finger_angle(finger_close_angle) # close
         rospy.sleep(1)
         self.wrist_up()
-        return(self.has_block())
+        return self.has_block()
        
     def putdown(self):
         '''Puts the block down'''
@@ -552,25 +542,40 @@ class Swarmie:
         self.set_finger_angle(2) #open
         rospy.sleep(1)
         self.wrist_up()
-    
-    def get_latest_targets(self) :
-        '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
-        return self.Targets
-    
-    def get_targets_buffer(self) :
-        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
-        return self.TargetsBuffer
-    
-    def get_obstacle_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the obstacle map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_obstacle_map())
 
-    def get_target_map(self):
-        '''Return a `mapping.msg.RoverMap` that is the targets map.
-            See `./src/mapping/src/mapping/__init__.py` for documentation of RoverMap'''
-        return RoverMap(self._get_target_map())
+    def get_latest_targets(self,id=-1):
+        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        and will be affected by twinkeling with an optional id flag"""
+        # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
+        if id == -1:  # all of the tags
+            return self.targets[self.targets_index]
+        else:  # only the specified tags with id
+            return [tag for tag in self.targets[self.targets_index] if tag.id == id]
 
+    def get_targets_buffer(self, age=8, cleanup=True, id=-1):
+        """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
+        buffer = sum(self.targets, [])
+        if cleanup:
+            buffer = self._detection_cleanup(buffer, age, id)
+        return buffer
+
+    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
+        """ Returns the detections with the duplicate tags and old tags removed """
+        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
+        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
+        if id == -1:
+            id = [0, 256]  # resource & home
+        else:
+            id = [id]
+        targets_dict = {(round(tag.pose.pose.position.x, 2),
+                        round(tag.pose.pose.position.y, 2),
+                        round(tag.pose.pose.position.z, 2)):
+                        tag for tag in detections
+                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
+        # get the tags from the dict and saves them to detections
+        detections = targets_dict.values()
+        return detections
+    
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 
@@ -823,13 +828,11 @@ class Swarmie:
 
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
         '''
-        global rovername, swarmie
-
         # Finds all visible apriltags
         if use_targets_buffer is True:
-            blocks = self.get_targets_buffer().detections
+            blocks = self.get_targets_buffer()
         else:
-            blocks = self.get_latest_targets().detections
+            blocks = self.get_latest_targets()
         if len(blocks) == 0 :
             return None
 
@@ -891,49 +894,18 @@ class Swarmie:
         * (`bool`): True if the parameter exists, False otherwise.
         '''
         return rospy.has_param('search_exit_poses')
-    
-
-    def sees_resource(self, required_matches,crop=True):
-        '''Check to see if a resource can be seen between the grippers
-        Args:
-        * (`int`): the minimum number of matches required to return true
-        Returns:
-        * (`bool`): True if the number of required matches has been met, False otherwise.
-        '''
-        'most of the code from https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_feature2d/py_matcher/py_matcher.html'
-        ### TODO crop the image on where the tag in the claws would be
-        from sensor_msgs.msg import CompressedImage
-        import numpy as np
-        import cv2
         
-        try:
-            test = rospy.wait_for_message('camera/image/compressed', CompressedImage, timeout=3)
-        except(rospy.ROSException), e:
-            print("Camera Broke?")
-            print("Error message: ", e)
-        np_arr = np.fromstring(test.data, np.uint8)
-        img1 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # queryImage
-        import pickle
-        img2 = pickle.load( open(rospy.get_param('april_tag_resource_pickel'), "rb" ) ) #this 
-        if(crop):       #(y1:y2, x1:x2)
-            img1 = img1[60:220, 50:220]
-        ''' #for testing1
-        cv2.imshow("cropped", img1)
-        cv2.waitKey(0)        
-        ''' #end for testing1
-        
-        # Initiate SIFT detector
-        #sift = cv2.SIFT() #for opencv2
-        sift = cv2.xfeatures2d.SIFT_create()
 
-        # find the keypoints and descriptors with SIFT
-        kp1, des1 = sift.detectAndCompute(img1,None)
-        kp2, des2 = sift.detectAndCompute(img2,None) #<-- this guy
-        '''
-        Throws
-        OpenCV Error: Bad argument (image is empty or has incorrect depth (!=CV_8U)) in detectAndCompute, file /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp, line 1116
-        error: /tmp/binarydeb/ros-kinetic-opencv3-3.3.1/opencv_contrib/xfeatures2d/src/sift.cpp:1116: error: (-5) image is empty or has incorrect depth (!=CV_8U) in function detectAndCompute
-        '''
+#
+# Global singleton instance. No code should make a new instance
+# of swarmie. Instead it should access this instance instead as shown
+# below.
+#
+# from movility.swarmie import swarmie
+#
+# swarmie.drive()
+#
+swarmie = Swarmie()
 
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -973,35 +945,4 @@ class Swarmie:
             return(True)
         else:
             return(False)
-
-#apriltags2_ros/AprilTagDetectionArray
-#std_msgs/Header header
-#  uint32 seq
-#  time stamp
-#  string frame_id
-#apriltags2_ros/AprilTagDetection[] detections
-#  int32[] id
-#  float64[] size
-#  geometry_msgs/PoseWithCovarianceStamped pose
-#    std_msgs/Header header
-#      uint32 seq
-#      time stamp
-#      string frame_id
-#    geometry_msgs/PoseWithCovariance pose
-#      geometry_msgs/Pose pose
-#        geometry_msgs/Point position
-#          float64 x
-#          float64 y
-#          float64 z
-#        geometry_msgs/Quaternion orientation
-#          float64 x
-#          float64 y
-#          float64 z
-#          float64 w
-#      float64[36] covariance
-def PoseWithCovarianceStamped_to_PoseStamped(PwCS):
-    '''Helper function to convert PoseWithCovarianceStamped to PoseStamped this is to resolve the change with apriltags 2'''
-    ps = PoseStamped()
-    ps.header = PwCS.header
-    ps.pose = PwCS.pose.pose
-    return ps #ps
+        

@@ -12,17 +12,15 @@ import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
-from planner import Planner
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
+from mobility.planner import Planner
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
 '''Searcher node.''' 
 
 def turnaround(): 
-    global swarmie
     swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
     
 def wander():
-    global swarmie
     try :
         rospy.loginfo("Wandering...")
         swarmie.turn(random.gauss(0, math.pi/6))
@@ -37,7 +35,7 @@ def wander():
 
 
 def escape_home(detections):
-    global swarmie, planner
+    global planner
 
     print('\nGetting out of the home ring!!')
     angle, dist = planner.get_angle_and_dist_to_escape_home(detections)
@@ -52,7 +50,7 @@ def escape_home(detections):
 
 
 def handle_exit():
-    global planner, swarmie, found_tag
+    global planner, found_tag
 
     reset_speeds()
 
@@ -70,22 +68,20 @@ def reset_speeds():
 
 
 def set_search_exit_poses():
-    global swarmie
     swarmie.set_search_exit_poses()
 
 
-def main(s, **kwargs):
-    global swarmie, planner, found_tag
+def main(**kwargs):
+    global planner, found_tag
     global initial_config, param_client
 
-    swarmie = s
     found_tag = False
     SEARCH_SPEEDS = {
          'DRIVE_SPEED': 0.25,
          'TURN_SPEED': 0.7
     }
 
-    planner = Planner(swarmie)
+    planner = Planner()
 
     swarmie.fingers_open()
     swarmie.wrist_middle()
@@ -113,7 +109,7 @@ def main(s, **kwargs):
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
             # get out of from inside home if it ever happens
-            detections = swarmie.get_latest_targets().detections
+            detections = swarmie.get_latest_targets()
             if planner.is_inside_home_ring(detections):
                 escape_home(detections)
             else:
@@ -131,7 +127,7 @@ def main(s, **kwargs):
                 pass
     else:
         # get out of from inside home if it ever happens
-        detections = swarmie.get_latest_targets().detections
+        detections = swarmie.get_latest_targets()
         if planner.is_inside_home_ring(detections):
             escape_home(detections)
         else:
@@ -218,7 +214,7 @@ def main(s, **kwargs):
                 planner.set_home_locations()
 
                 # get out of from inside home if it ever happens
-                detections = swarmie.get_latest_targets().detections
+                detections = swarmie.get_latest_targets()
                 if planner.is_inside_home_ring(detections):
                     escape_home(detections)
 
@@ -239,4 +235,5 @@ def main(s, **kwargs):
     return 1 
 
 if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+    swarmie.start(node_name='search')
+    sys.exit(main())

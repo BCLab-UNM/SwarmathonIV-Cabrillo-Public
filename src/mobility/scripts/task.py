@@ -22,7 +22,7 @@ import mobility.behavior.pickup
 import mobility.behavior.gohome
 import mobility.behavior.dropoff
 
-from mobility.swarmie import Swarmie, AbortException
+from mobility.swarmie import swarmie, AbortException
 
 '''Node that coordinates the overall robot task''' 
 
@@ -45,7 +45,6 @@ class Task :
         self.current_state = Task.STATE_IDLE 
         self.has_block = False
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
-        self.swarmie = Swarmie(node_name='task') 
         self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
                         
     def print_state(self, msg):
@@ -56,7 +55,7 @@ class Task :
         
     def launch(self, prog):
         try: 
-            rval = prog(self.swarmie, has_block=self.has_block)
+            rval = prog(has_block=self.has_block)
         except SystemExit as e: 
             rval = e.code
         except AbortException as e:
@@ -141,7 +140,7 @@ class Task :
                 self.current_state = Task.STATE_GOHOME
 
 def main() :
-    # Get a manager instance. 
+    swarmie.start(node_name='task')
     taskman = Task() 
     while not rospy.is_shutdown():
         taskman.run_next() 

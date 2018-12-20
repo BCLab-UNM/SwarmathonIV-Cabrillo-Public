@@ -6,7 +6,6 @@ Uses Swarmie API or Joy messages published on the driver's /joystick topic to
 drive the rover with keyboard.
 """
 from __future__ import print_function
-import argparse
 import math
 import sys
 import select
@@ -14,24 +13,25 @@ import termios
 import textwrap
 import traceback
 import tty
+import argparse
+
 import rospy
-import rosnode
 
 import dynamic_reconfigure.client
 from sensor_msgs.msg import Joy
 from swarmie_msgs.msg import Obstacle
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
 
 class Teleop(object):
     """Teleop base class."""
 
     def __init__(self, rovername):
-        self.swarmie = Swarmie(rovername, node_suffix='_teleop_keyboard')
+        # self.swarmie = Swarmie(node_name='teleop_keyboard')
 
         self.params = {}
         self.param_client = dynamic_reconfigure.client.Client(
-            rovername + '_MOBILITY',
+            'mobility',
             config_callback=self.update_params
         )
         server_config = self.param_client.get_configuration()
@@ -39,11 +39,11 @@ class Teleop(object):
 
         # Keybindings common to both derived classes:
         self.claw_bindings = {
-            'O': self.swarmie.fingers_open,
-            'U': self.swarmie.fingers_close,
-            't': self.swarmie.wrist_up,
-            'g': self.swarmie.wrist_middle,
-            'b': self.swarmie.wrist_down,
+            'O': swarmie.fingers_open,
+            'U': swarmie.fingers_close,
+            't': swarmie.wrist_up,
+            'g': swarmie.wrist_middle,
+            'b': swarmie.wrist_down,
         }
         self.param_bindings = {
             '1': ['drive_speed', 0.9],
@@ -200,12 +200,12 @@ class TeleopSwarmie(Teleop):
                         dist = self.params['drive_dist']
                         if self.drive_bindings[key] < 0:
                             dist = -dist
-                        self.swarmie.drive(dist, ignore=self.ignore_obst)
+                        swarmie.drive(dist, ignore=self.ignore_obst)
                     elif key in self.turn_bindings.keys():
                         theta = self.params['turn_theta']
                         if self.turn_bindings[key] < 0:
                             theta = -theta
-                        self.swarmie.turn(theta, ignore=self.ignore_obst)
+                        swarmie.turn(theta, ignore=self.ignore_obst)
                     elif key in self.claw_bindings.keys():
                         self.claw_bindings[key]()
                     elif key in self.param_bindings.keys():
@@ -285,7 +285,7 @@ class TeleopKey(Teleop):
 
     def __init__(self, rovername):
         super(TeleopKey, self).__init__(rovername)
-        self.pub = rospy.Publisher(rovername + '/joystick', Joy, queue_size=1)
+        self.pub = rospy.Publisher('joystick', Joy, queue_size=1)
         self.move_bindings = {
             'i': (0, 0, 0, 0, 1, 0),
             'o': (0, 0, 0, -1, 1, 0),
@@ -355,50 +355,11 @@ class TeleopKey(Teleop):
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'rovername',
-        help='optional, name of the rover to connect to',
-        nargs='?',
-        default=None
-    )
-    parser.add_argument(
-        '-s',
-        '--swarmie',
-        action='store_true',
-        help='use Swarmie API instead to issue driving commands'
-    )
-    args = parser.parse_args()
+def main(use_swarmie=False):
+    rovername = rospy.get_namespace().strip('/')
+    swarmie.start(node_name='teleop')
 
-    if args.rovername is None:
-        rovers = set()
-        nodes = rosnode.get_node_names()
-        for node in nodes:
-            if 'MOBILITY' in node:
-                node = node.lstrip('/')
-                rovername = node.split('_')[0]
-                rovers.add(rovername)
-        if len(rovers) == 0:
-            print('\033[91m',"No Rovers Detected",'\033[0m')
-            print('usage:', sys.argv[0], '[rovername]')
-            exit(-1)
-        elif len(rovers) == 1:
-            rovername = rovers.pop()
-            print('Detected rovers: ', rovername)
-            print('\033[92m',"Auto selected:",rovername,'\033[0m')
-        else:
-            print('Detected rovers:')
-            for rover in rovers:
-                print(rover)
-            rovername = ''
-            while rovername not in rovers:
-                rovername = raw_input(
-                    'Which rover would you like to connect to? ')
-    else:
-        rovername = args.rovername
-
-    if args.swarmie:
+    if use_swarmie:
         teleop = TeleopSwarmie(rovername)
     else:
         teleop = TeleopKey(rovername)
@@ -406,6 +367,15 @@ def main():
     teleop.run()
 
 
-if __name__=="__main__":
-    main()
-
+if __name__== '__main__':
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '-s',
+        '--swarmie',
+        action='store_true',
+        help='use Swarmie API instead to issue driving commands'
+    )
+    args = parser.parse_args()
+    main(use_swarmie=args.swarmie)
