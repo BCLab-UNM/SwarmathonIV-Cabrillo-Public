@@ -353,7 +353,7 @@ class Planner:
         * sorted detections  sorted list of AprilTagDetections in view. Will
           be empty if no tags are in view.
         """
-         return sorted(detections,
+        return sorted(detections,
                       key=lambda x: abs(x.pose.pose.position.x))
 
     def _sort_tags_left_to_right(self, detections, id=0):
