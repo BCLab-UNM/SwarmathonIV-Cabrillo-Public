@@ -42,6 +42,9 @@ class TagException(VisionException):
 class HomeException(VisionException):
     pass
 
+class AprilTagBoundaryException(VisionException):
+    pass
+
 class ObstacleException(DriveException):
     pass 
 
@@ -352,6 +355,9 @@ class Swarmie:
 
             * `mobility.swarmie.TagException` - Exception caused when the target tag (0) is seen.
 
+            TODO: add AprilTagBoundaryException
+            * `mobility.swarmie.AprilTagBoundaryException` - Exception caused when boundary tag (1) is seen.
+
             * `mobility.swarmie.HomeException` - Exception caused when the home tag (256) is seen. 
 
             * `mobility.swarmie.ObstacleException` - Exception caused when sonar senses the rover \
@@ -561,7 +567,7 @@ class Swarmie:
         # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
         # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
         if id == -1:
-            id = [0, 256]  # resource & home
+            id = [0, 1, 256]  # resource & home
         else:
             id = [id]
         targets_dict = {(round(tag.pose.pose.position.x, 2),
