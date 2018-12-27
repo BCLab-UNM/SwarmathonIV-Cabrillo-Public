@@ -32,6 +32,12 @@ class Coordinator(rospy.SubscribeListener):
     subscribers.
     """
 
+    # Amount priority will be increased if a rover has to perform an IMU
+    # calibration at the start of a round. This is an appropriate number
+    # because rover priorities by initial heading are in [0, PI], so increasing
+    # this value by 10 is sure to drop the rover to the back of the queue.
+    CAL_PRIORITY_PENALTY = 10
+
     def __init__(self):
         super(Coordinator, self).__init__()
 
@@ -40,6 +46,14 @@ class Coordinator(rospy.SubscribeListener):
         self._start_queues = [[], []]  # Rovers sorted by their priority.
 
         rospy.init_node('coordinate')
+
+        # Service proxies to query the IMU node.
+        self._imu_is_finished_validating = rospy.ServiceProxy(
+            'imu/is_finished_validating', QueryCalibrationState
+        )
+        self._imu_needs_calibration = rospy.ServiceProxy(
+            'imu/needs_calibration', QueryCalibrationState
+        )
 
         rospy.Subscriber('/start_queue_priorities', StartQueuePriority,
                          self._insert_to_start_queue, queue_size=10)
@@ -80,6 +94,16 @@ class Coordinator(rospy.SubscribeListener):
         else:
             self._queue_priority.queue_index = StartQueuePriority.QUEUE_TWO
             self._queue_priority.priority = abs(initial_heading)
+
+        # Only call the IMU services if the simulation isn't running.
+        if not rospy.get_param('/use_sim_time', False):
+            while not self._imu_is_finished_validating().is_calibrated:
+                pass
+
+            if self._imu_needs_calibration().is_calibrated:
+                self._queue_priority.priority += (
+                    Coordinator.CAL_PRIORITY_PENALTY
+                )
 
     @sync(coord_lock)
     def _insert_to_start_queue(self, msg):
