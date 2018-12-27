@@ -50,7 +50,7 @@ add_message_files(
   Waypoint.msg
   Obstacle.msg
   SwarmieIMU.msg
-  SwarmieHeading.msg
+  StartQueuePriority.msg
 )
 
 ## Generate services in the 'srv' folder
