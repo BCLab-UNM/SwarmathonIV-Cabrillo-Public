@@ -40,6 +40,8 @@
     <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
   </node>
 
+  <node name="coordinate" pkg="mobility" type="coordinate.py" respawn="true"/>
+
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
   </node>
     

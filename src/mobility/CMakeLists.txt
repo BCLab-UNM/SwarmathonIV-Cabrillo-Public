@@ -49,6 +49,7 @@ catkin_install_python (
 	scripts/cal_imu.py
 	scripts/test_square.py
 	scripts/task.py
+	scripts/coordinate.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
