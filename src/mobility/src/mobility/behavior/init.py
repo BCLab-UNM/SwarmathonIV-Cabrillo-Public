@@ -8,10 +8,12 @@ import rospy
 
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
+from mobility.srv import QueueRemove, QueueRemoveRequest
 
 from mobility.swarmie import swarmie, Location
 
 def main(**kwargs):
+    remove_from_queue = rospy.ServiceProxy('start_queue/remove', QueueRemove)
 
     # During a normal startup the rover will be facing the center and
     # close to the nest. But there's no guarantee where we will be if 
@@ -43,6 +45,10 @@ def main(**kwargs):
     swarmie.set_home_odom_location(home_odom)
 
     swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+
+    remove_from_queue(QueueRemoveRequest(rover_name=swarmie.rover_name,
+                                         notify_others=True))
+
     return 0 
 
 if __name__ == '__main__' : 

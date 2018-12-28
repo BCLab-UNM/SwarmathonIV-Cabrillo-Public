@@ -18,6 +18,7 @@ from mobility import sync
 # Behavior programs
 import mobility.behavior.init
 import mobility.behavior.calibrate_imu
+import mobility.behavior.queue
 import mobility.behavior.search 
 import mobility.behavior.pickup
 import mobility.behavior.gohome
@@ -31,14 +32,16 @@ class Task :
     
     STATE_IDLE     = 0
     STATE_CAL_IMU  = 1
-    STATE_INIT     = 2
-    STATE_SEARCH   = 3
-    STATE_PICKUP   = 4
-    STATE_GOHOME   = 5
-    STATE_DROPOFF  = 6
+    STATE_QUEUE    = 2
+    STATE_INIT     = 3
+    STATE_SEARCH   = 4
+    STATE_PICKUP   = 5
+    STATE_GOHOME   = 6
+    STATE_DROPOFF  = 7
     
     PROG_INIT      = 'init.py'
     PROG_CAL_IMU   = 'calibrate_imu.py'
+    PROG_QUEUE     = 'queue.py'
     PROG_SEARCH    = 'search.py'
     PROG_PICKUP    = 'pickup.py'
     PROG_GOHOME    = 'gohome.py'
@@ -74,6 +77,8 @@ class Task :
             return "idle"
         elif self.current_state == Task.STATE_CAL_IMU :
             return "cal IMU"
+        elif self.current_state == Task.STATE_QUEUE :
+            return "queue"
         elif self.current_state == Task.STATE_INIT : 
             return "init"
         elif self.current_state == Task.STATE_SEARCH :
@@ -94,11 +99,19 @@ class Task :
 
         elif self.current_state == Task.STATE_CAL_IMU :
             if self.launch(mobility.behavior.calibrate_imu.main) == 0:
-                self.print_state('IMU is calibrated. Starting init.')
-                self.current_state = Task.STATE_INIT
+                self.print_state('IMU is calibrated. Entering start queue.')
+                self.current_state = Task.STATE_QUEUE
             else:
                 # TODO: Can the 2D calibration behavior fail? ServiceException's for example?
                 self.print_state('IMU calibration failed!')
+
+        elif self.current_state == Task.STATE_QUEUE :
+            if self.launch(mobility.behavior.queue.main) == 0:
+                self.print_state('Finished queuing. Starting init.')
+                self.current_state = Task.STATE_INIT
+            else:
+                # TODO: Can the queue behavior fail?
+                self.print_state('Queue failed!')
             
         elif self.current_state == Task.STATE_INIT : 
             if self.launch(mobility.behavior.init.main) == 0:
