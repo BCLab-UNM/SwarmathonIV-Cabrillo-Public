@@ -3,7 +3,7 @@
 try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
-        from typing import Any, Callable
+        from typing import Any, Callable, List, Tuple
         from genpy import Message as Msg
 except ImportError:
     pass
@@ -19,6 +19,8 @@ from mobility import sync
 from mobility.swarmie import Location
 
 from swarmie_msgs.msg import StartQueuePriority
+from mobility.srv import (Queue, QueueRequest, QueueResponse,
+                          QueueRemove, QueueRemoveRequest, QueueRemoveResponse)
 
 
 coord_lock = threading.Lock()
@@ -43,7 +45,10 @@ class Coordinator(rospy.SubscribeListener):
 
         self._initial_pose = Location(None)
         self._queue_priority = StartQueuePriority()
-        self._start_queues = [[], []]  # Rovers sorted by their priority.
+
+        # Rovers sorted by their priority.
+        self._start_queues = [[], []]  # type: List[List[Tuple[float, str]], List[Tuple[float, str]]]
+        self._remove_proxies = []  # type: List[rospy.ServiceProxy]
 
         rospy.init_node('coordinate')
 
@@ -55,16 +60,20 @@ class Coordinator(rospy.SubscribeListener):
             'imu/needs_calibration', QueryCalibrationState
         )
 
-        rospy.Subscriber('/start_queue_priorities', StartQueuePriority,
+        rospy.Subscriber('/start_queue/priorities', StartQueuePriority,
                          self._insert_to_start_queue, queue_size=10)
 
         self._wait_for_initial_odometry()
         self._set_start_queue_priority()
 
         self.pub = rospy.Publisher(
-            '/start_queue_priorities', StartQueuePriority,
+            '/start_queue/priorities', StartQueuePriority,
             subscriber_listener=self, queue_size=10
         )
+
+        self.queue = rospy.Service('start_queue/wait', Queue, self._queue)
+        self.remove = rospy.Service('start_queue/remove', QueueRemove,
+                                    self._remove_from_queue)
 
     def _wait_for_initial_odometry(self):
         """Wait until a message comes in from the IMU/Wheel Encoder EKF."""
@@ -116,6 +125,14 @@ class Coordinator(rospy.SubscribeListener):
         )
         self._start_queues[msg.queue_index].sort(key=lambda tup: tup[0])
 
+        if msg.rover_name != self._queue_priority.rover_name:
+            self._remove_proxies.append(
+                rospy.ServiceProxy(
+                    '/{}/start_queue/remove'.format(msg.rover_name),
+                    QueueRemove
+                )
+            )
+
         log_msg = []
 
         for index, start_queue in enumerate(self._start_queues):
@@ -158,6 +175,74 @@ class Coordinator(rospy.SubscribeListener):
             None
         """
         pass  # TODO: is this callback needed?
+
+    def _queue(self, req):
+        # type: (QueueRequest) -> QueueResponse
+        """ROS service callback to start waiting in the start queue.
+
+        Args:
+            req: the request to start waiting. Includes a timout per rover,
+                which is multiplied by the number of rovers ahead of this one
+                in the start queue to determine the total timeout length.
+
+        Returns:
+            The service QueueResponse, including the result, whether the service
+                timed out, or completed successfully.
+        """
+        timeout_per_rover = QueueRequest.TIMEOUT_DEFAULT
+        if req.timeout_per_rover > 1e-5:
+            timeout_per_rover = req.timeout_per_rover
+
+        num_rovers_ahead = 0
+
+        for rover in self._start_queues[self._queue_priority.queue_index]:
+            if rover[1] == self._queue_priority.rover_name:
+                break
+            num_rovers_ahead += 1
+
+        timeout_time = (rospy.Time().now()
+                        + rospy.Duration(timeout_per_rover * num_rovers_ahead))
+
+        done_once = False
+        while not done_once or rospy.Time().now() < timeout_time:
+            if (self._start_queues[self._queue_priority.queue_index][0][1]
+                    == self._queue_priority.rover_name):
+                return QueueResponse(result=QueueResponse.SUCCESS)
+
+            done_once = True
+
+        return QueueResponse(result=QueueResponse.TIMEOUT)
+
+    @sync(coord_lock)
+    def _remove_from_queue(self, req):
+        # type: (QueueRemoveRequest) -> QueueRemoveResponse
+        """Remove a rover from the start queue. This provides a service to both
+        local and remote nodes. A local node, like the local task manager, for
+        example, can call with req.notify_others=True, and this service will
+        then call the remote services to update everyone's start queues before
+        returning.
+
+        Args:
+            req: the request containing the rover to remove.
+
+        Returns:
+            The empty service response.
+        """
+        for queue in self._start_queues:
+            for index, rover in enumerate(queue):
+                if rover[1] == req.rover_name:
+                    rospy.loginfo('{}: removing {} from queue'.format(
+                        rospy.get_name(),
+                        rover[1]
+                    ))
+                    queue.pop(index)
+
+        if req.notify_others:
+            rospy.loginfo('notifying others.')
+            for service in self._remove_proxies:
+                service(QueueRemoveRequest(rover_name=req.rover_name))
+
+        return QueueRemoveResponse()
 
 
 def main():

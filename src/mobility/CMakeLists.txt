@@ -30,7 +30,7 @@ add_message_files (
 )
 
 add_service_files (
-	FILES Core.srv
+	FILES Core.srv Queue.srv QueueRemove.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs)
