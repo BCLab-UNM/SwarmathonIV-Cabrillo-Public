@@ -24,6 +24,7 @@
   
   <include file="$(find swarmie)/launch/tf.xml">
       <arg name="name" value="$(arg name)"/>
+      <arg name="simulation" value="$(arg simulation)"  />
   </include>
 
   <node name="diagnostics" pkg="diagnostics" type="diagnostics" respawn="true"/>
