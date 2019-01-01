@@ -5,7 +5,8 @@
 function userExit() {
 	echo "Received SIGINT. Exiting."
 	rosnode kill -all
-	./cleanup.sh
+	chmod +x $(catkin locate)/cleanup.sh
+	$(catkin locate)/cleanup.sh 
 	exit
 } #end userExit
 
@@ -105,7 +106,8 @@ export GAZEBO_MODEL_PATH="$PWD/simulation/models"
 export GAZEBO_PLUGIN_PATH="$PWD/build/gazebo_plugins"
 source "$PWD/devel/setup.bash"
 echo Cleaning up ROS and Gazebo Processes
-./cleanup.sh
+chmod +x $(catkin locate)/cleanup.sh
+$(catkin locate)/cleanup.sh 
 echo Killing rosmaster
 pkill rosmaster
 echo Killing roscore
@@ -281,7 +283,8 @@ echo Killing rosmaster
 pkill rosmaster
 echo Killing roscore
 pkill roscore
-./cleanup.sh #TODO: Fix the path for this call
+chmod +x $(catkin locate)/cleanup.sh
+$(catkin locate)/cleanup.sh 
 # Restore previous environment
 export GAZEBO_MODEL_PATH=$previous_gazebo_model_path
 export GAZEBO_PLUGIN_PATH=$previous_gazebo_plugin_path
