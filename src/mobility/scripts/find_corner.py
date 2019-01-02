@@ -1,5 +1,12 @@
 #! /usr/bin/env python
-"""Find a corner of the home plate."""
+"""Find a corner of the home plate.
+TODO: Add a service to allow remote rovers to attempt to set the transform
+ option being used. The service would provide a response indicating success
+ or not success, and if not success, the transform option the client should
+ use instead.
+TODO: Add a list of ServiceProxies to all remote set transform option services.
+ You could get the list of rovers currently online from the coordinate node.
+"""
 from __future__ import print_function
 
 try:
@@ -22,16 +29,6 @@ from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
                                PoseArray, Quaternion)
 
 from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
-
-
-# Globals
-# ROS publishers
-closest_pub = None
-rotated_pub = None
-intersect_pub = None
-corner_pub = None
-# base_link_frame parameter
-base_link_frame = None
 
 
 def euler_from_quaternion(quat):
@@ -243,200 +240,211 @@ def closest_inline_pair(poses1,  # type: List[PoseStamped]
     return None
 
 
-def find_corner_tags(detections):
-    # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
-    """Find the closest pair of tags whose orientations in 2D space are
-    approximately perpendicular and are inline with each other.
-
-    Detections should not be empty and should only contain home tags (id ==
-    256).
+class HomeTransformGen:
+    """Generate the transform from the home frame at the center of the home
+    plate to the odom frame for this rover.
     """
-    global closest_pub, rotated_pub, intersect_pub
 
-    pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
-    pose_buckets[0].append(detections[0])
+    def __init__(self):
+        rospy.init_node('find_corner')
 
-    for detection in detections[1:]:  # type: PoseStamped
-        angle_between = abs(angles.shortest_angular_distance(
-            yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
-            yaw_from_quaternion(detection.pose.orientation)
-        ))
+        self._xform = tf.TransformListener(cache_time=rospy.Duration(secs=30))
 
-        if angle_between < 0.25:  # ~15 deg
-            pose_buckets[0].append(detection)
-        elif angle_between > math.pi / 2 - 0.25:  # PI/2 minus a nominal ~15 deg.
-            pose_buckets[1].append(detection)
+        self._base_link_frame = rospy.get_param('base_link_frame')
+        print(self._base_link_frame)
 
-    if len(pose_buckets[1]) > 0:  # We found 2 different orientations of tags.
-        pair = closest_inline_pair(*pose_buckets)
-        if pair is None:
-            return None
+        # Subscribers
+        self._sub = rospy.Subscriber('targets',
+                                     AprilTagDetectionArray, self._targets_cb)
 
-        pose1, pose2 = pair
+        # Publishers, for visualizing intermediate steps in RViz.
+        self._closest_pub = rospy.Publisher('targets/closest_pair',
+                                            PoseArray, queue_size=10)
+        self._rotated_pub = rospy.Publisher('targets/closest_pair/rotated',
+                                            PoseArray, queue_size=10)
+        self._intersect_pub = rospy.Publisher('targets/closest_pair/intersect',
+                                              PointStamped, queue_size=10)
+        self._corner_pub = rospy.Publisher('targets/corner',
+                                           PoseStamped, queue_size=10)
 
-        # are_inline(pose1, pose2)
-        # pose3 = Pose()
+    def _find_corner_tags(self, detections):
+        # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
+        """Find the closest pair of tags whose orientations in 2D space are
+        approximately perpendicular and are inline with each other.
 
-        # angle_between = angles.shortest_angular_distance(
-        #     yaw_from_quaternion(pose1.pose.orientation),
-        #     yaw_from_quaternion(pose2.pose.orientation)
-        # )
-        # q = tf.transformations.quaternion_multiply(
-        #     [pose1.pose.orientation.x, pose1.pose.orientation.y,
-        #      pose1.pose.orientation.z, pose1.pose.orientation.w],
-        #     tf.transformations.quaternion_about_axis(angle_between / 2.,
-        #                                              (0, 0, 1))
-        # )
-        # pose3.position.x = (pose1.pose.position.x + pose2.pose.position.x) / 2.
-        # pose3.position.y = (pose1.pose.position.y + pose2.pose.position.y) / 2.
-        # pose3.position.z = (pose1.pose.position.z + pose2.pose.position.z) / 2.
-        # pose3.orientation.x = q[0]
-        # pose3.orientation.y = q[1]
-        # pose3.orientation.z = q[2]
-        # pose3.orientation.w = q[3]
+        Detections should not be empty and should only contain home tags (id ==
+        256).
+        """
+        pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
+        pose_buckets[0].append(detections[0])
 
-        # TODO: only publish if debugging?
-        msg = PointStamped()
-        msg.header = pose1.header
-        int_ = intersected(pose1, pose2)
-        if int_ is not None:
-            msg.point.x = int_.pose.position.x
-            msg.point.y = int_.pose.position.y
-            msg.point.z = int_.pose.position.z
-        intersect_pub.publish(msg)
+        for detection in detections[1:]:  # type: PoseStamped
+            angle_between = abs(angles.shortest_angular_distance(
+                yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
+                yaw_from_quaternion(detection.pose.orientation)
+            ))
 
-        msg = PoseArray()
-        msg.header = pose1.header
-        msg.poses = [pose1.pose, pose2.pose]  # , pose3]
-        closest_pub.publish(msg)
+            if angle_between < 0.25:  # ~15 deg
+                pose_buckets[0].append(detection)
+            elif angle_between > math.pi / 2 - 0.25:
+                # PI/2 minus a nominal ~15 deg.
+                pose_buckets[1].append(detection)
 
-        return pose1, pose2
-    else:
-        # Publish empty PoseArray's so RViz doesn't show old data.
-        msg = PoseArray()
-        msg.header = detections[0].header
-        closest_pub.publish(msg)
-        rotated_pub.publish(msg)  # TODO: move into new function
+        if len(pose_buckets[1]) > 0:
+            # We found 2 different orientations of tags.
+            pair = closest_inline_pair(*pose_buckets)
+            if pair is None:
+                return None
 
-        msg = PointStamped()
-        msg.header = detections[0].header
-        intersect_pub.publish(msg)
+            pose1, pose2 = pair
 
-    return None
+            # are_inline(pose1, pose2)
+            # pose3 = Pose()
 
+            # angle_between = angles.shortest_angular_distance(
+            #     yaw_from_quaternion(pose1.pose.orientation),
+            #     yaw_from_quaternion(pose2.pose.orientation)
+            # )
+            # q = tf.transformations.quaternion_multiply(
+            #     [pose1.pose.orientation.x, pose1.pose.orientation.y,
+            #      pose1.pose.orientation.z, pose1.pose.orientation.w],
+            #     tf.transformations.quaternion_about_axis(angle_between / 2.,
+            #                                              (0, 0, 1))
+            # )
+            # pose3.position.x = (pose1.pose.position.x
+            #                     + pose2.pose.position.x) / 2.
+            # pose3.position.y = (pose1.pose.position.y
+            #                     + pose2.pose.position.y) / 2.
+            # pose3.position.z = (pose1.pose.position.z
+            #                     + pose2.pose.position.z) / 2.
+            # pose3.orientation.x = q[0]
+            # pose3.orientation.y = q[1]
+            # pose3.orientation.z = q[2]
+            # pose3.orientation.w = q[3]
 
-def corner_pose(intersected_pose, other_pose):
-    # type: (PoseStamped, PoseStamped) -> PoseStamped
-    """Return the calculated corner pose, given two inline, perpendicular home
-    tag poses.
-    """
-    result = copy.deepcopy(intersected_pose)
-    result.pose.position.x = ((intersected_pose.pose.position.x
-                               + other_pose.pose.position.x) / 2.)
-    result.pose.position.y = ((intersected_pose.pose.position.y
-                               + other_pose.pose.position.y) / 2.)
-    result.pose.position.z = ((intersected_pose.pose.position.z
-                               + other_pose.pose.position.z) / 2.)
-
-    # Rotate the other pose about the intersected pose by the angle required
-    # to give the intersected pose a zero heading in the current frame of
-    # reference.
-    int_rot, other_rot = rotate(
-        intersected_pose, other_pose,
-        -yaw_from_quaternion(intersected_pose.pose.orientation)
-    )
-
-    # Type 2 corner
-    if yaw_from_quaternion(other_rot.pose.orientation) > 0:
-        result.pose.orientation = rotate_quaternion(result.pose.orientation,
-                                                    math.pi / 2, (0, 0, 1))
-
-    return result
-
-
-def targets_cb(msg, listener):
-    # type: (AprilTagDetectionArray, tf.TransformListener) -> None
-    """Find corner of home."""
-    global base_link_frame, rotated_pub, corner_pub
-
-    detections = []  # type: List[PoseStamped]
-    for detection in msg.detections:  # type: AprilTagDetection
-        if detection.id == 256:
-            try:
-                xpose = listener.transformPose(base_link_frame, detection.pose)
-                r, p, y = euler_from_quaternion(xpose.pose.orientation)
-
-                if r < 0.25 and p < 0.25:  # ~15 degrees
-                    # TODO: is this a good number?
-                    # TODO: could filtering ever be a problem, since the
-                    #  transform is going to the base link frame, if the rover
-                    #  was yawed or pitched while driving over a cube? I don't
-                    #  know if transforming into the odom frame would help in
-                    #  that case either, because robot_localization is in 2D
-                    #  mode.
-                    # Occasionally a detection's pose estimate isn't calculated
-                    # very well, and its orientation has a very large roll
-                    # and/or pitch component, when we know the tags are flat
-                    # on the ground.
-                    detections.append(xpose)
-
-            except tf.Exception:
-                pass
-
-    # If a home tag is in view
-    if len(detections) > 0:
-        corner = find_corner_tags(detections)
-        if corner is not None:
-            # print(ps_to_p2d(corner[0]), ps_to_p2d(corner[1]))
-            pose1, pose2 = corner
+            # TODO: only publish if debugging?
+            msg = PointStamped()
+            msg.header = pose1.header
             int_ = intersected(pose1, pose2)
-
-            if int_ == pose1:
-                cor_pose = corner_pose(pose1, pose2)
-                rotated_poses = rotate(
-                    pose1, pose2, -yaw_from_quaternion(pose1.pose.orientation)
-                )
-                # p1_rot, p2_rot = rotated_poses
-            else:
-                cor_pose = corner_pose(pose2, pose1)
-                rotated_poses = rotate(
-                    pose2, pose1, -yaw_from_quaternion(pose2.pose.orientation)
-                )
-                # p2_rot, p1_rot = rotated_poses
-
-            corner_pub.publish(cor_pose)
+            if int_ is not None:
+                msg.point.x = int_.pose.position.x
+                msg.point.y = int_.pose.position.y
+                msg.point.z = int_.pose.position.z
+            self._intersect_pub.publish(msg)
 
             msg = PoseArray()
             msg.header = pose1.header
-            msg.poses = [ps.pose for ps in rotated_poses]
-            rotated_pub.publish(msg)
+            msg.poses = [pose1.pose, pose2.pose]  # , pose3]
+            self._closest_pub.publish(msg)
+
+            return pose1, pose2
         else:
-            # Publish empty corner pose
-            msg = PoseStamped()
+            # Publish empty PoseArray's so RViz doesn't show old data.
+            msg = PoseArray()
             msg.header = detections[0].header
-            corner_pub.publish(msg)
+            self._closest_pub.publish(msg)
+            self._rotated_pub.publish(msg)  # TODO: move into new function
+
+            msg = PointStamped()
+            msg.header = detections[0].header
+            self._intersect_pub.publish(msg)
+
+        return None
+
+    def _corner_pose(self, intersected_pose, other_pose):
+        # type: (PoseStamped, PoseStamped) -> PoseStamped
+        """Return the calculated corner pose, given two inline, perpendicular
+        home tag poses.
+        """
+        result = copy.deepcopy(intersected_pose)
+        result.pose.position.x = ((intersected_pose.pose.position.x
+                                   + other_pose.pose.position.x) / 2.)
+        result.pose.position.y = ((intersected_pose.pose.position.y
+                                   + other_pose.pose.position.y) / 2.)
+        result.pose.position.z = ((intersected_pose.pose.position.z
+                                   + other_pose.pose.position.z) / 2.)
+
+        # Rotate the other pose about the intersected pose by the angle required
+        # to give the intersected pose a zero heading in the current frame of
+        # reference.
+        int_rot, other_rot = rotate(
+            intersected_pose, other_pose,
+            -yaw_from_quaternion(intersected_pose.pose.orientation)
+        )
+
+        # Type 2 corner
+        if yaw_from_quaternion(other_rot.pose.orientation) > 0:
+            result.pose.orientation = rotate_quaternion(result.pose.orientation,
+                                                        math.pi / 2, (0, 0, 1))
+
+        return result
+
+    def _targets_cb(self, msg):
+        # type: (AprilTagDetectionArray) -> None
+        """Find corner of home."""
+        detections = []  # type: List[PoseStamped]
+        for detection in msg.detections:  # type: AprilTagDetection
+            if detection.id == 256:
+                try:
+                    xpose = self._xform.transformPose(self._base_link_frame,
+                                                      detection.pose)
+                    r, p, y = euler_from_quaternion(xpose.pose.orientation)
+
+                    if r < 0.25 and p < 0.25:  # ~15 degrees
+                        # TODO: is this a good number?
+                        # TODO: could filtering ever be a problem, since the
+                        #  transform is going to the base link frame, if the
+                        #  rover was yawed or pitched while driving over a cube?
+                        #  I don't know if transforming into the odom frame
+                        #  would help in that case either, because
+                        #  robot_localization is in 2D mode.
+                        # Occasionally a detection's pose estimate isn't
+                        # calculated very well, and its orientation has a very
+                        # large roll and/or pitch component, when we know the
+                        # tags are flat on the ground.
+                        detections.append(xpose)
+
+                except tf.Exception:
+                    pass
+
+        # If a home tag is in view
+        if len(detections) > 0:
+            corner = self._find_corner_tags(detections)
+            if corner is not None:
+                # print(ps_to_p2d(corner[0]), ps_to_p2d(corner[1]))
+                pose1, pose2 = corner
+                int_ = intersected(pose1, pose2)
+
+                if int_ == pose1:
+                    cor_pose = self._corner_pose(pose1, pose2)
+                    rotated_poses = rotate(
+                        pose1, pose2,
+                        -yaw_from_quaternion(pose1.pose.orientation)
+                    )
+                    # p1_rot, p2_rot = rotated_poses
+                else:
+                    cor_pose = self._corner_pose(pose2, pose1)
+                    rotated_poses = rotate(
+                        pose2, pose1,
+                        -yaw_from_quaternion(pose2.pose.orientation)
+                    )
+                    # p2_rot, p1_rot = rotated_poses
+
+                self._corner_pub.publish(cor_pose)
+
+                msg = PoseArray()
+                msg.header = pose1.header
+                msg.poses = [ps.pose for ps in rotated_poses]
+                self._rotated_pub.publish(msg)
+            else:
+                # Publish empty corner pose
+                msg = PoseStamped()
+                msg.header = detections[0].header
+                self._corner_pub.publish(msg)
 
 
 def main():
-    global base_link_frame, closest_pub, rotated_pub, intersect_pub, corner_pub
-
-    rospy.init_node('find_corner')
-
-    listener = tf.TransformListener(cache_time=rospy.Duration(secs=30))
-
-    base_link_frame = rospy.get_param('base_link_frame')
-    print(base_link_frame)
-
-    sub = rospy.Subscriber('targets', AprilTagDetectionArray,
-                           targets_cb, callback_args=listener)
-    closest_pub = rospy.Publisher('targets/closest_pair', PoseArray,
-                                  queue_size=10)
-    rotated_pub = rospy.Publisher('targets/closest_pair/rotated', PoseArray,
-                                  queue_size=10)
-    intersect_pub = rospy.Publisher('targets/closest_pair/intersect',
-                                    PointStamped, queue_size=10)
-    corner_pub = rospy.Publisher('targets/corner', PoseStamped, queue_size=10)
-
+    home_xform = HomeTransformGen()
     rospy.spin()
 
 
