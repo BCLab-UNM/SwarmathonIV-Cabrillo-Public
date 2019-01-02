@@ -17,6 +17,7 @@ except ImportError:
     pass
 
 import angles
+from collections import OrderedDict
 import copy
 import math
 import numpy as np
@@ -243,9 +244,142 @@ def closest_inline_pair(poses1,  # type: List[PoseStamped]
 class HomeTransformGen:
     """Generate the transform from the home frame at the center of the home
     plate to the odom frame for this rover.
+
+    Tag orientations on the home plate are::
+
+             Corner 1                                       Corner 4
+             <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <--
+
+             <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <-- <--
+            -------------                               -------------
+     Type 1 |<-- <-- <--|<-- <-- <-- <-- <-- <-- <-- <--|<-- <-- <--| Type 2
+     Corner |           |                               |           | Corner
+            | |   |   | |                               | ^   ^   ^ |
+            | v   v   v |                               | |   |   | |
+            -------------                               -------------
+              |   |   |                                   ^   ^   ^
+              v   v   v                                   |   |   |
+                                        |x
+              |   |   |                 |                 ^   ^   ^
+              v   v   v             ____|                 |   |   |
+                                    y
+              |   |   |                                   ^   ^   ^
+              v   v   v                                   |   |   |
+            -------------                               -------------
+     Type 2 | |   |   | |                               | ^   ^   ^ | Type 1
+     Corner | v   v   v |                               | |   |   | | Corner
+            |           |                               |           |
+            |--> --> -->|--> --> --> --> --> --> --> -->|--> --> -->|
+            -------------                               -------------
+             --> --> --> --> --> --> --> --> --> --> --> --> --> -->
+
+             --> --> --> --> --> --> --> --> --> --> --> --> --> -->
+             Corner 2                                       Corner 3
+
+    Corners are numbered by the quadrant they lie within. The two corner types
+    are numbered by the first quadrant they appear in.
+
+
+    The two corner type's are defined to have different orientations::
+
+            -----------------
+     Type 1 | ^     ^     ^ |
+     Corner | |     |     | |
+            |      _|x      |
+            |      y        |
+            |-->   -->   -->|
+            -----------------
+
+            -----------------
+     Type 2 |<--   <--   <--|
+     Corner |     x__       |
+            |       |y      |
+            | ^     ^     ^ |
+            | |     |     | |
+            -----------------
+
+    To determine which corner (1, 2, 3, 4) is in view when the rover sees home
+    tags of 2 different orientations, we identify the type of corner and
+    calculate its pose in the odometry coordinate frame. Those two pieces of
+    information are enough to estimate the home plate's current pose in the
+    odometry frame, allowing us to calculate the transform from the home frame
+    to the odometry frame.
     """
 
+    # Data structures holding the 2 Options for determining a corner number.
+    # These hold the bounds that a corner's orientation must lie within for it
+    # to be identified. The bounds will be shortened at each end by a term,
+    # phi, representing the error in compass headings between rovers that are
+    # facing exactly the same direction.
+
+    BOUNDARY_OPT_1 = 1
+    BOUNDARY_OPT_2 = 2
+
+    # BOUNDS is defined as an OrderedDict because it's important to iterate
+    # through the options in the order they're defined below. This way Option 1
+    # will be the most likely option to be used.
+    BOUNDS = OrderedDict({
+        # Primary option, this is the most likely to be used, but a rover using
+        # this option will switch to option 2 if another rover needs to use
+        # option 2.
+        BOUNDARY_OPT_1: {
+            1: {  # type 1 corner
+                1: {  # corner 1
+                    # Does tag orientation need normalization to [0, 2PI]?
+                    'norm_pos': True,
+                    # (low bound, high bound)
+                    'bounds': (math.pi / 2, 3 * math.pi / 2)
+                },
+                3: {  # corner 3
+                    'norm_pos': False, 'bounds': (-math.pi / 2, math.pi / 2)
+                }
+            },
+            2: {  # type 2 corner
+                2: {  # corner 2
+                    'norm_pos': False, 'bounds': (-math.pi, 0)
+                },
+                4: {  # corner 4
+                    'norm_pos': False, 'bounds': (0, math.pi)
+                }
+            }
+        },
+
+        # The secondary option, this is less likely to be used, but all rovers
+        # will switch to it if any rover needs to used this option.
+        BOUNDARY_OPT_2: {
+            1: {  # type 1 corner
+                1: {  # corner 1
+                    'norm_pos': False, 'bounds': (0, math.pi)
+                },
+                3: {  # corner 3
+                    'norm_pos': False, 'bounds': (-math.pi, 0)
+                }
+            },
+            2: {  # type 2 corner
+                2: {  # corner 2
+                    'norm_pos': True, 'bounds': (math.pi / 2, 3 * math.pi / 2)
+                },
+                4: {  # corner 4
+                    'norm_pos': False, 'bounds': (- math.pi / 2, math.pi / 2)
+                }
+            }
+        }
+    })
+
     def __init__(self):
+        # TODO: calculate a good number for Phi and make this accessible as
+        #  a ROS parameter.
+        # When oriented in exactly the same direction, two rovers may have
+        # slightly different compass headings. This discrepancy, or error, makes
+        # it important to define the corner orientation boundary regions
+        # carefully and to make sure that all the rovers are using the same
+        # boundary option to identify corners.
+        self._phi = 0.25  # ~15 degrees, Where 15 degrees is the avg error
+
+        # Start with option 1, move to option 2 if needed.
+        self._bounds_option = 1
+        self._bounds = HomeTransformGen.BOUNDS[HomeTransformGen.BOUNDARY_OPT_1]
+
         rospy.init_node('find_corner')
 
         self._xform = tf.TransformListener(cache_time=rospy.Duration(secs=30))
