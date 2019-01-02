@@ -306,6 +306,9 @@ class HomeTransformGen:
     to the odometry frame.
     """
 
+    CORNER_TYPE_1 = 1
+    CORNER_TYPE_2 = 2
+
     # Data structures holding the 2 Options for determining a corner number.
     # These hold the bounds that a corner's orientation must lie within for it
     # to be identified. The bounds will be shortened at each end by a term,
@@ -485,18 +488,20 @@ class HomeTransformGen:
 
         return None
 
-    def _corner_pose(self, intersected_pose, other_pose):
-        # type: (PoseStamped, PoseStamped) -> PoseStamped
-        """Return the calculated corner pose, given two inline, perpendicular
-        home tag poses.
+    def _classify_corner(self, intersected_pose, other_pose):
+        # type: (PoseStamped, PoseStamped) -> Tuple[int, PoseStamped]
+        """Return a corner type and it's calculated pose, given two inline,
+        perpendicular home tag poses.
         """
-        result = copy.deepcopy(intersected_pose)
-        result.pose.position.x = ((intersected_pose.pose.position.x
-                                   + other_pose.pose.position.x) / 2.)
-        result.pose.position.y = ((intersected_pose.pose.position.y
-                                   + other_pose.pose.position.y) / 2.)
-        result.pose.position.z = ((intersected_pose.pose.position.z
-                                   + other_pose.pose.position.z) / 2.)
+        c_type = HomeTransformGen.CORNER_TYPE_2
+
+        ps = copy.deepcopy(intersected_pose)
+        ps.pose.position.x = ((intersected_pose.pose.position.x
+                               + other_pose.pose.position.x) / 2.)
+        ps.pose.position.y = ((intersected_pose.pose.position.y
+                               + other_pose.pose.position.y) / 2.)
+        ps.pose.position.z = ((intersected_pose.pose.position.z
+                               + other_pose.pose.position.z) / 2.)
 
         # Rotate the other pose about the intersected pose by the angle required
         # to give the intersected pose a zero heading in the current frame of
@@ -506,12 +511,13 @@ class HomeTransformGen:
             -yaw_from_quaternion(intersected_pose.pose.orientation)
         )
 
-        # Type 2 corner
+        # Type 1 corner
         if yaw_from_quaternion(other_rot.pose.orientation) > 0:
-            result.pose.orientation = rotate_quaternion(result.pose.orientation,
-                                                        math.pi / 2, (0, 0, 1))
+            c_type = HomeTransformGen.CORNER_TYPE_1
+            ps.pose.orientation = rotate_quaternion(ps.pose.orientation,
+                                                    math.pi / 2, (0, 0, 1))
 
-        return result
+        return c_type, ps
 
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
@@ -550,14 +556,14 @@ class HomeTransformGen:
                 int_ = intersected(pose1, pose2)
 
                 if int_ == pose1:
-                    cor_pose = self._corner_pose(pose1, pose2)
+                    cor_type, cor_pose = self._classify_corner(pose1, pose2)
                     rotated_poses = rotate(
                         pose1, pose2,
                         -yaw_from_quaternion(pose1.pose.orientation)
                     )
                     # p1_rot, p2_rot = rotated_poses
                 else:
-                    cor_pose = self._corner_pose(pose2, pose1)
+                    cor_type, cor_pose = self._classify_corner(pose2, pose1)
                     rotated_poses = rotate(
                         pose2, pose1,
                         -yaw_from_quaternion(pose2.pose.orientation)
