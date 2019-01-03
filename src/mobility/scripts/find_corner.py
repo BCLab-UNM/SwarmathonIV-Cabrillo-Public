@@ -19,6 +19,7 @@ import copy
 import math
 import numpy as np
 import rospy
+import threading
 import sys
 import tf
 import tf.transformations
@@ -26,7 +27,13 @@ import tf.transformations
 from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
                                PoseArray, Quaternion)
 
+from mobility import sync
+
 from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from mobility.srv import (GetRoverNames, GetRoverNamesRequest,
+                          GetRoverNamesResponse, SetHomeTransformOption,
+                          SetHomeTransformOptionRequest,
+                          SetHomeTransformOptionResponse)
 
 
 def euler_from_quaternion(quat):
@@ -238,6 +245,9 @@ def closest_inline_pair(poses1,  # type: List[PoseStamped]
     return None
 
 
+home_xform_lock = threading.Lock()
+
+
 class HomeTransformGen:
     """Generate the transform from the home frame at the center of the home
     plate to the odom frame for this rover.
@@ -403,7 +413,8 @@ class HomeTransformGen:
         # boundary option to identify corners.
         self._phi = 0.25  # ~15 degrees, Where 15 degrees is the avg error
 
-        # Wait until a corner is seen before making a choice.
+        # Wait until a corner is seen or another rover requests to use option 2
+        # before making a choice.
         self._bounds_set = False
         self._bounds_option = None
         self._bounds = None
@@ -422,6 +433,11 @@ class HomeTransformGen:
         self._sub = rospy.Subscriber('targets',
                                      AprilTagDetectionArray, self._targets_cb)
 
+        # Services
+        self._opt_srv = rospy.Service('home_transform/set_option_num',
+                                      SetHomeTransformOption,
+                                      self._process_opt_req)
+
         # Publishers, for visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
                                             PoseArray, queue_size=10)
@@ -433,6 +449,81 @@ class HomeTransformGen:
                                            PoseStamped, queue_size=10)
         self._home_pub = rospy.Publisher('home_pose',
                                          PoseStamped, queue_size=10)
+
+        # ServiceProxy
+        # This is used the first time a corner is seen to get a list of rovers
+        # currently online. Then this rover can send a request to each remote
+        # rover to use its preferred transform option. It should be safe to
+        # assume this list is up to date by the time this rover sees a corner
+        # of home for the first time.
+        self.get_rovers = rospy.ServiceProxy('get_rover_names',
+                                             GetRoverNames)
+
+    @sync(home_xform_lock)
+    def _process_opt_req(self,
+                         req  # type: SetHomeTransformOptionRequest
+                         ):
+        # type: (...) -> SetHomeTransformOptionResponse
+        """Process a request from a remote rover to set the bounds option for
+        the group.
+
+        This rover will accept or reject the request. Requests to use Option 2
+        take priority.
+
+        It will accept the request if:
+            - The request is Option 1:
+
+                - This rover is using Option 1 OR
+                - This rover hasn't picked an option yet.
+
+            - The request is Option 2:
+
+                - This rover is using Option 1 OR
+                - This rover is using Option 2 OR
+                - This rover hasn't picked an option yet.
+
+        It will reject the request if:
+            - The request is Option 1 and this rover is using Option 2
+        """
+        response = SetHomeTransformOptionResponse()
+        response.success = False
+
+        rospy.loginfo('{}: transform option request received from {}'.format(
+            self.rover_name, req.rover_name
+        ))
+
+        if req.option_num == HomeTransformGen.BOUNDARY_OPT_1:
+            if not self._bounds_set or self._bounds_option == req.option_num:
+                response.success = True
+
+        elif req.option_num == HomeTransformGen.BOUNDARY_OPT_2:
+            response.success = True
+
+            # Use Option 2, but wait until the next time a corner is seen
+            # to set the bounds, in case they need to be rotated slightly.
+            if not self._bounds_set:
+                msg = ('{}: request received from {} to use transform ' +
+                       'Option 2. Will use Option 2 when a corner ' +
+                       'is seen.').format(self.rover_name, req.rover_name)
+
+                rospy.loginfo(msg)
+                self._bounds_set = True
+                self._bounds_option = HomeTransformGen.BOUNDARY_OPT_2
+                self._bounds = None
+
+            elif self._bounds_option == HomeTransformGen.BOUNDARY_OPT_1:
+                # TODO: clear any data associated with the now invalid old
+                #  transform if moving from Option 1 to Option 2?
+                msg = ('{}: request received from {} to use transform ' +
+                       'Option 2. Switching to Option 2.').format(
+                    self.rover_name, req.rover_name
+                )
+                rospy.loginfo(msg)
+                self._bounds_set = True
+                self._bounds_option = HomeTransformGen.BOUNDARY_OPT_2
+                self._bounds = None
+
+        return response
 
     def _find_corner_tags(self, detections):
         # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
@@ -612,9 +703,9 @@ class HomeTransformGen:
             corner_type: The type (1, 2) of corner.
             corner_pose: The corner's pose in the odometry frame.
             opt_num: Which Option Number (1, 2) to try to use.
-            req_others: (not implemented yet) Whether to make requests to remote
-                rovers. It isn't necessary to make requests when another rover
-                has already been instructed to switch to Option 2.
+            req_others: Whether to make requests to remote rovers. It isn't
+                necessary to make requests when another rover has already been
+                instructed to switch to Option 2.
 
         Returns:
             Whether the bounds option has been set.
@@ -654,7 +745,62 @@ class HomeTransformGen:
                     # Make remote requests to other rovers to use this opt_num
                     # If any rover rejects return the result of calling this
                     # function again with req_others=False, and opt_num 2
-                    pass
+                    rovers = self.get_rovers(GetRoverNamesRequest())
+                    # Whether at least one remote service responded
+                    made_contact = False
+
+                    srvs = []  # type: List[Tuple[str, rospy.ServiceProxy]]
+                    for rover in rovers.rovers:
+                        if rover != self.rover_name:
+                            srv = '/{}/home_transform/set_option_num'.format(
+                                rover
+                            )
+                            srvs.append(
+                                (rover,
+                                 rospy.ServiceProxy(srv,
+                                                    SetHomeTransformOption))
+                            )
+
+                    for srv in srvs:
+                        req = SetHomeTransformOptionRequest()
+                        req.option_num = opt_num
+                        req.rover_name = self.rover_name
+
+                        try:
+                            response = srv[1](req)
+
+                            if response.success:
+                                made_contact = True
+                            else:
+                                msg = ('{}: {} rejected request to use home ' +
+                                       'transform option number {}').format(
+                                    self.rover_name, srv[0], opt_num
+                                )
+                                rospy.loginfo(msg)
+
+                                return self._set_bounds_option(
+                                    corner_type, corner_pose,
+                                    HomeTransformGen.BOUNDARY_OPT_2,
+                                    req_others=False
+                                )
+                        except rospy.ServiceException:
+                            rospy.logerr(
+                                ("{}: Couldn't make transform option service " +
+                                 "request to {}").format(self.rover_name,
+                                                         srv[0])
+                            )
+                            # TODO: should the rover have to successfully
+                            #  call all the other rovers' services? How reliable
+                            #  are service calls to remote machines?
+                            # Hopefully the rover we couldn't connect to here
+                            # has already made a request to us or will do so
+                            # soon, and we can switch options then if necessary.
+                            pass
+
+                    if len(srvs) > 0 and not made_contact:
+                        # Don't do anything if there are other rovers running
+                        # and you couldn't reach at least one of them.
+                        return False
 
                 self._set_bounds(opt_num, theta=theta)
                 return True
@@ -680,6 +826,7 @@ class HomeTransformGen:
 
         return False
 
+    @sync(home_xform_lock)
     def _home_pose(self, corner_type, corner_pose):
         # type: (int, PoseStamped) -> Optional[PoseStamped]
         """Given a corner pose in the base_link frame, calculate the home
@@ -693,6 +840,19 @@ class HomeTransformGen:
             The home plate's pose in the odometry frame, or None, if it couldn't
                 be calculated.
         """
+        # This function acquires a lock when it's called to ensure the service
+        # callback doesn't modify self._bounds_set and self._bounds after their
+        # values are checked below, but before they're set inside
+        # self._set_bounds(). Without the lock, it would be possible for this
+        # rover to be in the process of setting everything up to use Option 1,
+        # when another rover requests to use Option 2, briefly changing
+        # self._bounds_option to the correct value before it gets overridden in
+        # _set_bounds(). If that was the only rover requesting Option 2, this
+        # rover would have missed the opportunity to switch, and would possibly
+        # be generating transforms that don't agree with the rest of the group
+        # (The transforms might also be fine, it depends on the home plate's
+        # exact orientation relative to magnetic north, but it's not worth
+        # the risk).
         try:
             self._xform_l.waitForTransform(self._odom_frame,
                                            corner_pose.header.frame_id,
@@ -710,6 +870,14 @@ class HomeTransformGen:
 
         if not self._bounds_set:
             if not self._choose_bounds_option(corner_type, c_pose_odom):
+                return None
+        elif self._bounds is None:
+            # This can happen if another rover requested Option 2, which takes
+            # priority, but this rover hasn't seen a corner yet, perhaps because
+            # it's still waiting in the start queue.
+            if not self._set_bounds_option(corner_type, c_pose_odom,
+                                           self._bounds_option,
+                                           req_others=False):
                 return None
 
         home_pose = copy.deepcopy(c_pose_odom)
