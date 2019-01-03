@@ -1,9 +1,11 @@
 #! /usr/bin/env python
-"""Coordinate between rovers"""
+"""Coordinate between rovers.
+TODO: Put StartQueuePriority.msg into mobility instead of swarmie_msgs?
+"""
 try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
-        from typing import Any, Callable, List, Tuple
+        from typing import Any, Callable, List, Set, Tuple
         from genpy import Message as Msg
 except ImportError:
     pass
@@ -20,7 +22,9 @@ from mobility.swarmie import Location
 
 from swarmie_msgs.msg import StartQueuePriority
 from mobility.srv import (Queue, QueueRequest, QueueResponse,
-                          QueueRemove, QueueRemoveRequest, QueueRemoveResponse)
+                          QueueRemove, QueueRemoveRequest, QueueRemoveResponse,
+                          GetRoverNames, GetRoverNamesRequest,
+                          GetRoverNamesResponse)
 
 
 coord_lock = threading.Lock()
@@ -43,14 +47,16 @@ class Coordinator(rospy.SubscribeListener):
     def __init__(self):
         super(Coordinator, self).__init__()
 
+        rospy.init_node('coordinate')
+
+        self._rover_name = rospy.get_namespace().strip('/')
         self._initial_pose = Location(None)
         self._queue_priority = StartQueuePriority()
 
         # Rovers sorted by their priority.
         self._start_queues = [[], []]  # type: List[List[Tuple[float, str]], List[Tuple[float, str]]]
         self._remove_proxies = []  # type: List[rospy.ServiceProxy]
-
-        rospy.init_node('coordinate')
+        self._rovers = {self._rover_name}  # type: Set[str]
 
         # Service proxies to query the IMU node.
         self._imu_is_finished_validating = rospy.ServiceProxy(
@@ -60,8 +66,9 @@ class Coordinator(rospy.SubscribeListener):
             'imu/needs_calibration', QueryCalibrationState
         )
 
-        rospy.Subscriber('/start_queue/priorities', StartQueuePriority,
-                         self._insert_to_start_queue, queue_size=10)
+        self.sub = rospy.Subscriber('/start_queue/priorities',
+                                    StartQueuePriority,
+                                    self._insert_to_start_queue, queue_size=10)
 
         self._wait_for_initial_odometry()
         self._set_start_queue_priority()
@@ -74,6 +81,8 @@ class Coordinator(rospy.SubscribeListener):
         self.queue = rospy.Service('start_queue/wait', Queue, self._queue)
         self.remove = rospy.Service('start_queue/remove', QueueRemove,
                                     self._remove_from_queue)
+        self.list_rovers = rospy.Service('get_rover_names', GetRoverNames,
+                                         self._list_rovers)
 
     def _wait_for_initial_odometry(self):
         """Wait until a message comes in from the IMU/Wheel Encoder EKF."""
@@ -132,6 +141,7 @@ class Coordinator(rospy.SubscribeListener):
                     QueueRemove
                 )
             )
+            self._rovers.add(msg.rover_name)
 
         log_msg = []
 
@@ -243,6 +253,21 @@ class Coordinator(rospy.SubscribeListener):
                 service(QueueRemoveRequest(rover_name=req.rover_name))
 
         return QueueRemoveResponse()
+
+    @sync(coord_lock)
+    def _list_rovers(self, req):
+        # type: (GetRoverNamesRequest) -> GetRoverNamesResponse
+        """Return a list of the rovers currently online.
+
+        Args:
+            req: the service request.
+
+        Returns:
+            the service response containing the list of rover names.
+        """
+        response = GetRoverNamesResponse()
+        response.rovers = list(self._rovers)
+        return response
 
 
 def main():
