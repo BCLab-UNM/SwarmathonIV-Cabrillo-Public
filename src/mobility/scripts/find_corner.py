@@ -1,11 +1,8 @@
 #! /usr/bin/env python
-"""Find a corner of the home plate.
-TODO: Add a service to allow remote rovers to attempt to set the transform
- option being used. The service would provide a response indicating success
- or not success, and if not success, the transform option the client should
- use instead.
-TODO: Add a list of ServiceProxies to all remote set transform option services.
- You could get the list of rovers currently online from the coordinate node.
+"""Find a corner of the home plate and generate the transform from the home
+coordinate frame to the odometry frame.
+TODO: register a shutdown handler to set parameters for the transform option
+ being used if this node ever dies?
 """
 from __future__ import print_function
 
@@ -309,6 +306,33 @@ class HomeTransformGen:
     CORNER_TYPE_1 = 1
     CORNER_TYPE_2 = 2
 
+    # Rotations in radians to orient each type of corner toward the center of
+    # home. This is used to calculate the translation between the corner's pose
+    # and the center of home. These are calculated geometrically using the home
+    # plate dimensions (1m x 1m), the number of tags per side (21), and the
+    # assumption that the calculated corner position is at the center of the 6
+    # home tags defining a corner.
+    TRANS_ROT = {
+        CORNER_TYPE_1: 0.876,
+        CORNER_TYPE_2: 0.695
+    }
+
+    # A corner's distance from the center of home, in meters. This is used to
+    # calculate the translation to the center of home along with the angles
+    # above. It's calculated geometrically using the same assumptions as the
+    # rotation angles above.
+    CORNER_DIST = 0.558
+
+    # Angle by which each type of corner must be rotated to have the same
+    # orientation as the home plate. This is used to calculate the home plate's
+    # orientation.
+    CORNER_ROT = {
+        1: math.pi,
+        2: math.pi / 2,
+        3: 0,
+        4: -math.pi / 2
+    }
+
     # Data structures holding the 2 Options for determining a corner number.
     # These hold the bounds that a corner's orientation must lie within for it
     # to be identified. The bounds will be shortened at each end by a term,
@@ -379,16 +403,20 @@ class HomeTransformGen:
         # boundary option to identify corners.
         self._phi = 0.25  # ~15 degrees, Where 15 degrees is the avg error
 
-        # Start with option 1, move to option 2 if needed.
-        self._bounds_option = 1
-        self._bounds = HomeTransformGen.BOUNDS[HomeTransformGen.BOUNDARY_OPT_1]
+        # Wait until a corner is seen before making a choice.
+        self._bounds_set = False
+        self._bounds_option = None
+        self._bounds = None
 
         rospy.init_node('find_corner')
 
-        self._xform = tf.TransformListener(cache_time=rospy.Duration(secs=30))
+        self.rover_name = rospy.get_namespace().strip('/')
+
+        # Transform listener
+        self._xform_l = tf.TransformListener(cache_time=rospy.Duration(secs=30))
 
         self._base_link_frame = rospy.get_param('base_link_frame')
-        print(self._base_link_frame)
+        self._odom_frame = rospy.get_param('odom_frame')
 
         # Subscribers
         self._sub = rospy.Subscriber('targets',
@@ -403,6 +431,8 @@ class HomeTransformGen:
                                               PointStamped, queue_size=10)
         self._corner_pub = rospy.Publisher('targets/corner',
                                            PoseStamped, queue_size=10)
+        self._home_pub = rospy.Publisher('home_pose',
+                                         PoseStamped, queue_size=10)
 
     def _find_corner_tags(self, detections):
         # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
@@ -519,6 +549,213 @@ class HomeTransformGen:
 
         return c_type, ps
 
+    def _id_corner(self, corner_type, corner_pose):
+        # type: (int, PoseStamped) -> Optional[int]
+        """Given a corner's type and its pose in the odometry frame, identify
+        the corner number (1, 2, 3, 4).
+
+        self._bounds must be set before calling.
+
+        Args:
+            corner_type: the type (1, 2) of corner.
+            corner_pose: the corner pose in the odometry frame.
+
+        Returns:
+            The corner number (1, 2, 3, 4) or None if the corner can't be
+                identified (shouldn't happen).
+        """
+        yaw = yaw_from_quaternion(corner_pose.pose.orientation)
+
+        for corner_num, bounds in self._bounds[corner_type].items():
+            ang = yaw
+
+            if bounds['norm_pos']:
+                ang = angles.normalize_angle_positive(ang)
+
+            if bounds['bounds'][0] < ang < bounds['bounds'][1]:
+                return corner_num
+
+        return None
+
+    def _set_bounds(self, opt_num, theta=0):
+        # type: (int, float) -> None
+        """Given an option number, set the corner orientation bounds dictionary
+        for this rover, rotated by theta radians.
+        """
+        self._bounds_set = True
+        self._bounds_option = opt_num
+        self._bounds = copy.deepcopy(HomeTransformGen.BOUNDS[opt_num])
+
+        rospy.loginfo(
+            '{}: using home transform Option {}, rotated {} rad'.format(
+                self.rover_name, opt_num, theta
+            )
+        )
+
+        for _corner_type, corners in self._bounds.items():
+            for _corner_num, bounds in corners.items():
+                # Constrain the bounds by Phi radians on both ends.
+                lo_bound = bounds['bounds'][0] + self._phi
+                hi_bound = bounds['bounds'][1] - self._phi
+
+                # Rotate the constrained bounds by theta radians.
+                bounds['bounds'] = (lo_bound + theta, hi_bound + theta)
+
+    def _set_bounds_option(self, corner_type, corner_pose, opt_num,
+                           req_others=False):
+        # type: (int, PoseStamped, int, bool) -> bool
+        """Given the corner type, it's pose in the odometry frame, and the
+        option number to use, attempt to set the corner orientation bounds,
+        making the request to other rovers if necessary.
+
+        Args:
+            corner_type: The type (1, 2) of corner.
+            corner_pose: The corner's pose in the odometry frame.
+            opt_num: Which Option Number (1, 2) to try to use.
+            req_others: (not implemented yet) Whether to make requests to remote
+                rovers. It isn't necessary to make requests when another rover
+                has already been instructed to switch to Option 2.
+
+        Returns:
+            Whether the bounds option has been set.
+        """
+        yaw = yaw_from_quaternion(corner_pose.pose.orientation)
+
+        for (_corner_num,
+             bounds) in HomeTransformGen.BOUNDS[opt_num][corner_type].items():
+            ang = yaw
+
+            if bounds['norm_pos']:
+                ang = angles.normalize_angle_positive(ang)
+
+            # Constrain the bounds by Phi radians on both ends. This is also
+            # how large the bounds regions will be once they're chosen.
+            lo_bound = bounds['bounds'][0] + self._phi
+            hi_bound = bounds['bounds'][1] - self._phi
+
+            if lo_bound < ang < hi_bound:
+                theta = 0
+
+                if ang - lo_bound < self._phi:
+                    # Corner orientation is a little too close to the lower
+                    # bound, so the rover will use this option, but rotate the
+                    # bounds by -Phi radians, so there is a little more margin
+                    # for error.
+                    theta = -self._phi
+
+                elif hi_bound - ang < self._phi:
+                    # Corner orientation is a little too close to the upper
+                    # bound, so the rover will use this option, but rotate the
+                    # bounds by Phi radians, so there is a little more margin
+                    # for error.
+                    theta = self._phi
+
+                if req_others:
+                    # Make remote requests to other rovers to use this opt_num
+                    # If any rover rejects return the result of calling this
+                    # function again with req_others=False, and opt_num 2
+                    pass
+
+                self._set_bounds(opt_num, theta=theta)
+                return True
+
+        return False
+
+    def _choose_bounds_option(self, corner_type, corner_pose):
+        # type: (int, PoseStamped) -> bool
+        """Given the corner pose in the odometry frame, choose which bounds
+        option to use and make sure all other rovers are ok with that choice.
+
+        Args:
+            corner_type: The type (1, 2) of corner.
+            corner_pose: The corner's pose in the odometry frame.
+
+        Returns:
+            Whether the bounds options was set.
+        """
+        for opt_num, bounds_opt in HomeTransformGen.BOUNDS.items():
+            if self._set_bounds_option(corner_type, corner_pose, opt_num,
+                                       req_others=True):
+                return True
+
+        return False
+
+    def _home_pose(self, corner_type, corner_pose):
+        # type: (int, PoseStamped) -> Optional[PoseStamped]
+        """Given a corner pose in the base_link frame, calculate the home
+        plate's pose in the odometry frame.
+
+        Args:
+            corner_type: The type (1, 2) of corner.
+            corner_pose: The corner's pose in the base_link frame.
+
+        Returns:
+            The home plate's pose in the odometry frame, or None, if it couldn't
+                be calculated.
+        """
+        try:
+            self._xform_l.waitForTransform(self._odom_frame,
+                                           corner_pose.header.frame_id,
+                                           corner_pose.header.stamp,
+                                           rospy.Duration(0.1))
+            c_pose_odom = self._xform_l.transformPose(self._odom_frame,
+                                                      corner_pose)
+        except tf.Exception:
+            # We can't do anything without having the transformed pose.
+            rospy.logwarn(
+                ('{}: Transform exception in ' +
+                 'HomeTransformGen._home_pose().').format(self.rover_name)
+            )
+            return None
+
+        if not self._bounds_set:
+            if not self._choose_bounds_option(corner_type, c_pose_odom):
+                return None
+
+        home_pose = copy.deepcopy(c_pose_odom)
+
+        theta = HomeTransformGen.TRANS_ROT[corner_type]
+
+        angle_to_center = yaw_from_quaternion(rotate_quaternion(
+            c_pose_odom.pose.orientation, theta, (0, 0, 1)
+        ))
+        home_pose.pose.position.x = (home_pose.pose.position.x
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.cos(angle_to_center))
+        home_pose.pose.position.y = (home_pose.pose.position.y
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.sin(angle_to_center))
+
+        corner_num = self._id_corner(corner_type, c_pose_odom)
+        if corner_num is None:
+            # TODO: put this log statement temporarily outside the if, just to
+            #  make sure it works.
+            rospy.logerr(("{}: couldn't identify corner number from corner " +
+                          "with pose \n{}").format(self.rover_name,
+                                                   c_pose_odom))
+            return None
+
+        rospy.loginfo_throttle(0.5,
+                               '{}: looking at corner type {}, num {}'.format(
+                                   self.rover_name, corner_type, corner_num
+                               ))
+
+        home_pose.pose.orientation = rotate_quaternion(
+            home_pose.pose.orientation,
+            HomeTransformGen.CORNER_ROT[corner_num],
+            (0, 0, 1)
+        )
+        self._home_pub.publish(home_pose)
+
+        return home_pose
+
+    def _home_xform(self, home_pose):
+        # type: (PoseStamped) -> TransformStamped
+        """Given the home_plate's pose in the odometry frame, calculate the
+        transform from the home frame to the odometry frame.
+        """
+        pass
+
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
@@ -526,8 +763,8 @@ class HomeTransformGen:
         for detection in msg.detections:  # type: AprilTagDetection
             if detection.id == 256:
                 try:
-                    xpose = self._xform.transformPose(self._base_link_frame,
-                                                      detection.pose)
+                    xpose = self._xform_l.transformPose(self._base_link_frame,
+                                                        detection.pose)
                     r, p, y = euler_from_quaternion(xpose.pose.orientation)
 
                     if r < 0.25 and p < 0.25:  # ~15 degrees
@@ -569,6 +806,11 @@ class HomeTransformGen:
                         -yaw_from_quaternion(pose2.pose.orientation)
                     )
                     # p2_rot, p1_rot = rotated_poses
+
+                home_pose = self._home_pose(cor_type, cor_pose)
+                if home_pose is not None:
+                    # generate transform
+                    pass
 
                 self._corner_pub.publish(cor_pose)
 
