@@ -419,7 +419,7 @@ class HomeTransformGen:
         self._bounds_option = None
         self._bounds = None
 
-        rospy.init_node('find_corner')
+        rospy.init_node('home_transform')
 
         self.rover_name = rospy.get_namespace().strip('/')
 
