@@ -51,6 +51,7 @@ catkin_install_python (
 	scripts/test_square.py
 	scripts/task.py
 	scripts/coordinate.py
+	scripts/home_transform.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

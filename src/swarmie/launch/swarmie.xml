@@ -44,6 +44,8 @@
 
   <node name="coordinate" pkg="mobility" type="coordinate.py" respawn="true"/>
 
+  <node name="home_transform" pkg="mobility" type="home_transform.py" respawn="true"/>
+
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
   </node>
     
