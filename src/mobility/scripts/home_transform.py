@@ -152,7 +152,6 @@ def intersect(line1,  # type: Tuple[float, float, float]
     return int_.item(0), int_.item(1)
 
 
-# min_d = sys.maxint
 def intersected(pose1, pose2, epsilon=0.03):
     # type: (PoseStamped, PoseStamped, float) -> Optional[PoseStamped]
     """Given a pair of poses, return the pose that is approximately intersected
@@ -171,8 +170,6 @@ def intersected(pose1, pose2, epsilon=0.03):
         A copy of the intersected pose, or None if neither pose intersects
             the other.
     """
-    # global min_d
-
     p1 = (pose1.pose.position.x, pose1.pose.position.y)
     p2 = (pose2.pose.position.x, pose2.pose.position.y)
 
@@ -184,12 +181,6 @@ def intersected(pose1, pose2, epsilon=0.03):
     p = intersect(line1, line2)
     if p is None:
         return None
-
-    # min_ = min(pnt_dist(p1, p), pnt_dist(p2, p))
-    # if min_ < min_d:
-    #     min_d = min_
-    #     print('min dist seen: {}'.format(min_))
-    # print('min pnt dist: {}'.format(min(pnt_dist(p1, p), pnt_dist(p2, p))))
 
     # If the intersection point is very close two one of the two poses, then
     # that pose lies approximately on the line described by the other pose.
@@ -560,30 +551,6 @@ class HomeTransformGen:
                 return None
 
             pose1, pose2 = pair
-
-            # are_inline(pose1, pose2)
-            # pose3 = Pose()
-
-            # angle_between = angles.shortest_angular_distance(
-            #     yaw_from_quaternion(pose1.pose.orientation),
-            #     yaw_from_quaternion(pose2.pose.orientation)
-            # )
-            # q = tf.transformations.quaternion_multiply(
-            #     [pose1.pose.orientation.x, pose1.pose.orientation.y,
-            #      pose1.pose.orientation.z, pose1.pose.orientation.w],
-            #     tf.transformations.quaternion_about_axis(angle_between / 2.,
-            #                                              (0, 0, 1))
-            # )
-            # pose3.position.x = (pose1.pose.position.x
-            #                     + pose2.pose.position.x) / 2.
-            # pose3.position.y = (pose1.pose.position.y
-            #                     + pose2.pose.position.y) / 2.
-            # pose3.position.z = (pose1.pose.position.z
-            #                     + pose2.pose.position.z) / 2.
-            # pose3.orientation.x = q[0]
-            # pose3.orientation.y = q[1]
-            # pose3.orientation.z = q[2]
-            # pose3.orientation.w = q[3]
 
             # TODO: only publish if debugging?
             msg = PointStamped()
@@ -990,7 +957,6 @@ class HomeTransformGen:
         if len(detections) > 0:
             corner = self._find_corner_tags(detections)
             if corner is not None:
-                # print(ps_to_p2d(corner[0]), ps_to_p2d(corner[1]))
                 pose1, pose2 = corner
                 int_ = intersected(pose1, pose2)
 
@@ -1000,14 +966,12 @@ class HomeTransformGen:
                         pose1, pose2,
                         -yaw_from_quaternion(pose1.pose.orientation)
                     )
-                    # p1_rot, p2_rot = rotated_poses
                 else:
                     cor_type, cor_pose = self._classify_corner(pose2, pose1)
                     rotated_poses = rotate(
                         pose2, pose1,
                         -yaw_from_quaternion(pose2.pose.orientation)
                     )
-                    # p2_rot, p1_rot = rotated_poses
 
                 home_pose = self._home_pose(cor_type, cor_pose)
                 if home_pose is not None:
