@@ -546,38 +546,7 @@ class HomeTransformGen:
 
         if len(pose_buckets[1]) > 0:
             # We found 2 different orientations of tags.
-            pair = closest_inline_pair(*pose_buckets)
-            if pair is None:
-                return None
-
-            pose1, pose2 = pair
-
-            # TODO: only publish if debugging?
-            msg = PointStamped()
-            msg.header = pose1.header
-            int_ = intersected(pose1, pose2)
-            if int_ is not None:
-                msg.point.x = int_.pose.position.x
-                msg.point.y = int_.pose.position.y
-                msg.point.z = int_.pose.position.z
-            self._intersect_pub.publish(msg)
-
-            msg = PoseArray()
-            msg.header = pose1.header
-            msg.poses = [pose1.pose, pose2.pose]  # , pose3]
-            self._closest_pub.publish(msg)
-
-            return pose1, pose2
-        else:
-            # Publish empty PoseArray's so RViz doesn't show old data.
-            msg = PoseArray()
-            msg.header = detections[0].header
-            self._closest_pub.publish(msg)
-            self._rotated_pub.publish(msg)  # TODO: move into new function
-
-            msg = PointStamped()
-            msg.header = detections[0].header
-            self._intersect_pub.publish(msg)
+            return closest_inline_pair(*pose_buckets)
 
         return None
 
@@ -885,7 +854,6 @@ class HomeTransformGen:
             HomeTransformGen.CORNER_ROT[corner_num],
             (0, 0, 1)
         )
-        self._home_pub.publish(home_pose)
 
         return home_pose
 
@@ -977,18 +945,36 @@ class HomeTransformGen:
                 if home_pose is not None:
                     # generate transform
                     self._gen_home_xform(home_pose)
+                    self._home_pub.publish(home_pose)
 
                 self._corner_pub.publish(cor_pose)
 
                 msg = PoseArray()
                 msg.header = pose1.header
+                msg.poses = [pose1.pose, pose2.pose]
+                self._closest_pub.publish(msg)
+
                 msg.poses = [ps.pose for ps in rotated_poses]
                 self._rotated_pub.publish(msg)
+
+                msg = PointStamped()
+                msg.header = pose1.header
+                msg.point.x = int_.pose.position.x
+                msg.point.y = int_.pose.position.y
+                msg.point.z = int_.pose.position.z
+                self._intersect_pub.publish(msg)
             else:
-                # Publish empty corner pose
-                msg = PoseStamped()
-                msg.header = detections[0].header
-                self._corner_pub.publish(msg)
+                # If no corner is in view, publish empty PoseArrays so RViz
+                # doesn't show old data.
+                self._closest_pub.publish(header=detections[0].header)
+                self._rotated_pub.publish(header=detections[0].header)
+        else:
+            # If no home tags are in view, publish empty PoseArrays.
+            msg = PoseArray()
+            msg.header.stamp = rospy.Time().now()
+            msg.header.frame_id = self._base_link_frame
+            self._closest_pub.publish(msg)
+            self._rotated_pub.publish(msg)
 
 
 def main():
