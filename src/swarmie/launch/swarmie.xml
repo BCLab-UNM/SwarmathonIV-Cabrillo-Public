@@ -5,6 +5,7 @@
   <arg name="swarmie_dev"/>
 
   <param name="rover_name" value="$(arg name)"/>
+  <param name="home_frame" value="home"/>
   <param name="odom_frame" value="$(arg name)/odom"/>
   <param name="base_link_frame" value="$(arg name)/base_link"/>
   <param name="camera_link_frame" value="$(arg name)/camera_link"/>

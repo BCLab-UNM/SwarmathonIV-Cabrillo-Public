@@ -432,6 +432,7 @@ class HomeTransformGen:
 
         self._base_link_frame = rospy.get_param('base_link_frame')
         self._odom_frame = rospy.get_param('odom_frame')
+        self._home_frame = rospy.get_param('home_frame')
 
         # Subscribers
         self._sub = rospy.Subscriber('targets',
@@ -928,7 +929,7 @@ class HomeTransformGen:
         transform from the home frame to the odometry frame.
         """
         xform = TransformStamped()
-        xform.header.frame_id = 'home'  # TODO: add ROS parameter to launch file
+        xform.header.frame_id = self._home_frame
         xform.child_frame_id = home_pose.header.frame_id
 
         xform.transform.translation.x = -home_pose.pose.position.x
