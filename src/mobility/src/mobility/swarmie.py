@@ -170,7 +170,7 @@ class Swarmie:
         self.OdomLocation = Location(None)
         self.CIRCULAR_BUFFER_SIZE = 90
         self.targets = [[]]*self.CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
-        self.targets_index = 0;  # Used to keep track of the most recent targets index, holds the values 0-89
+        self.targets_index = 0  # Used to keep track of the most recent targets index, holds the values 0-89
         
         # Intialize this ROS node.
         anon = False
@@ -247,7 +247,7 @@ class Swarmie:
 
     @sync(swarmie_lock)
     def _targets(self, msg):
-        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE;
+        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE
         self.targets[self.targets_index] = msg.detections
 
 
@@ -521,30 +521,6 @@ class Swarmie:
                 # This is the simulator
                 return True
         return False
-
-    def pickup(self):
-        '''Picks up the block'''
-        #finger_close_angle = .5
-        #if self.simulator_running():
-        #    finger_close_angle = 0
-        finger_close_angle = 0
-        
-        self.set_finger_angle(2) #open
-        rospy.sleep(1)
-        self.set_wrist_angle(1)
-        rospy.sleep(.7)
-        self.set_finger_angle(finger_close_angle) # close
-        rospy.sleep(1)
-        self.wrist_up()
-        return self.has_block()
-       
-    def putdown(self):
-        '''Puts the block down'''
-        self.set_wrist_angle(1)
-        rospy.sleep(.7)
-        self.set_finger_angle(2) #open
-        rospy.sleep(1)
-        self.wrist_up()
 
     def get_latest_targets(self,id=-1):
         """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
