@@ -239,7 +239,7 @@ echo "Setting rovers to autonomous mode..."
 for (( i=0;i<$NUM_ROVERS;i++ ));
 do
 	# Publish the autonomous mode command ("2") to each rover. 
-	rostopic pub /${ROVER_NAMES[i]}/mode std_msgs/UInt8 2 & ########********** look at this line
+	rostopic pub /${ROVER_NAMES[i]}/mode std_msgs/UInt8 2 &
 	echo "Publishing 2 on /${ROVER_NAMES[i]}/mode"
 	sleep $MODEL_ADD_INTERVAL
 done
@@ -271,7 +271,7 @@ for (( i=0;i<$NUM_ROVERS;i++ ));
 do
 	# Publish the manual mode command ("1") to each rover.
 	# Latching mode is the default when using command-line arguments.
-	rostopic pub /${ROVER_NAMES[i]}/mode std_msgs/String "1" &
+	rostopic pub /${ROVER_NAMES[i]}/mode std_msgs/UInt8 1 &
 	echo "Publishing 1 on /${ROVER_NAMES[i]}/mode"
 done
 rosnow=`rostopic echo -n 1 /clock/clock/secs | head -n 1`; now=$(date +%s) #lookinto the --filter 
