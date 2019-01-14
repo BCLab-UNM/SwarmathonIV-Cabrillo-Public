@@ -42,6 +42,9 @@ class TagException(VisionException):
 class HomeException(VisionException):
     pass
 
+class AprilTagBoundaryException(VisionException):
+    pass 
+
 class InsideHomeException(VisionException):
     pass
 
@@ -114,8 +117,7 @@ class Swarmie:
     
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
-    ''' 
-
+    '''
     def __init__(self):
         '''Constructor.
         '''
@@ -123,12 +125,6 @@ class Swarmie:
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.Targets = AprilTagDetectionArray()
-        self.TargetsDict = {}
-        self.TargetsBuffer = AprilTagDetectionArray()
-        self.TargetsDictBuffer = {}
-        self.targets_timeout = 3
-
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -172,7 +168,13 @@ class Swarmie:
             self.rover_name = rospy.get_namespace()
             
         self.rover_name = self.rover_name.strip('/')
-
+           
+        self.Obstacles = 0
+        self.OdomLocation = Location(None)
+        self.CIRCULAR_BUFFER_SIZE = 90
+        self.targets = [[]]*self.CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
+        self.targets_index = 0  # Used to keep track of the most recent targets index, holds the values 0-89
+        
         # Intialize this ROS node.
         anon = False
         if 'anonymous' in kwargs : 
@@ -247,28 +249,10 @@ class Swarmie:
         self.Obstacles |= msg.msg 
 
     @sync(swarmie_lock)
-    def _targets(self, msg) : 
-        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-        #adding currently seen tags to the dict
-        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-        #get the tags from the dict and saves them to Targets
-        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
-    
-        if self._is_moving():
-            self.Targets = msg
-            #create a dict of tags as values and rounded coordinates as the key
-            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
-            
-        else:
-            #remove old tags from the dict
-            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-            #adding currently seen tags to the dict
-            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-            #get the tags from the dict and saves them to Targets
-            self.Targets.detections = self.TargetsDict.values() 
-    
-    #self.TargetsBuffer = AprilTagDetectionArray()
-    #self.TargetsDictBuffer = {}
+    def _targets(self, msg):
+        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE
+        self.targets[self.targets_index] = msg.detections
+
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
@@ -377,6 +361,9 @@ class Swarmie:
             * `mobility.swarmie.VisionException` - Base class for exceptions caused by seeing a tag            
 
             * `mobility.swarmie.TagException` - Exception caused when the target tag (0) is seen.
+
+            TODO: add AprilTagBoundaryException
+            * `mobility.swarmie.AprilTagBoundaryException` - Exception caused when boundary tag (1) is seen.
 
             * `mobility.swarmie.HomeException` - Exception caused when the home tag (256) is seen. 
 
@@ -508,18 +495,18 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
+        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
+        if len(blocks) > 0:
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18 :
+            if abs(z_dist) < 0.18:
                 return True 
 
         # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
@@ -534,7 +521,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return(False) #self.sees_resource(6)
+        return False  # self.sees_resource(6)
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -543,14 +530,39 @@ class Swarmie:
                 # This is the simulator
                 return True
         return False
-    
-    def get_latest_targets(self) :
-        '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
-        return self.Targets
-    
-    def get_targets_buffer(self) :
-        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
-        return self.TargetsBuffer
+
+    def get_latest_targets(self,id=-1):
+        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        and will be affected by twinkeling with an optional id flag"""
+        # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
+        if id == -1:  # all of the tags
+            return self.targets[self.targets_index]
+        else:  # only the specified tags with id
+            return [tag for tag in self.targets[self.targets_index] if tag.id == id]
+
+    def get_targets_buffer(self, age=8, cleanup=True, id=-1):
+        """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
+        buffer = sum(self.targets, [])
+        if cleanup:
+            buffer = self._detection_cleanup(buffer, age, id)
+        return buffer
+
+    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
+        """ Returns the detections with the duplicate tags and old tags removed """
+        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
+        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
+        if id == -1:
+            id = [0, 1, 256]  # resource & home
+        else:
+            id = [id]
+        targets_dict = {(round(tag.pose.pose.position.x, 2),
+                        round(tag.pose.pose.position.y, 2),
+                        round(tag.pose.pose.position.z, 2)):
+                        tag for tag in detections
+                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
+        # get the tags from the dict and saves them to detections
+        detections = targets_dict.values()
+        return detections
     
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
@@ -833,9 +845,9 @@ class Swarmie:
         '''
         # Finds all visible apriltags
         if use_targets_buffer is True:
-            blocks = self.get_targets_buffer().detections
+            blocks = self.get_targets_buffer()
         else:
-            blocks = self.get_latest_targets().detections
+            blocks = self.get_latest_targets()
         if len(blocks) == 0 :
             return None
 
