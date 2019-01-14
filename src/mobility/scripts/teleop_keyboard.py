@@ -112,6 +112,7 @@ class TeleopSwarmie(Teleop):
             'f': Obstacle.SONAR_BLOCK,
             'T': Obstacle.TAG_TARGET,
             'H': Obstacle.TAG_HOME,
+            'N': Obstacle.INSIDE_HOME,
             'S': Obstacle.IS_SONAR,
             'V': Obstacle.IS_VISION
         }
@@ -124,33 +125,35 @@ class TeleopSwarmie(Teleop):
 
     def obstacle_msg(self):
         obstacles = [
-            ['PATH_IS_CLEAR', 0],
-            ['SONAR_LEFT', 1],
-            ['SONAR_RIGHT', 2],
-            ['SONAR_CENTER', 4],
-            ['SONAR_BLOCK', 8],
-            ['TAG_TARGET', 256],
-            ['TAG_HOME', 512],
-            ['IS_SONAR', 15],
-            ['IS_VISION', 768]
+            ['PATH_IS_CLEAR', Obstacle.PATH_IS_CLEAR],
+            ['SONAR_LEFT',    Obstacle.SONAR_LEFT],
+            ['SONAR_RIGHT',   Obstacle.SONAR_RIGHT],
+            ['SONAR_CENTER',  Obstacle.SONAR_CENTER],
+            ['SONAR_BLOCK',   Obstacle.SONAR_BLOCK],
+            ['TAG_TARGET',    Obstacle.TAG_TARGET],
+            ['TAG_HOME',      Obstacle.TAG_HOME],
+            ['INSIDE_HOME',   Obstacle.INSIDE_HOME],
+            ['IS_SONAR',      Obstacle.IS_SONAR],
+            ['IS_VISION',     Obstacle.IS_VISION]
         ]
         msg = """
         Toggle Obstacles to ignore (* = currently ignored):
         -----------------
-        (!) {:<14}= 0{}
-        (a) {:<14}= 1{}
-        (d) {:<14}= 2{}
-        (s) {:<14}= 4{}
-        (f) {:<14}= 8{}
-        (T) {:<14}= 256{}
-        (H) {:<14}= 512{}
+        (!) {:<14}= {}{}
+        (a) {:<14}= {}{}
+        (d) {:<14}= {}{}
+        (s) {:<14}= {}{}
+        (f) {:<14}= {}{}
+        (T) {:<14}= {}{}
+        (H) {:<14}= {}{}
+        (N) {:<14}= {}{}
 
-        (S) {:<14}= 15{}
-        (V) {:<14}= 768{}
+        (S) {:<14}= {}{}
+        (V) {:<14}= {}{}
         """
         msg_formatter = []
         if self.ignore_obst == 0:
-            msg_formatter = ['*', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']
+            msg_formatter = ['*', '', '', '', '', '', '', '', '', '']
         else:
             msg_formatter.append('')
             for i in xrange(1, len(obstacles)):
@@ -160,7 +163,7 @@ class TeleopSwarmie(Teleop):
                     msg_formatter.append(' ')
         result = []
         for obstacle, formatter in zip(obstacles, msg_formatter):
-            result.append(obstacle[0])
+            result.extend(obstacle)
             result.append(formatter)
         return textwrap.dedent(msg.format(*result))
 

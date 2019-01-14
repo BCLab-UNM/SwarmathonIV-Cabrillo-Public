@@ -51,7 +51,10 @@ def main(**kwargs):
     swarmie.set_home_odom_location(home_odom)
 
     if swarmie.imu_needs_calibration():
-        swarmie.drive(-0.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.drive(
+            -0.5,
+            ignore=Obstacle.TAG_HOME | Obstacle.TAG_TARGET | Obstacle.IS_SONAR
+        )
         start_heading = swarmie.get_odom_location().get_pose().theta
 
         swarmie.start_imu_calibration()
@@ -61,16 +64,21 @@ def main(**kwargs):
                 25,
                 0,
                 0.6,
-                ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR,
+                ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR,
                 throw=False
             )
         swarmie.store_imu_calibration()
 
-        swarmie.set_heading(start_heading,
-                            ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.set_heading(
+            start_heading,
+            ignore=Obstacle.TAG_HOME | Obstacle.TAG_TARGET | Obstacle.IS_SONAR
+        )
 
-    swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
-    return 0 
+    swarmie.turn(
+        math.pi,
+        ignore=Obstacle.TAG_HOME | Obstacle.TAG_TARGET | Obstacle.IS_SONAR
+    )
+    return 0
 
 if __name__ == '__main__' : 
     swarmie.start(node_name='init')
