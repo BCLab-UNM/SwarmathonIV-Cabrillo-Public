@@ -40,15 +40,15 @@ def wander():
 
 def search_exit(code):
     global planner, found_tag
-
+    
     reset_speeds()
-
+    
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
-
-    swarmie.print_infoLog('Setting search exit poses.')
+    
     if code == 0:
+        swarmie.print_infoLog('Setting search exit poses.')
         set_search_exit_poses()
     exit(code)
 
