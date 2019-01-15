@@ -12,14 +12,27 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   dynamic_reconfigure
   swarmie_msgs
+  message_generation
 )
 
 generate_dynamic_reconfigure_options(
     cfg/pid.py
 )
 
+add_message_files (
+  FILES
+  PidState.msg
+  PidWheel.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp std_msgs sensor_msgs std_msgs tf nav_msgs dynamic_reconfigure swarmie_msgs
+  CATKIN_DEPENDS geometry_msgs roscpp std_msgs sensor_msgs std_msgs
+  tf nav_msgs dynamic_reconfigure swarmie_msgs message_runtime
 )
 
 include_directories(

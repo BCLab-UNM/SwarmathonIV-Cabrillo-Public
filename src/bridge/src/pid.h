@@ -23,6 +23,9 @@ public:
 	double step(double setpoint, double feeback, double now=0);
 	void reconfig(double p, double i, double d, double db, double st, double wu);
 	void reset();
+	double getP();
+	double getI();
+	double getD();
 
 private:
 
@@ -32,7 +35,7 @@ private:
 	double _kp, _ki, _kd, _dband, _hi, _lo, _stiction, _windup;
 
 	// State
-	double _out, _sum, _lasterr, _lastsp, _lasttime;
+	double _out, _sum, _lasterr, _lastsp, _lasttime, _P, _I, _D;
 };
 
 #endif /* BRIDGE_SRC_PID_H_ */
