@@ -93,19 +93,6 @@ double PID::step(double setpoint, double feedback, double now) {
 
 	double delta = _P + _I + _D;
 
-//	if (fabs(delta) > _dband)
-//		_out += delta;
-//
-//	if (_out > _hi)
-//		_out = _hi;
-//	else if (_out < _lo)
-//		_out = _lo;
-//
-//	if (fabs(_out) < _stiction)
-//	  return 0;
-//	else
-//	  return _out;
-
 	return delta;
 }
 
