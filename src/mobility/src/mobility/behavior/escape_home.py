@@ -80,10 +80,7 @@ def main(**kwargs):
     obstacles = swarmie.get_obstacle_condition()
     if obstacles & Obstacle.INSIDE_HOME != Obstacle.INSIDE_HOME:
         return
-
-    #TODO: update with id=256 argument when API has changed
-    detections = swarmie.get_latest_targets().detections
-    escape_home(detections)
+    escape_home(swarmie.get_latest_targets(id=256))
 
 
 if __name__ == '__main__':
