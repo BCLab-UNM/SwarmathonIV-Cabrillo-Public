@@ -50,7 +50,7 @@ def search_exit(code):
     if code == 0:
         swarmie.print_infoLog('Setting search exit poses.')
         set_search_exit_poses()
-    exit(code)
+    sys.exit(code)
 
 
 def reset_speeds():
