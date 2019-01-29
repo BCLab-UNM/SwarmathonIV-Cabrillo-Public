@@ -212,7 +212,7 @@ def main(**kwargs):
             search_exit(0)
 
     print ("I'm homesick!")
-    return 1 
+    search_exit(1)
 
 if __name__ == '__main__' : 
     swarmie.start(node_name='search')
