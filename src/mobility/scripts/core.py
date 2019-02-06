@@ -40,11 +40,12 @@ def main() :
     launcher = roslaunch.scriptapi.ROSLaunch()
     launcher.start()
     task = None 
-    status_pub.publish("Okay")
+    status_pub.publish("idle")
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
         if rover_mode > 1 :
             if task is None: 
+                status_pub.publish("starting")
                 node = roslaunch.core.Node('mobility', 'task.py', namespace=rospy.get_namespace())
                 task = launcher.launch(node)
             else:
@@ -52,6 +53,7 @@ def main() :
                     task = None
         else :
             if task is not None and task.is_alive() :
+                status_pub.publish("stopped")
                 task.stop()
                 task = None 
                 

@@ -38,17 +38,19 @@ def wander():
         turnaround()
 
 
-def handle_exit():
+def search_exit(code):
     global planner, found_tag
-
+    
     reset_speeds()
-
+    
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
-
-    swarmie.print_infoLog('Setting search exit poses.')
-    set_search_exit_poses()
+    
+    if code == 0:
+        swarmie.print_infoLog('Setting search exit poses.')
+        set_search_exit_poses()
+    sys.exit(code)
 
 
 def reset_speeds():
@@ -91,7 +93,6 @@ def main(**kwargs):
         'TURN_SPEED': config['TURN_SPEED']
     }
     param_client.update_configuration(speeds)
-    rospy.on_shutdown(handle_exit)
 
     if not planner.sees_home_tag():
         try:
@@ -108,7 +109,7 @@ def main(**kwargs):
                     found_tag = True
                     # print('Found a tag! Turning to face.')
                     # planner.face_nearest_block()
-                    sys.exit(0)  # found a tag?
+                    search_exit(0)  # found a tag?
             except tf.Exception:
                 pass
     else:
@@ -177,7 +178,7 @@ def main(**kwargs):
                 found_tag = True
                 # print('Found a tag! Turning to face.')
                 # planner.face_nearest_block()
-                sys.exit(0)
+                search_exit(0)
         except HomeException:
             # Just move onto random search, but this shouldn't really happen
             # either.
@@ -189,7 +190,7 @@ def main(**kwargs):
     try:
         for move in range(30) :
             if rospy.is_shutdown() :
-                sys.exit(-1)
+                search_exit(-1)
             try:
                 wander()
 
@@ -208,10 +209,10 @@ def main(**kwargs):
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
             # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET)
-            sys.exit(0)
+            search_exit(0)
 
     print ("I'm homesick!")
-    return 1 
+    search_exit(1)
 
 if __name__ == '__main__' : 
     swarmie.start(node_name='search')
