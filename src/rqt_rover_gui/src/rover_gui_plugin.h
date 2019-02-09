@@ -50,6 +50,7 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <ublox_msgs/NavSOL.h>
 #include "swarmie_msgs/Waypoint.h" // For waypoint commands
 
 //ROS msg types
@@ -105,6 +106,9 @@ namespace rqt_rover_gui {
     void waypointEventHandler(const swarmie_msgs::Waypoint& event);
     void joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg);
     void cameraEventHandler(const sensor_msgs::ImageConstPtr& image);
+    void EKFEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
+    void GPSEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
+    void GPSNavSolutionEventHandler(const ros::MessageEvent<const ublox_msgs::NavSOL> &event);
     void encoderEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
     void obstacleEventHandler(const ros::MessageEvent<std_msgs::UInt8 const> &event);
     void scoreEventHandler(const ros::MessageEvent<std_msgs::String const> &event);
@@ -233,6 +237,9 @@ namespace rqt_rover_gui {
     // ROS Subscribers
     ros::Subscriber joystick_subscriber;
     map<string,ros::Subscriber> encoder_subscribers;
+    map<string,ros::Subscriber> gps_subscribers;
+    map<string,ros::Subscriber> gps_nav_solution_subscribers;
+    map<string,ros::Subscriber> ekf_subscribers;
     map<string,ros::Subscriber> rover_diagnostic_subscribers;
     map<string,ros::Subscriber> waypoint_subscribers;
     ros::Subscriber us_center_subscriber;
