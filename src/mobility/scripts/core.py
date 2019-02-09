@@ -29,7 +29,7 @@ def main() :
     driver = State()
     
     heartbeat_pub = rospy.Publisher('mobility/heartbeat', String, queue_size=1, latch=True)
-    status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
+    status_pub = rospy.Publisher('swarmie_status', String, queue_size=1, latch=True)
 
     # Subscribers 
     rospy.Subscriber('mode', UInt8, mode)
