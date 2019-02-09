@@ -49,7 +49,7 @@ class Task :
         self.prev_state = None
         self.has_block = False
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
-        self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
+        self.status_pub = rospy.Publisher('swarmie_status', String, queue_size=1, latch=True)
                         
     def print_state(self, msg):
         s = String()
