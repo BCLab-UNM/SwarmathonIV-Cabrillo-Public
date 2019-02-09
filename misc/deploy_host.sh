@@ -30,7 +30,7 @@ fi
     catkin config --profile rover-deploy -i='deploy/install'
     catkin config --profile rover-deploy --install
     catkin config --profile rover-deploy --cmake-args -DCMAKE_BUILD_TYPE=Release
-    catkin config --profile rover-deploy --blacklist gazebo_plugins rqt_rover_gui
+    catkin config --profile rover-deploy --blacklist gazebo_plugins rqt_rover_gui cabrillo_gui ublox
 
 ) > /dev/null
 
