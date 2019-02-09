@@ -26,7 +26,7 @@
       <arg name="name" value="$(arg name)"/>
   </include>
 
-  <node name="diagnostics" pkg="diagnostics" type="diagnostics" respawn="true"/>
+  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" required="True" respawn="false"/> 
   
   <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
