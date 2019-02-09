@@ -6,14 +6,20 @@
 class Odometry {
 public:
     //Constructors
-    Odometry(byte rightEncoderAPin, byte rightEncoderBPin, byte leftEncoderAPin, byte leftEncoderBPin);
+    Odometry(byte rightEncoderAPin, byte rightEncoderBPin, byte leftEncoderAPin, byte leftEncoderBPin, float wheelBase, float wheelDiameter, int cpr);
     
     //Functions
     void update();
     
     //Variables
-    int16_t right, left;
-    unsigned long clock;
+    float x, y, theta;
+    float vx, vy, vtheta;
+    long clock;
+
+private:
+    //Variables
+    float _wheelBase, _wheelDiameter;
+    int _cpr;
 };
 
 #endif
