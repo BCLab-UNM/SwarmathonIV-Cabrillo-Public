@@ -37,7 +37,15 @@ def main(**kwargs):
         # Let's just call it good. 
         pass
 
+
+    wait_duration = 3;
+    start_time = rospy.get_rostime().secs
     current_location = swarmie.get_odom_location()
+    print("init.py: Waiting ", wait_duration, "secs")
+    while (not current_location) and (rospy.get_rostime().secs < (start_time + wait_duration)):
+        current_location = swarmie.get_odom_location()
+    if not current_location:
+        print("init.py: could not get odom location")  # will crash after this
     current_pose = current_location.get_pose()
     home_odom = Location(current_location.Odometry)
 
