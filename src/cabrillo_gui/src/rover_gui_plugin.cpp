@@ -290,7 +290,6 @@ namespace rqt_rover_gui
 
     bool dostart;
     if (nh.getParam("startsim", dostart)) {
-    	cout << "Motherfucking fuck fuck" << endl;
     	if (dostart) {
     		emit sendInfoLogMessage("Automatically starting simulation.");
     		buildSimulationButtonEventHandler();
