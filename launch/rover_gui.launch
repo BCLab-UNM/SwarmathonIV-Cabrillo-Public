@@ -7,7 +7,7 @@
   <arg name="startsim" default="false"/>
   <arg name="gazebo" default="false"/>
 
-<node name="rqt_rover_gui" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
+<node name="cabrillo_gui" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
 
     <env name="SWARMATHON_APP_ROOT" value="$(env PWD)" />
     <env name="GAZEBO_MODEL_PATH" value="$(env PWD)/simulation/models" />
