@@ -87,7 +87,7 @@ class Diagnostics:
             self._diags_log.publish(_ok("Physical rover", self._rover_name, 'is initializing.'))        
 
         # FIXME: Need to sub the rover's wifi interface
-        self.interface = 'eno1'
+        self.interface = 'wlp2s0'
         self.topics = [
                 "imu",
                 "odom/filtered",
@@ -167,16 +167,18 @@ class Diagnostics:
             else:
                 # Caluclate Bps 
                 curr_if_bytes = self._get_if_bytes()
-                Bps = float(curr_if_bytes - last_if_bytes) / (1.0 / float(self._update_rate))
+                Bps = float(curr_if_bytes - self._last_if_bytes) / (1.0 / float(self._update_rate))
                 self._last_if_bytes = curr_if_bytes
     
                 # Link quality 
                 link = 0
                 try:
-                    # FIXME: Need an RE to extract the link quality. 
-                    iwconfig = subprocess.check_output(['iwconfig', self.interface], stderr=subprocess.DEVNULL)
-                except:
-                    link = 70
+                    iwconfig = subprocess.check_output(['iwconfig', self.interface])
+                    m = re.search(r'Link Quality=(\d+)/70', iwconfig)
+                    if m is not None:
+                        link = int(m.group(1)) 
+                except Exception as e:
+                    link = 0
                     
                 data = [link,Bps,-1]
                 
@@ -187,7 +189,7 @@ class Diagnostics:
         msg = UInt8() 
         msg.data = 1
         self._mode_pub.publish(msg)
-        self._diags_log.publish(err('Rover', self._rover_name, 'is shutting down!'))
+        self._diags_log.publish(_err('Rover', self._rover_name, 'is shutting down!'))
         self._r.sleep()
         self._r.sleep()
         self._r.sleep()
