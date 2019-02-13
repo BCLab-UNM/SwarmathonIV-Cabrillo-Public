@@ -4,6 +4,8 @@ Diags package.
 This package contains the Diagnostics class, which  implements the rover diagnostics. 
 """
 
+from __future__ import print_function
+
 import rospy 
 import time 
 import os 
@@ -100,10 +102,15 @@ class Diagnostics:
         
     def _get_if_bytes(self):
         total = 0
-        for fx in ["/sys/class/net/{}/statistics/tx_bytes".format(self.interface), 
-                   "/sys/class/net/{}/statistics/rx_bytes".format(self.interface)]:
-            with open(fx) as f:
-                total += int(f.readline())
+        try:
+            for fx in ["/sys/class/net/{}/statistics/tx_bytes".format(self.interface), 
+                       "/sys/class/net/{}/statistics/rx_bytes".format(self.interface)]:
+                with open(fx) as f:
+                    total += int(f.readline())
+        except IOError as e:
+            # This can happen in the simulator
+            print ('Could not open interface', self.interface)
+        
         return total 
     
     def run(self):
