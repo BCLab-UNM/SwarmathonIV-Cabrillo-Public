@@ -4,12 +4,16 @@ set -e
 
 # Parse arguments
 skip_arduino=
+skip_build=0
 rovername=
 for arg in "$@"
 do
     case "$arg" in
     --skip-arduino|-s) 
         skip_arduino=--skip-arduino
+        ;;
+    --skip-build|-f) 
+        skip_build=1
         ;;
     *)
 	rovername=$arg
@@ -21,6 +25,7 @@ if [ -z "$rovername" ]; then
     echo "usage: $0 [options] <rovername>"
     echo "  options:"
     echo "    -s | --skip-arduino : Skip loading the Arduino sketch"
+    echo "    -f | --skip-build   : Skip building the workspace"
     exit -1
 fi
 
@@ -52,7 +57,9 @@ fi
 ) > /dev/null
 
 # Build the current workspace
-catkin build --profile rover-deploy --no-status --no-color
+if [ "$skip_build" -eq 0 ]; then
+  catkin build --profile rover-deploy --no-status --no-color
+fi
 
 # Package the build products, scripts, launch configs and stuff
 echo "Copying installation files."

@@ -4,9 +4,9 @@
 
   <node name="ekfOdom" pkg="robot_localization" type="ekf_localization_node" respawn="false">
     
-    <param name="odom_frame" value="$(arg name)/odom" />
-    <param name="world_frame" value="$(arg name)/odom" />
-    <param name="base_link_frame" value="$(arg name)/base_link"/>
+    <param name="odom_frame" value="odom" />
+    <param name="world_frame" value="odom" />
+    <param name="base_link_frame" value="base_link"/>
     
     <param name="odom0" value="odom" />
     <param name="imu0" value="imu" />

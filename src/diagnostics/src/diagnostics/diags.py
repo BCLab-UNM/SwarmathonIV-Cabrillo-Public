@@ -89,10 +89,10 @@ class Diagnostics:
         # FIXME: Need to sub the rover's wifi interface
         self.interface = 'wlp2s0'
         self.topics = [
-                "imu",
-                "odom/filtered",
-                "sonarLeft", "sonarRight", "sonarCenter",
-                "targets"
+                "/imu",
+                "/odom/filtered",
+                "/sonarLeft", "/sonarRight", "/sonarCenter",
+                "/targets"
             ]
     
         self._watchers = [TopicWatcher(t) for t in self.topics]

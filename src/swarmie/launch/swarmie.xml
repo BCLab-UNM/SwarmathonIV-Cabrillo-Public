@@ -5,12 +5,12 @@
   <arg name="swarmie_dev"/>
 
   <param name="rover_name" value="$(arg name)"/>
-  <param name="odom_frame" value="$(arg name)/odom"/>
-  <param name="base_link_frame" value="$(arg name)/base_link"/>
-  <param name="camera_link_frame" value="$(arg name)/camera_link"/>
-  <param name="sonar_right_frame" value="$(arg name)/sonar_right"/>
-  <param name="sonar_center_frame" value="$(arg name)/sonar_center"/>
-  <param name="sonar_left_frame" value="$(arg name)/sonar_left"/>
+  <param name="odom_frame" value="odom"/>
+  <param name="base_link_frame" value="base_link"/>
+  <param name="camera_link_frame" value="camera_link"/>
+  <param name="sonar_right_frame" value="sonar_right"/>
+  <param name="sonar_center_frame" value="sonar_center"/>
+  <param name="sonar_left_frame" value="sonar_left"/>
 
   <include file="$(find swarmie)/launch/robot_localization.xml">
       <arg name="name" value="$(arg name)"/>
@@ -26,7 +26,7 @@
       <arg name="name" value="$(arg name)"/>
   </include>
 
-  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" required="True" respawn="false"/> 
+  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" required="true" respawn="false"/> 
   
   <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
@@ -79,8 +79,8 @@
       <param name="image_width" value="320"/>
       <param name="image_height" value="240"/>
       <param name="framerate" value="10"/>
-      <param name="camera_frame_id" value="$(arg name)/camera_link"/>
-      <remap from="/$(arg name)/camera/image_raw" to="/$(arg name)/camera/image"/>
+      <param name="camera_frame_id" value="camera_link"/>
+      <remap from="/camera/image_raw" to="/camera/image"/>
     </node>
   </group>
   
