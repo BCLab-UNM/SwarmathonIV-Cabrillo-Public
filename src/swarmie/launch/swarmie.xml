@@ -50,6 +50,8 @@
   
   <group unless="$(arg simulation)">
 
+    <node name="master_discovery" pkg="master_discovery_fkie" type="zeroconf" respawn="true"/>
+
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
       <param name="device" value="$(arg swarmie_dev)"/>
       <param name="scale" value="0.1" />

@@ -1,12 +1,5 @@
 #!/bin/bash
 
-if [ -z "$1" ]
-then
-    export ROS_MASTER_URI=http://$(echo $SSH_CLIENT | cut -d' ' -f 1):11311
-else
-    export ROS_MASTER_URI=http://$1:11311
-fi
-
 projdir=$(dirname $0)/..
 
 if udevadm info /dev/ttyACM0 | grep -q Leonardo; then
