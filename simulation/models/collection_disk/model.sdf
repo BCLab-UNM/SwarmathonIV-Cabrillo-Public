@@ -17,6 +17,34 @@
 		      </script>
 		    </material>
 		  </visual>
+		  
+<sensor type="camera" name="camera">
+				<pose>0 0 5 0.0 1.57 0.0</pose>
+				<visualize>false</visualize>
+				<update_rate>6.0</update_rate>
+				<camera name="head">
+					<horizontal_fov>2</horizontal_fov>
+					<image>
+						<width>3500</width>
+						<height>3500</height>
+						<format>B8G8R8</format>
+					</image>
+				</camera>
+				<plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+					<alwaysOn>true</alwaysOn>
+					<updateRate>0.0</updateRate>
+					<cameraName>/collection_disk/camera</cameraName>
+					<imageTopicName>/collection_disk/camera/image</imageTopicName>
+					<cameraInfoTopicName>/collection_disk/camera/camera_info</cameraInfoTopicName>
+					<frameName>camera_link</frameName>
+					<hackBaseline>0.1</hackBaseline>
+					<CxPrime>0.0</CxPrime>
+					<Cx>0.0</Cx>
+					<Cy>0.0</Cy>
+					<focalLength>0.0</focalLength>
+				</plugin>
+			</sensor>
+			
 		</link>
 		<!-- Score Plugin -->
 		<plugin name="score_sim" filename="libgazebo_plugins_score.so">
