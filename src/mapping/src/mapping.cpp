@@ -955,6 +955,30 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 	return true;
 }
 
+/*
+ * Subscriber to help with testing/debugging. Responds to RViz nav_goals
+ * published with a mouse click and gets path from the rover's current location
+ * to the goal location.
+ */
+void navGoalHandler(const geometry_msgs::PoseStamped::ConstPtr& goal) {
+	mapping::GetNavPlan::Request request;
+	mapping::GetNavPlan::Response response;
+
+	bool use_home_layer = false;
+	ros::param::param<bool>("use_home_layer", use_home_layer, false);
+	if (use_home_layer) {
+		ROS_INFO("Using home layer in this path search.");
+	}
+
+	request.start.pose.position.x = currentLocation.x;
+	request.start.pose.position.y = currentLocation.y;
+	request.goal.pose.position.x = goal->pose.position.x;
+	request.goal.pose.position.y = goal->pose.position.y;
+	request.use_home_layer.data = use_home_layer;
+
+	get_plan(request, response);
+}
+
 void crashHandler(int s) {
   int j, nptrs;
   void *buffer[1000];
@@ -1045,6 +1069,7 @@ int main(int argc, char **argv) {
     //
     ros::Subscriber odomSubscriber = mNH.subscribe("odom/filtered", 10, odometryHandler);
     ros::Subscriber targetSubscriber = mNH.subscribe("targets", 10, targetHandler);
+    ros::Subscriber goalSubscriber = mNH.subscribe("goal", 10, navGoalHandler);
 
     message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(mNH, "sonarLeft", 10);
     message_filters::Subscriber<sensor_msgs::Range> sonarCenterSubscriber(mNH, "sonarCenter", 10);
