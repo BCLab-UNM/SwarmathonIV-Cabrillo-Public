@@ -281,19 +281,19 @@ class HomeTransformGen:
     The two corner type's are defined to have different orientations::
 
             -----------------
-     Type 1 | ^     ^     ^ |
-     Corner | |     |     | |
-            |      _|x      |
+     Type 1 |<--   <--   <--|
+     Corner |      _|x      |
             |      y        |
-            |-->   -->   -->|
+            | |     |     | |
+            | v     v     v |
             -----------------
 
             -----------------
-     Type 2 |<--   <--   <--|
-     Corner |     x__       |
+     Type 2 | |     |     | |
+     Corner | v     v     v |
+            |     x__       |
             |       |y      |
-            | ^     ^     ^ |
-            | |     |     | |
+            |-->   -->   -->|
             -----------------
 
     To determine which corner (1, 2, 3, 4) is in view when the rover sees home
@@ -314,8 +314,8 @@ class HomeTransformGen:
     # assumption that the calculated corner position is at the center of the 6
     # home tags defining a corner.
     TRANS_ROT = {
-        CORNER_TYPE_1: 0.876,
-        CORNER_TYPE_2: 0.695
+        CORNER_TYPE_1: -2.266,
+        CORNER_TYPE_2: -2.447
     }
 
     # A corner's distance from the center of home, in meters. This is used to
@@ -328,10 +328,10 @@ class HomeTransformGen:
     # orientation as the home plate. This is used to calculate the home plate's
     # orientation.
     CORNER_ROT = {
-        1: math.pi,
-        2: math.pi / 2,
-        3: 0,
-        4: -math.pi / 2
+        1: 0,
+        2: -math.pi / 2,
+        3: math.pi,
+        4: math.pi / 2
     }
 
     # Data structures holding the 2 Options for determining a corner number.
@@ -343,55 +343,54 @@ class HomeTransformGen:
     BOUNDARY_OPT_1 = 1
     BOUNDARY_OPT_2 = 2
 
+    # Primary option, this is the most likely to be used, but a rover using
+    # this option will switch to option 2 if another rover needs to use
+    # option 2.
+    _BOUNDS_1 = {
+        1: {  # type 1 corner
+            1: {  # corner 1
+                # Does tag orientation need normalization to [0, 2PI]?
+                'norm_pos': False,
+                # (low bound, high bound)
+                'bounds': (-math.pi / 2, math.pi / 2)
+            },
+            3: {  # corner 3
+                'norm_pos': True, 'bounds': (math.pi / 2, 3 * math.pi / 2)
+            }
+        },
+        2: {  # type 2 corner
+            2: {  # corner 2
+                'norm_pos': False, 'bounds': (0, math.pi)
+            },
+            4: {  # corner 4
+                'norm_pos': False, 'bounds': (-math.pi, 0)
+            }
+        }
+    }
+
+    # The secondary option, this is less likely to be used, but all rovers
+    # will switch to it if any rover needs to use this option.
+    _BOUNDS_2 = {
+        1: {  # type 1 corner
+            # corner 1
+            1: _BOUNDS_1[2][4],
+            # corner 3
+            3: _BOUNDS_1[2][2]
+        },
+        2: {  # type 2 corner
+            # corner 2
+            2: _BOUNDS_1[1][1],
+            # corner 4
+            4: _BOUNDS_1[1][3]
+        }
+    }
+
     # BOUNDS is defined as an OrderedDict because it's important to iterate
     # through the options in the order they're defined below. This way Option 1
     # will be the most likely option to be used.
     BOUNDS = OrderedDict({
-        # Primary option, this is the most likely to be used, but a rover using
-        # this option will switch to option 2 if another rover needs to use
-        # option 2.
-        BOUNDARY_OPT_1: {
-            1: {  # type 1 corner
-                1: {  # corner 1
-                    # Does tag orientation need normalization to [0, 2PI]?
-                    'norm_pos': True,
-                    # (low bound, high bound)
-                    'bounds': (math.pi / 2, 3 * math.pi / 2)
-                },
-                3: {  # corner 3
-                    'norm_pos': False, 'bounds': (-math.pi / 2, math.pi / 2)
-                }
-            },
-            2: {  # type 2 corner
-                2: {  # corner 2
-                    'norm_pos': False, 'bounds': (-math.pi, 0)
-                },
-                4: {  # corner 4
-                    'norm_pos': False, 'bounds': (0, math.pi)
-                }
-            }
-        },
-
-        # The secondary option, this is less likely to be used, but all rovers
-        # will switch to it if any rover needs to used this option.
-        BOUNDARY_OPT_2: {
-            1: {  # type 1 corner
-                1: {  # corner 1
-                    'norm_pos': False, 'bounds': (0, math.pi)
-                },
-                3: {  # corner 3
-                    'norm_pos': False, 'bounds': (-math.pi, 0)
-                }
-            },
-            2: {  # type 2 corner
-                2: {  # corner 2
-                    'norm_pos': True, 'bounds': (math.pi / 2, 3 * math.pi / 2)
-                },
-                4: {  # corner 4
-                    'norm_pos': False, 'bounds': (- math.pi / 2, math.pi / 2)
-                }
-            }
-        }
+        BOUNDARY_OPT_1: _BOUNDS_1,
+        BOUNDARY_OPT_2: _BOUNDS_2
     })
 
     def __init__(self):
@@ -557,6 +556,10 @@ class HomeTransformGen:
         """
         c_type = HomeTransformGen.CORNER_TYPE_2
 
+        # The angle to rotate the intersected pose by in order to get the
+        # corner's orientation.
+        theta = math.pi
+
         ps = copy.deepcopy(intersected_pose)
         ps.pose.position.x = ((intersected_pose.pose.position.x
                                + other_pose.pose.position.x) / 2.)
@@ -576,8 +579,10 @@ class HomeTransformGen:
         # Type 1 corner
         if yaw_from_quaternion(other_rot.pose.orientation) > 0:
             c_type = HomeTransformGen.CORNER_TYPE_1
-            ps.pose.orientation = rotate_quaternion(ps.pose.orientation,
-                                                    math.pi / 2, (0, 0, 1))
+            theta = -math.pi / 2
+
+        ps.pose.orientation = rotate_quaternion(ps.pose.orientation,
+                                                theta, (0, 0, 1))
 
         return c_type, ps
 
