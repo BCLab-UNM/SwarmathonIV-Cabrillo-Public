@@ -868,16 +868,32 @@ class HomeTransformGen:
         """Given the home_plate's pose in the odometry frame, calculate the
         transform from the home frame to the odometry frame.
         """
+        # Considering the odometry frame as the parent frame, the odom -> home
+        # transform is the same as the home plate's pose in the odometry frame.
+        # However, we need the home frame to be the parent frame for tf. We need
+        # to calculate the home -> odom transform. This transform is the inverse
+        # of the implied transform contained in the home plate's pose.
+        transform = tf.transformations.concatenate_matrices(
+            tf.transformations.translation_matrix([home_pose.pose.position.x,
+                                                   home_pose.pose.position.y,
+                                                   home_pose.pose.position.z]),
+            tf.transformations.quaternion_matrix([home_pose.pose.orientation.x,
+                                                  home_pose.pose.orientation.y,
+                                                  home_pose.pose.orientation.z,
+                                                  home_pose.pose.orientation.w])
+        )
+
+        inverse = tf.transformations.inverse_matrix(transform)
+        trans = tf.transformations.translation_from_matrix(inverse)
+        q = tf.transformations.quaternion_from_matrix(inverse)
+
         xform = TransformStamped()
         xform.header.frame_id = self._home_frame
         xform.child_frame_id = home_pose.header.frame_id
 
-        xform.transform.translation.x = -home_pose.pose.position.x
-        xform.transform.translation.y = -home_pose.pose.position.y
+        xform.transform.translation.x = trans[0]
+        xform.transform.translation.y = trans[1]
 
-        q = tf.transformations.quaternion_about_axis(
-            -yaw_from_quaternion(home_pose.pose.orientation), (0, 0, 1)
-        )
         xform.transform.rotation.x = q[0]
         xform.transform.rotation.y = q[1]
         xform.transform.rotation.z = q[2]
