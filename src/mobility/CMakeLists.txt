@@ -26,7 +26,7 @@ generate_dynamic_reconfigure_options(
 )
 
 add_message_files ( 
-	FILES MoveResult.msg MoveRequest.msg 
+	FILES MoveResult.msg MoveRequest.msg HomeTransformAuthority.msg
 )
 
 add_service_files (

@@ -18,6 +18,7 @@ from collections import OrderedDict
 import copy
 import math
 import numpy as np
+import random
 import rospy
 import threading
 import sys
@@ -26,10 +27,12 @@ import tf.transformations
 
 from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
                                PoseArray, Quaternion, TransformStamped)
+from std_msgs.msg import Time
 
 from mobility import sync
 
 from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from mobility.msg import HomeTransformAuthority
 from mobility.srv import (GetRoverNames, GetRoverNamesRequest,
                           GetRoverNamesResponse, SetHomeTransformOption,
                           SetHomeTransformOptionRequest,
@@ -394,6 +397,30 @@ class HomeTransformGen:
     })
 
     def __init__(self):
+        """Initialization."""
+        rospy.init_node('home_transform')
+
+        self.rover_name = rospy.get_namespace().strip('/')
+
+        # It's important to wait for a message on the /clock topic so the
+        # rostime API doesn't return time 0 below. If a message comes in here,
+        # it should be safe to assume a message was received inside of rostime.
+        if rospy.get_param('/use_sim_time', False):
+            try:
+                rospy.wait_for_message('/clock', Time, timeout=10.0)
+            except rospy.ROSException:
+                rospy.logwarn(("{}: timed out waiting for a message on " +
+                               "/clock. This node's start time is likely " +
+                               "to be 0.").format(self.rover_name))
+
+        self._xform_vote = HomeTransformAuthority()
+        self._xform_vote.rover_name = self.rover_name
+        self._xform_vote.start_time = rospy.Time.now()
+        self._xform_vote.random_priority = random.randrange(0, sys.maxint)
+        self._xform_vote.boundary_option = (
+            HomeTransformAuthority.BOUNDARY_OPT_UNSET
+        )
+
         # TODO: calculate a good number for Phi and make this accessible as
         #  a ROS parameter.
         # When oriented in exactly the same direction, two rovers may have
@@ -409,31 +436,35 @@ class HomeTransformGen:
         self._bounds_option = None
         self._bounds = None
 
-        rospy.init_node('home_transform')
-
-        self.rover_name = rospy.get_namespace().strip('/')
-
         # Transform listener and broadcaster
         self._xform_l = tf.TransformListener(cache_time=rospy.Duration(secs=30))
         self._xform_b = tf.TransformBroadcaster()
 
         self._home_xform = None
-        self._xform_timer = rospy.Timer(rospy.Duration(0.1), self._send_xform)
 
         self._base_link_frame = rospy.get_param('base_link_frame')
         self._odom_frame = rospy.get_param('odom_frame')
         self._home_frame = rospy.get_param('home_frame')
 
         # Subscribers
-        self._sub = rospy.Subscriber('targets',
-                                     AprilTagDetectionArray, self._targets_cb)
+        self._targets_sub = rospy.Subscriber('targets',
+                                             AprilTagDetectionArray,
+                                             self._targets_cb)
+        self._xform_auth_sub = rospy.Subscriber('/home_xform_vote',
+                                                HomeTransformAuthority,
+                                                self._home_xform_vote_cb)
 
         # Services
         self._opt_srv = rospy.Service('home_transform/set_option_num',
                                       SetHomeTransformOption,
                                       self._process_opt_req)
 
-        # Publishers, for visualizing intermediate steps in RViz.
+        # Publishers
+        self._xform_vote_pub = rospy.Publisher('/home_xform_vote',
+                                               HomeTransformAuthority,
+                                               queue_size=10)
+
+        # For visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
                                             PoseArray, queue_size=10)
         self._rotated_pub = rospy.Publisher('targets/closest_pair/rotated',
@@ -445,6 +476,12 @@ class HomeTransformGen:
         self._home_pub = rospy.Publisher('home_pose',
                                          PoseStamped, queue_size=10)
 
+        # Timers
+        self._xform_timer = rospy.Timer(rospy.Duration(0.1), self._send_xform)
+        # TODO: parameterize the vote timer rate in the launch file.
+        self._xform_vote_timer = rospy.Timer(rospy.Duration(1.0),
+                                             self._send_xform_vote)
+
         # ServiceProxy
         # This is used the first time a corner is seen to get a list of rovers
         # currently online. Then this rover can send a request to each remote
@@ -453,6 +490,87 @@ class HomeTransformGen:
         # of home for the first time.
         self.get_rovers = rospy.ServiceProxy('get_rover_names',
                                              GetRoverNames)
+
+    def _log_vote(self, vote, action, reason):
+        # type: (HomeTransformAuthority, str, str) -> None
+        """Log an accepted/ignored transform authority message."""
+        rospy.loginfo(("[{}]: {} home transform vote from: {}.\n" +
+                       "Reason: {}.\n" +
+                       "My vote:\n{}\n" +
+                       "Their vote:\n{}\n").format(self.rover_name,
+                                                   action,
+                                                   vote.rover_name,
+                                                   reason,
+                                                   self._xform_vote,
+                                                   vote))
+
+    def _log_accepted_vote(self, vote, reason):
+        # type: (HomeTransformAuthority, str) -> None
+        """Log an accepted transform authority message."""
+        self._log_vote(vote, "Accepting", reason)
+
+    def _log_ignored_vote(self, vote, reason):
+        # type: (HomeTransformAuthority, str) -> None
+        """Log an ignored transform authority message."""
+        self._log_vote(vote, "Ignoring", reason)
+
+    def _has_higher_authority_than(self, vote):
+        # type: (HomeTransformAuthority) -> bool
+        """Return true if this rover has higher authority than the rover sending
+        the vote.
+        """
+        if vote.start_time == self._xform_vote.start_time:
+            return self._xform_vote.random_priority < vote.random_priority
+
+        return self._xform_vote.start_time < vote.start_time
+
+    def _accept_vote(self, vote, reason):
+        # type: (HomeTransformAuthority, str) -> None
+        """Accept the vote and set or update this rover's bounds accordingly."""
+        # TODO: log the accepted vote every time?
+        # TODO: If switching bounds options or boundary_theta differs
+        #  dramatically, then log a warning.
+        self._log_accepted_vote(vote, reason)
+
+    @sync(home_xform_lock)
+    def _home_xform_vote_cb(self, msg):
+        # type: (HomeTransformAuthority) -> None
+        """Process a vote received from another rover."""
+        if msg.rover_name == self.rover_name:
+            # Ignore votes received from the local publisher.
+            return
+
+        if msg.boundary_option == HomeTransformAuthority.BOUNDARY_OPT_UNSET:
+            # Ignore votes from rovers with unset bounds.
+            self._log_ignored_vote(msg, reason="This vote's bounds are unset")
+            return
+
+        if (self._xform_vote.boundary_option ==
+                HomeTransformAuthority.BOUNDARY_OPT_UNSET):
+            # Accept this vote and set this rover's bounds using the vote data.
+            # This is vote is accepted regardless of the voting rover's
+            # authority compared to this rover. This way the group's highest
+            # authority rover can begin sending votes with bounds information as
+            # soon as any rover sees a corner of home, allowing the group to
+            # converge on a single choice as quickly as possible.
+            self._accept_vote(msg, reason="My vote bounds are unset")
+            return
+
+        if self._has_higher_authority_than(msg):
+            # Ignore votes from rovers with lower authority than this rover.
+            self._log_ignored_vote(msg,
+                                   reason="Vote authority is lower than mine")
+            return
+
+        # Accept the vote and set this rover's bounds
+        self._accept_vote(msg, reason="Vote authority is higher than mine")
+
+    @sync(home_xform_lock)
+    def _send_xform_vote(self, _event):
+        """Publish this rover's transform authority if it's the current leader,
+        or if it hasn't heard from the leader recently.
+        """
+        self._xform_vote_pub.publish(self._xform_vote)
 
     @sync(home_xform_lock)
     def _process_opt_req(self,
@@ -504,6 +622,9 @@ class HomeTransformGen:
                 rospy.loginfo(msg)
                 self._bounds_set = True
                 self._bounds_option = HomeTransformGen.BOUNDARY_OPT_2
+                self._xform_vote.boundary_option = (
+                    HomeTransformAuthority.BOUNDARY_OPT_2
+                )
                 self._bounds = None
 
             elif self._bounds_option == HomeTransformGen.BOUNDARY_OPT_1:
@@ -516,6 +637,9 @@ class HomeTransformGen:
                 rospy.loginfo(msg)
                 self._bounds_set = True
                 self._bounds_option = HomeTransformGen.BOUNDARY_OPT_2
+                self._xform_vote.boundary_option = (
+                    HomeTransformAuthority.BOUNDARY_OPT_2
+                )
                 self._bounds = None
 
         return response
@@ -621,6 +745,8 @@ class HomeTransformGen:
         """
         self._bounds_set = True
         self._bounds_option = opt_num
+        self._xform_vote.boundary_option = opt_num
+        self._xform_vote.boundary_theta = theta
         self._bounds = copy.deepcopy(HomeTransformGen.BOUNDS[opt_num])
 
         rospy.loginfo(
@@ -748,6 +874,9 @@ class HomeTransformGen:
                         # and you couldn't reach at least one of them.
                         return False
 
+                # TODO: change theta, the angle the bounds are rotated by, to
+                #  always be set so the corner's orientation is in the center
+                #  of the bounds.
                 self._set_bounds(opt_num, theta=theta)
                 return True
 
@@ -849,7 +978,7 @@ class HomeTransformGen:
                                                    c_pose_odom))
             return None
 
-        rospy.loginfo_throttle(0.5,
+        rospy.loginfo_throttle(5.0,
                                '{}: looking at corner type {}, num {}'.format(
                                    self.rover_name, corner_type, corner_num
                                ))
