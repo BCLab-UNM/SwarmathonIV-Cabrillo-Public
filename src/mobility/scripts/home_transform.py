@@ -448,6 +448,8 @@ class HomeTransformGen:
         self._odom_frame = rospy.get_param('odom_frame')
         self._home_frame = rospy.get_param('home_frame')
 
+        self._log_rate = 5.0  # Throttle log messages to this rate in Hz.
+
         # Subscribers
         self._targets_sub = rospy.Subscriber('targets',
                                              AprilTagDetectionArray,
@@ -482,15 +484,16 @@ class HomeTransformGen:
     def _log_vote(self, vote, action, reason):
         # type: (HomeTransformAuthority, str, str) -> None
         """Log an accepted/ignored transform authority message."""
-        rospy.loginfo(("[{}]: {} home transform vote from: {}.\n" +
-                       "Reason: {}.\n" +
-                       "My vote:\n{}\n" +
-                       "Their vote:\n{}\n").format(self.rover_name,
-                                                   action,
-                                                   vote.rover_name,
-                                                   reason,
-                                                   self._xform_vote,
-                                                   vote))
+        rospy.loginfo_throttle(self._log_rate,
+                               ("[{}]: {} home transform vote from: {}.\n" +
+                                "Reason: {}.\n" +
+                                "My vote:\n{}\n" +
+                                "Their vote:\n{}\n").format(self.rover_name,
+                                                            action,
+                                                            vote.rover_name,
+                                                            reason,
+                                                            self._xform_vote,
+                                                            vote))
 
     def _log_accepted_vote(self, vote, reason):
         # type: (HomeTransformAuthority, str) -> None
@@ -686,7 +689,8 @@ class HomeTransformGen:
         self._xform_vote.boundary_theta = theta
         self._bounds = copy.deepcopy(HomeTransformGen.BOUNDS[opt_num])
 
-        rospy.loginfo(
+        rospy.loginfo_throttle(
+            self._log_rate,
             '{}: using home transform Option {}, rotated {} rad'.format(
                 self.rover_name, opt_num, theta
             )
@@ -816,14 +820,15 @@ class HomeTransformGen:
 
         corner_num = self._id_corner(corner_type, c_pose_odom)
         if corner_num is None:
-            # TODO: put this log statement temporarily outside the if, just to
-            #  make sure it works.
-            rospy.logerr(("{}: couldn't identify corner number from corner " +
-                          "with pose \n{}").format(self.rover_name,
-                                                   c_pose_odom))
+            rospy.logerr_throttle(
+                self._log_rate,
+                ("{}: Couldn't identify a Type {} corner with pose:\n{}\n" +
+                 "Current bounds are: {}").format(self.rover_name, corner_type,
+                                                  c_pose_odom, self._bounds)
+            )
             return None
 
-        rospy.loginfo_throttle(5.0,
+        rospy.loginfo_throttle(self._log_rate,
                                '{}: looking at corner type {}, num {}'.format(
                                    self.rover_name, corner_type, corner_num
                                ))
