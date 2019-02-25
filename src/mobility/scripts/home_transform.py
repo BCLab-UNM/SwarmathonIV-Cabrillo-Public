@@ -425,15 +425,6 @@ class HomeTransformGen:
             HomeTransformAuthority.BOUNDARY_OPT_UNSET
         )
 
-        # TODO: calculate a good number for Phi and make this accessible as
-        #  a ROS parameter.
-        # When oriented in exactly the same direction, two rovers may have
-        # slightly different compass headings. This discrepancy, or error, makes
-        # it important to define the corner orientation boundary regions
-        # carefully and to make sure that all the rovers are using the same
-        # boundary option to identify corners.
-        self._phi = 0.25  # ~15 degrees, Where 15 degrees is the avg error
-
         # Wait to set the bounds until a corner is seen or another rover
         # sets them.
         self._bounds = None
@@ -447,8 +438,18 @@ class HomeTransformGen:
         self._base_link_frame = rospy.get_param('base_link_frame')
         self._odom_frame = rospy.get_param('odom_frame')
         self._home_frame = rospy.get_param('home_frame')
+        self._xform_rate = rospy.get_param('~transform_publish_rate', 0.1)
+        self._vote_rate = rospy.get_param('~vote_rate', 1.0)
+        self._log_rate = rospy.get_param('~log_rate', 5.0)
 
-        self._log_rate = 5.0  # Throttle log messages to this rate in Hz.
+        # TODO: calculate a good number for Phi.
+        # When oriented in exactly the same direction, two rovers may have
+        # slightly different compass headings. This discrepancy means it's
+        # important to define the corner orientation boundary regions carefully
+        # and to make sure that all the rovers are using the same boundary
+        # option to identify corners.
+        # Default value of ~15 degrees, Where 15 degrees is the avg error
+        self._phi = rospy.get_param('~phi', 0.25)
 
         # Subscribers
         self._targets_sub = rospy.Subscriber('targets',
@@ -476,9 +477,9 @@ class HomeTransformGen:
                                          PoseStamped, queue_size=10)
 
         # Timers
-        self._xform_timer = rospy.Timer(rospy.Duration(0.1), self._send_xform)
-        # TODO: parameterize the vote timer rate in the launch file.
-        self._xform_vote_timer = rospy.Timer(rospy.Duration(1.0),
+        self._xform_timer = rospy.Timer(rospy.Duration(self._xform_rate),
+                                        self._send_xform)
+        self._xform_vote_timer = rospy.Timer(rospy.Duration(self._vote_rate),
                                              self._send_xform_vote)
 
     def _log_vote(self, vote, action, reason):
