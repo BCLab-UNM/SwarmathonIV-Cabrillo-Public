@@ -116,7 +116,7 @@ class Coordinator(rospy.SubscribeListener):
         # Only call the IMU services if the simulation isn't running.
         if not rospy.get_param('/use_sim_time', False):
             while not self._imu_is_finished_validating().is_calibrated:
-                pass
+                rospy.sleep(0.5)
 
             if self._imu_needs_calibration().is_calibrated:
                 self._queue_priority.priority += (
