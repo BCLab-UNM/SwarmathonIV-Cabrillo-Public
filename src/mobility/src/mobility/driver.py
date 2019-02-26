@@ -172,6 +172,8 @@ class State:
             if (detected & Obstacle.IS_VISION) != 0 :
                 if detected & Obstacle.INSIDE_HOME:
                     self._stop_now(MoveResult.INSIDE_HOME)
+                elif detected & Obstacle.HOME_CORNER:
+                    self._stop_now(MoveResult.OBSTACLE_CORNER)
                 elif detected & Obstacle.TAG_HOME:
                     self._stop_now(MoveResult.OBSTACLE_HOME)
                 else:
