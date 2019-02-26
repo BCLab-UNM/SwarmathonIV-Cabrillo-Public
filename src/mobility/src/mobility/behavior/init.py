@@ -46,7 +46,7 @@ def main(**kwargs):
 
     swarmie.turn(
         math.pi,
-        ignore=Obstacle.TAG_HOME | Obstacle.TAG_TARGET | Obstacle.IS_SONAR
+        ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
     )
 
     remove_from_queue(QueueRemoveRequest(rover_name=swarmie.rover_name,

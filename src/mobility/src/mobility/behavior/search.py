@@ -21,7 +21,7 @@ def turnaround():
     #TODO: should this be ignoring TAG_TARGET's???
     swarmie.turn(
         random.gauss(math.pi/2, math.pi/4),
-        ignore=Obstacle.IS_SONAR | Obstacle.TAG_TARGET | Obstacle.TAG_HOME
+        ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE
     )
     
 def wander():
@@ -98,10 +98,8 @@ def main(**kwargs):
         try:
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
-            swarmie.turn(
-                math.pi,
-                ignore=Obstacle.TAG_TARGET|Obstacle.TAG_HOME|Obstacle.IS_SONAR
-            )
+            swarmie.turn(math.pi,
+                         ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
@@ -113,10 +111,7 @@ def main(**kwargs):
             except tf.Exception:
                 pass
     else:
-        swarmie.turn(
-            math.pi,
-            ignore=Obstacle.TAG_TARGET | Obstacle.TAG_HOME | Obstacle.IS_SONAR
-        )
+        swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
     # Return to our last search exit pose if possible
     dist = 0
@@ -208,7 +203,7 @@ def main(**kwargs):
             found_tag = True
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
-            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET)
+            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
             search_exit(0)
 
     print ("I'm homesick!")

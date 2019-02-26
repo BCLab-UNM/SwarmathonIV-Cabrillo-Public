@@ -13,5 +13,10 @@ int32 HOME_CORNER      = 2048
 int32 IS_SONAR         = 15
 int32 IS_VISION        = 3840
 
+# convenience masks
+# All vision obstacles that are generally safe to ignore. These are TAG_TARGET,
+# TAG_HOME, and HOME_CORNER, but !!NOT!! INSIDE_HOME
+int32 VISION_SAFE      = 2816
+
 int32 msg 
 int32 mask

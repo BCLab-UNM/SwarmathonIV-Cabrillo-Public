@@ -40,13 +40,13 @@ def approach():
                 swarmie.drive_to(
                     block,
                     claw_offset=0.1,
-                    ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
                 )
             else: 
                 swarmie.drive_to(
                     block,
                     claw_offset=claw_offset_distance,
-                    ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
                 )
             # Grab - minimal pickup with sim_check.
             
@@ -62,10 +62,8 @@ def approach():
             # did we succesuflly grab a block?
             if swarmie.has_block():
                 swarmie.wrist_middle()
-                swarmie.drive(
-                    -0.3,
-                    ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-                )
+                swarmie.drive(-0.3,
+                              ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
                 return True
             else:
                 swarmie.set_wrist_angle(0.55)
@@ -91,10 +89,8 @@ def recover():
     claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
     try:
-        swarmie.drive(
-            -0.15,
-            ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        )
+        swarmie.drive(-0.15,
+                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
         try:
@@ -106,10 +102,8 @@ def recover():
         if block is not None:
             pass
         else:
-            swarmie.drive(
-                -0.15,
-                ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-            )
+            swarmie.drive(-0.15,
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)

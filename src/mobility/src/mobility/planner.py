@@ -185,7 +185,7 @@ class Planner:
             current_heading = swarmie.get_odom_location().get_pose().theta
             swarmie.set_heading(
                 current_heading + angle,
-                ignore=Obstacle.IS_SONAR|Obstacle.TAG_TARGET|Obstacle.TAG_HOME
+                ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE
             )
 
     def sees_home_tag(self):
@@ -376,9 +376,9 @@ class Planner:
         if self.avoid_targets is True:
             ignore |= Obstacle.TAG_TARGET
         elif self.avoid_home is True:
-            # Need to ignore both for this because target tags are likely to
-            # be in view inside the home nest.
-            ignore |= Obstacle.TAG_TARGET | Obstacle.TAG_HOME
+            # Ignore both types of tag and the corner of home because target
+            # tags are likely to be in view inside the home nest.
+            ignore |= Obstacle.VISION_SAFE
 
         cur_heading = swarmie.get_odom_location().get_pose().theta
         turn_result = swarmie.set_heading(
@@ -430,7 +430,7 @@ class Planner:
         if block is not None:
             angle = self.get_angle_to_face_point(block)
             swarmie.turn(angle,
-                         ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET,
+                         ignore=Obstacle.VISION_SAFE,
                          throw=False)
 
         return
@@ -1015,7 +1015,7 @@ class Planner:
                 self.current_state = Planner.STATE_AVOID_REVERSE
                 swarmie.drive(
                     -0.5,
-                    ignore=Obstacle.IS_SONAR|Obstacle.TAG_HOME|Obstacle.TAG_TARGET,
+                    ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE,
                     throw=False
                 )
 

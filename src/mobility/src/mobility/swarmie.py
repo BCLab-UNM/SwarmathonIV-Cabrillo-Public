@@ -711,6 +711,11 @@ class Swarmie:
         
             IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
             IS_VISION = TAG_TARGET | TAG_HOME | INSIDE_HOME | HOME_CORNER
+
+        Convenience bit masks. These are more useful when driving the rover than when
+        checking the obstacle condition:
+
+            VISION_SAFE = TAG_TARGET | TAG_HOME | HOME_CORNER
         '''
         with swarmie_lock : 
             return self.Obstacles
