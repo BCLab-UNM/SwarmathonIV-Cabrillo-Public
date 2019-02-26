@@ -44,7 +44,10 @@ def main(**kwargs):
     )
     swarmie.set_home_odom_location(home_odom)
 
-    swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    swarmie.turn(
+        math.pi,
+        ignore=Obstacle.TAG_HOME | Obstacle.TAG_TARGET | Obstacle.IS_SONAR
+    )
 
     remove_from_queue(QueueRemoveRequest(rover_name=swarmie.rover_name,
                                          notify_others=True))

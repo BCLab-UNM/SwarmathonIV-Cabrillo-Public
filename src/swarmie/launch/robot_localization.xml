@@ -2,7 +2,7 @@
   <arg name="name"/>
   <arg name="simulation"/>
 
-  <node name="ekfOdom" pkg="robot_localization" type="ekf_localization_node" respawn="true">
+  <node name="ekfOdom" pkg="robot_localization" type="ekf_localization_node" respawn="false">
     
     <param name="odom_frame" value="$(arg name)/odom" />
     <param name="world_frame" value="$(arg name)/odom" />

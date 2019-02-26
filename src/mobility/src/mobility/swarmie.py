@@ -42,6 +42,12 @@ class TagException(VisionException):
 class HomeException(VisionException):
     pass
 
+class AprilTagBoundaryException(VisionException):
+    pass 
+
+class InsideHomeException(VisionException):
+    pass
+
 class ObstacleException(DriveException):
     pass 
 
@@ -111,8 +117,7 @@ class Swarmie:
     
     This is the Python API used to drive the rover. The API interfaces 
     with ROS topics and services to perform action and acquire sensor data. 
-    ''' 
-
+    '''
     def __init__(self):
         '''Constructor.
         '''
@@ -120,12 +125,6 @@ class Swarmie:
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self.Targets = AprilTagDetectionArray()
-        self.TargetsDict = {}
-        self.TargetsBuffer = AprilTagDetectionArray()
-        self.TargetsDictBuffer = {}
-        self.targets_timeout = 3
-
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -169,7 +168,13 @@ class Swarmie:
             self.rover_name = rospy.get_namespace()
             
         self.rover_name = self.rover_name.strip('/')
-
+           
+        self.Obstacles = 0
+        self.OdomLocation = Location(None)
+        self.CIRCULAR_BUFFER_SIZE = 90
+        self.targets = [[]]*self.CIRCULAR_BUFFER_SIZE  # The rolling buffer of targets msgs was AprilTagDetectionArray()
+        self.targets_index = 0  # Used to keep track of the most recent targets index, holds the values 0-89
+        
         # Intialize this ROS node.
         anon = False
         if 'anonymous' in kwargs : 
@@ -244,33 +249,17 @@ class Swarmie:
         self.Obstacles |= msg.msg 
 
     @sync(swarmie_lock)
-    def _targets(self, msg) : 
-        self.TargetsDictBuffer = {key:tag for key,tag in self.TargetsDictBuffer.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-        #adding currently seen tags to the dict
-        self.TargetsDictBuffer.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-        #get the tags from the dict and saves them to Targets
-        self.TargetsBuffer.detections = self.TargetsDictBuffer.values() 
-    
-        if self._is_moving():
-            self.Targets = msg
-            #create a dict of tags as values and rounded coordinates as the key
-            self.TargetsDict = {(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections }
-            
-        else:
-            #remove old tags from the dict
-            self.TargetsDict = {key:tag for key,tag in self.TargetsDict.iteritems() if ((tag.pose.header.stamp.secs + self.targets_timeout ) > rospy.Time.now().secs) }
-            #adding currently seen tags to the dict
-            self.TargetsDict.update({(round(tag.pose.pose.position.x, 2),round(tag.pose.pose.position.y, 2),round(tag.pose.pose.position.z, 2)): tag for tag in msg.detections })
-            #get the tags from the dict and saves them to Targets
-            self.Targets.detections = self.TargetsDict.values() 
-    
-    #self.TargetsBuffer = AprilTagDetectionArray()
-    #self.TargetsDictBuffer = {}
+    def _targets(self, msg):
+        self.targets_index = (self.targets_index + 1) % self.CIRCULAR_BUFFER_SIZE
+        self.targets[self.targets_index] = msg.detections
+
 
     def __drive(self, request, **kwargs):
         request.obstacles = ~0
         if 'ignore' in kwargs :
             request.obstacles = ~kwargs['ignore']
+            if kwargs['ignore'] & Obstacle.INSIDE_HOME == Obstacle.INSIDE_HOME:
+                rospy.logwarn('Ignoring INSIDE_HOME exceptions.')
 
         request.timeout = 120
         if 'timeout' in kwargs :
@@ -291,6 +280,8 @@ class Swarmie:
                 raise AbortException(value)
             elif value == MoveResult.TIMEOUT :
                 raise TimeoutException(value)
+            elif value == MoveResult.INSIDE_HOME:
+                raise InsideHomeException(value)
         
         return value
         
@@ -371,6 +362,9 @@ class Swarmie:
 
             * `mobility.swarmie.TagException` - Exception caused when the target tag (0) is seen.
 
+            TODO: add AprilTagBoundaryException
+            * `mobility.swarmie.AprilTagBoundaryException` - Exception caused when boundary tag (1) is seen.
+
             * `mobility.swarmie.HomeException` - Exception caused when the home tag (256) is seen. 
 
             * `mobility.swarmie.ObstacleException` - Exception caused when sonar senses the rover \
@@ -386,6 +380,8 @@ class Swarmie:
             * `mobility.swarmie.TimeoutException` - Exception caused when the drive command fails to \
             complete in the amount of time specified with the `timeout=` argument. 
              
+            * `mobility.swarmie.InsideHomeException` - Exception caused when the rover thinks it's inside \
+            of the home ring.
         '''
         req = MoveRequest(
             r=distance, 
@@ -499,18 +495,18 @@ class Swarmie:
         self.set_wrist_angle(.55)
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
+        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
+        if len(blocks) > 0:
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18 :
+            if abs(z_dist) < 0.18:
                 return True 
 
         # Second test: Can we see a bock that's close to the camera with the wrist up.
         self.wrist_up()
         rospy.sleep(1)
         blocks = self.get_latest_targets()
-        blocks = sorted(blocks.detections, key=lambda x : abs(x.pose.pose.position.z))
+        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
         if len(blocks) > 0 :
             nearest = blocks[0]
             z_dist = nearest.pose.pose.position.z 
@@ -525,7 +521,7 @@ class Swarmie:
         # The block does not affect the sonar in the simulator. 
         # Use the below check if having trouble with visual target check.
         # return(self.simulator_running())
-        return(False) #self.sees_resource(6)
+        return False  # self.sees_resource(6)
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -534,14 +530,39 @@ class Swarmie:
                 # This is the simulator
                 return True
         return False
-    
-    def get_latest_targets(self) :
-        '''Return the latest `apriltags_ros.msg.ArpilTagDetectionArray`. (it might be out of date)'''
-        return self.Targets
-    
-    def get_targets_buffer(self) :
-        '''Return the buffer of the target detections from the ArpilTagDetectionArray '''
-        return self.TargetsBuffer
+
+    def get_latest_targets(self,id=-1):
+        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        and will be affected by twinkeling with an optional id flag"""
+        # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
+        if id == -1:  # all of the tags
+            return self.targets[self.targets_index]
+        else:  # only the specified tags with id
+            return [tag for tag in self.targets[self.targets_index] if tag.id == id]
+
+    def get_targets_buffer(self, age=8, cleanup=True, id=-1):
+        """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
+        buffer = sum(self.targets, [])
+        if cleanup:
+            buffer = self._detection_cleanup(buffer, age, id)
+        return buffer
+
+    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
+        """ Returns the detections with the duplicate tags and old tags removed """
+        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
+        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
+        if id == -1:
+            id = [0, 1, 256]  # resource & home
+        else:
+            id = [id]
+        targets_dict = {(round(tag.pose.pose.position.x, 2),
+                        round(tag.pose.pose.position.y, 2),
+                        round(tag.pose.pose.position.z, 2)):
+                        tag for tag in detections
+                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
+        # get the tags from the dict and saves them to detections
+        detections = targets_dict.values()
+        return detections
     
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
@@ -675,11 +696,12 @@ class Swarmie:
             bit 4: SONAR_BLOCK
             bit 8: TAG_TARGET
             bit 9: TAG_HOME
+            bit 10: INSIDE_HOME
 
         Bit masks:
         
             IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
-            IS_VISION = TAG_TARGET | TAG_HOME 
+            IS_VISION = TAG_TARGET | TAG_HOME | INSIDE_HOME
         '''
         with swarmie_lock : 
             return self.Obstacles
@@ -778,7 +800,33 @@ class Swarmie:
         if (self.OdomLocation.Odometry is None):
             return(False)
         return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
-                
+
+    def transform_pose(self, target_frame, pose, timeout=3.0):
+        """Transform PoseStamped into the target frame of reference.
+        Returns a PoseStamped in the target frame.
+
+        Args:
+        * target_frame (`string`) - the frame of reference to transform to. Ex: '/odom' or `/base_link`
+        * pose (`PoseStamped`) - the pose of the tag in the /camera_link frame
+        * timeout (`float`) - the time to wait for the transform
+
+        Returns:
+        * pose - PoseStamped the pose of the tag in the /odom frame
+
+        Raises:
+        * tf.Exception if timeout is exceeded
+        """
+        target_frame = self.rover_name + '/' + target_frame.strip('/')
+
+        swarmie.xform.waitForTransform(
+            target_frame,
+            pose.header.frame_id,
+            pose.header.stamp,
+            rospy.Duration(timeout)
+        )
+
+        return swarmie.xform.transformPose(target_frame, pose)
+
     def get_nearest_block_location(self, use_targets_buffer=False):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
@@ -797,9 +845,9 @@ class Swarmie:
         '''
         # Finds all visible apriltags
         if use_targets_buffer is True:
-            blocks = self.get_targets_buffer().detections
+            blocks = self.get_targets_buffer()
         else:
-            blocks = self.get_latest_targets().detections
+            blocks = self.get_latest_targets()
         if len(blocks) == 0 :
             return None
 
@@ -815,13 +863,10 @@ class Swarmie:
         if nearest.id==256:
             return None
 
-        self.xform.waitForTransform(self.rover_name + '/odom',
-                        nearest.pose.header.frame_id, nearest.pose.header.stamp,
-                        rospy.Duration(3.0))
-        
-        # returns the closes block to the rover.
-        return self.xform.transformPose(self.rover_name + '/odom', nearest.pose).pose.position
-        
+        result = self.transform_pose('/odom', nearest.pose, timeout=3.0)
+
+        return result.pose.position
+
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
         odom =  self.get_odom_location().get_pose()
@@ -842,10 +887,16 @@ class Swarmie:
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
-        Use:
-            odom_pose = swarmie.get_search_exit_poses()
-            swarmie.drive_to(odom_pose,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-            swarmie.set_heading(odom_pose.theta,ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        Examples:
+        >>> odom_pose = swarmie.get_search_exit_poses()
+        >>> swarmie.drive_to(
+        >>>     odom_pose,
+        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+        >>> )
+        >>> swarmie.set_heading(
+        >>>     odom_pose.theta,
+        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+        >>> )
         '''
         poses = rospy.get_param(
             'search_exit_poses',
