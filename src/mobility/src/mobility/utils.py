@@ -17,29 +17,27 @@ except ImportError:
 from apriltags_ros.msg import AprilTagDetection
 
 
-def sort_tags_left_to_right(detections, id=0):
-    # type: (List[AprilTagDetection], int) -> List[AprilTagDetection]
+def sort_tags_left_to_right(detections):
+    # type: (List[AprilTagDetection]) -> List[AprilTagDetection]
     """Sort tags in view from left to right (by their x position in the camera
     frame). Removes/ignores tags close enough in the camera to likely be a block
     in the claw.
 
     Args:
-        detections: The list of detections.
-        id: The tag id to filter by before sorting. (0 - target, 256 - home)
+        detections: The list of detections. This should only contain the type of
+            tag you care about sorting. (i.e. filter unwanted tag id's
+            out first).
 
     Returns:
         The sorted list of AprilTagDetections in view. This will be empty if no
             tags are in view.
     """
     BLOCK_IN_CLAW_DIST = 0.22  # meters
-    sorted_detections = []
 
-    for detection in detections:
-        if (detection.id == id and
-                detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
-            sorted_detections.append(detection)
-
-    return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
-
+    return sorted(
+        filter(lambda x: x.pose.pose.position.z > BLOCK_IN_CLAW_DIST,
+               detections),
+        key=lambda x: x.pose.pose.position.x
+    )
 
 

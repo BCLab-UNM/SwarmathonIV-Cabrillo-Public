@@ -508,8 +508,7 @@ class Planner:
         * drive_result - MoveResult of the avoidance attempt
         """
         sorted_detections = utils.sort_tags_left_to_right(
-            swarmie.get_latest_targets(),
-            id=id
+            swarmie.get_latest_targets(id=id)
         )
 
         # if count == 3:  # last resort
