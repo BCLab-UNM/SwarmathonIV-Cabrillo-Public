@@ -23,6 +23,7 @@ from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
 from mobility.swarmie import swarmie, Location, HomeException, TagException, PathException, ObstacleException
+from mobility import utils
 
 
 class Planner:
@@ -226,30 +227,6 @@ class Planner:
         """
         return sorted(detections,
                       key=lambda x: abs(x.pose.pose.position.x))
-
-    def _sort_tags_left_to_right(self, detections, id=0):
-        """Sort tags in view from left to right (by their x
-        position in the camera frame). Removes/ignores tags close enough in the
-        camera to likely be a block in the claw.
-
-        Args:
-        * detections - apriltags_ros/AprilTagDetectionArray the list
-          of detections.
-        * id - the id of the tags to sort (0 - target, 256 - home)
-
-        Returns:
-        * sorted_detections - sorted list of AprilTagDetections in view. Will
-          be empty if no tags are in view.
-        """
-        BLOCK_IN_CLAW_DIST = 0.22  # meters
-        sorted_detections = []
-
-        for detection in detections:
-            if (detection.id == id and
-                    detection.pose.pose.position.z > BLOCK_IN_CLAW_DIST):
-                sorted_detections.append(detection)
-
-        return sorted(sorted_detections, key=lambda x: x.pose.pose.position.x)
 
     def sweep(self, angle=math.pi/4, dist=0.3,
               ignore=Obstacle.PATH_IS_CLEAR, throw=False):
@@ -530,7 +507,7 @@ class Planner:
         Returns:
         * drive_result - MoveResult of the avoidance attempt
         """
-        sorted_detections = self._sort_tags_left_to_right(
+        sorted_detections = utils.sort_tags_left_to_right(
             swarmie.get_latest_targets(),
             id=id
         )
