@@ -7,10 +7,11 @@ int32 SONAR_BLOCK      = 8
 int32 TAG_TARGET       = 256
 int32 TAG_HOME         = 512
 int32 INSIDE_HOME      = 1024
+int32 HOME_CORNER      = 2048
 
 # bitmasks
 int32 IS_SONAR         = 15
-int32 IS_VISION        = 1792
+int32 IS_VISION        = 3840
 
 int32 msg 
 int32 mask

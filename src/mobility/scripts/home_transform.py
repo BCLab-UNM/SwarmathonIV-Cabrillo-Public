@@ -37,6 +37,7 @@ from mobility import sync
 
 from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
 from mobility.msg import HomeTransformAuthority
+from swarmie_msgs.msg import Obstacle
 
 
 def euler_from_quaternion(quat):
@@ -429,6 +430,10 @@ class HomeTransformGen:
         # sets them.
         self._bounds = None
 
+        # Keep track of previous obstacle message so it's only published once
+        # when it changes.
+        self._prev_obst_status = Obstacle.PATH_IS_CLEAR
+
         # Transform listener and broadcaster
         self._xform_l = tf.TransformListener(cache_time=rospy.Duration(secs=30))
         self._xform_b = tf.TransformBroadcaster()
@@ -463,6 +468,10 @@ class HomeTransformGen:
         self._xform_vote_pub = rospy.Publisher('/home_xform_vote',
                                                HomeTransformAuthority,
                                                queue_size=10)
+        self._obstacle_pub = rospy.Publisher('obstacle',
+                                             Obstacle,
+                                             queue_size=1,
+                                             latch=True)
 
         # For visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
@@ -897,6 +906,8 @@ class HomeTransformGen:
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
+        next_obst_status = Obstacle.PATH_IS_CLEAR
+
         detections = []  # type: List[PoseStamped]
         for detection in msg.detections:  # type: AprilTagDetection
             if detection.id == 256:
@@ -926,6 +937,8 @@ class HomeTransformGen:
         if len(detections) > 0:
             corner = self._find_corner_tags(detections)
             if corner is not None:
+                next_obst_status = Obstacle.HOME_CORNER
+
                 pose1, pose2 = corner
                 int_ = intersected(pose1, pose2)
 
@@ -976,6 +989,15 @@ class HomeTransformGen:
             msg.header.frame_id = self._base_link_frame
             self._closest_pub.publish(msg)
             self._rotated_pub.publish(msg)
+
+        # Publish obstacle messages for the home plate's corner, if necessary.
+        if next_obst_status != self._prev_obst_status:
+            msg = Obstacle()
+            msg.msg = next_obst_status
+            msg.mask = Obstacle.HOME_CORNER
+            self._obstacle_pub.publish(msg)
+
+        self._prev_obst_status = next_obst_status
 
 
 def main():
