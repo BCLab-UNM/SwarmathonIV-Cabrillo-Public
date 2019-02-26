@@ -836,7 +836,7 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 	if (next_status != prev_status) {
 		swarmie_msgs::Obstacle msg;
 		msg.msg = next_status;
-		msg.mask = swarmie_msgs::Obstacle::IS_VISION;
+		msg.mask = swarmie_msgs::Obstacle::TAG_TARGET | swarmie_msgs::Obstacle::TAG_HOME | swarmie_msgs::Obstacle::INSIDE_HOME;
 		obstaclePublish.publish(msg);
 	}
 
