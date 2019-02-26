@@ -263,6 +263,11 @@ class Swarmie:
             request.obstacles = ~kwargs['ignore']
             if kwargs['ignore'] & Obstacle.INSIDE_HOME == Obstacle.INSIDE_HOME:
                 rospy.logwarn('Ignoring INSIDE_HOME exceptions.')
+            if kwargs['ignore'] & Obstacle.VISION_HOME == Obstacle.TAG_HOME:
+                rospy.logwarn(
+                    'Ignoring only TAG_HOME and not also HOME_CORNER. ' +
+                    'You usually want to use ignore=VISION_HOME'
+                )
 
         request.timeout = 120
         if 'timeout' in kwargs :
@@ -716,6 +721,7 @@ class Swarmie:
         checking the obstacle condition:
 
             VISION_SAFE = TAG_TARGET | TAG_HOME | HOME_CORNER
+            VISION_HOME = TAG_HOME | HOME_CORNER
         '''
         with swarmie_lock : 
             return self.Obstacles

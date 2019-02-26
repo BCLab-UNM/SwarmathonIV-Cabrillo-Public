@@ -17,6 +17,8 @@ int32 IS_VISION        = 3840
 # All vision obstacles that are generally safe to ignore. These are TAG_TARGET,
 # TAG_HOME, and HOME_CORNER, but !!NOT!! INSIDE_HOME
 int32 VISION_SAFE      = 2816
+# Both TAG_HOME and HOME_CORNER
+int32 VISION_HOME      = 2560
 
 int32 msg 
 int32 mask
