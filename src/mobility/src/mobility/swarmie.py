@@ -48,6 +48,9 @@ class AprilTagBoundaryException(VisionException):
 class InsideHomeException(VisionException):
     pass
 
+class HomeCornerException(VisionException):
+    pass
+
 class ObstacleException(DriveException):
     pass 
 
@@ -274,7 +277,7 @@ class Swarmie:
                 raise TagException(value)
             elif value == MoveResult.OBSTACLE_HOME : 
                 raise HomeException(value)
-            elif value == MoveResult.PATH_FAIL : 
+            elif value == MoveResult.PATH_FAIL :
                 raise PathException(value)
             elif value == MoveResult.USER_ABORT : 
                 raise AbortException(value)
@@ -282,6 +285,8 @@ class Swarmie:
                 raise TimeoutException(value)
             elif value == MoveResult.INSIDE_HOME:
                 raise InsideHomeException(value)
+            elif value == MoveResult.OBSTACLE_CORNER:
+                raise HomeCornerException(value)
         
         return value
         
@@ -382,6 +387,9 @@ class Swarmie:
              
             * `mobility.swarmie.InsideHomeException` - Exception caused when the rover thinks it's inside \
             of the home ring.
+
+            * `mobility.swarmie.HomeCornerException` - Exception caused when the rover sees a corner of \
+            the home ring.
         '''
         req = MoveRequest(
             r=distance, 
@@ -697,11 +705,12 @@ class Swarmie:
             bit 8: TAG_TARGET
             bit 9: TAG_HOME
             bit 10: INSIDE_HOME
+            bit 11: HOME_CORNER
 
         Bit masks:
         
             IS_SONAR = SONAR_LEFT | SONAR_CENTER | SONAR_RIGHT | SONAR_BLOCK 
-            IS_VISION = TAG_TARGET | TAG_HOME | INSIDE_HOME
+            IS_VISION = TAG_TARGET | TAG_HOME | INSIDE_HOME | HOME_CORNER
         '''
         with swarmie_lock : 
             return self.Obstacles
