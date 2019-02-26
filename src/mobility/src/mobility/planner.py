@@ -262,8 +262,8 @@ class Planner:
         * drive_result - MoveResult of the last executed call of
           Swarmie.set_heading().
           drive_result == MoveResult.SUCCESS if all turns were successful.
-          drive_result == MoveResult.OBSTACLE_HOME if home tags aren't being
-          ignored and a home tag is seen.
+          drive_result == MoveResult.OBSTACLE_HOME or MoveResult.OBSTACLE_CORNER
+          if home tags aren't being ignored and a home tag is seen.
           drive_result == MoveResult.OBSTACLE_TAG if targets aren't being
           ignored and a target is seen.
           drive_result == MoveResult.OBSTACLE_SONAR if sonar is blocked and
@@ -272,6 +272,8 @@ class Planner:
         Raises:
         * mobility.Swarmie.HomeException - if home tags aren't being
           ignored, throw=True, and a home tag is seen.
+        * mobility.Swarmie.HomeCornerException if home tags are ignored but home
+          corners aren't, throw=True, and a home corner is seen.
         * mobility.Swarmie.TagException - if targets tags aren't being
           ignored, throw=True, and a target is seen.
         * mobility.Swarmie.ObstacleException - if sonar is blocked, throw=True,
@@ -328,14 +330,16 @@ class Planner:
         * drive_result - MoveResult of the last executed call of
           Swarmie.set_heading().
           drive_result == MoveResult.SUCCESS if all turns were successful.
-          drive_result == MoveResult.OBSTACLE_HOME if home tags aren't being
-          ignored and a home tag is seen.
+          drive_result == MoveResult.OBSTACLE_HOME or MoveResult.OBSTACLE_CORNER
+          if home tags aren't being ignored and a home tag is seen.
           drive_result == MoveResult.OBSTACLE_TAG if targets aren't being
           ignored and a target is seen.
 
         Raises:
         * mobility.Swarmie.HomeException - if home tags aren't being
           ignored, throw=True, and a home tag is seen.
+        * mobility.Swarmie.HomeCornerException if home tags are ignored but home
+          corners aren't, throw=True, and a home corner is seen.
         * mobility.Swarmie.TagException - if targets tags aren't being
           ignored, throw=True, and a target is seen.
         """
@@ -387,8 +391,7 @@ class Planner:
             throw=False
         )
         drive_result = swarmie.drive(dist,
-                                          ignore=Obstacle.SONAR_BLOCK,
-                                          throw=False)
+                                     ignore=Obstacle.SONAR_BLOCK, throw=False)
 
         return turn_result, drive_result
 
@@ -651,7 +654,7 @@ class Planner:
         Args:
         * point - geometry_msgs/Point the point to turn and face.
         * ignore - the Obstacle's to ignore while turning. Should only be
-          either Obstacle.TAG_HOME or Obstacle.TAG_TARGET, or both. Sonar
+          either Obstacle.VISION_HOME or Obstacle.TAG_TARGET, or both. Sonar
           will not be ignored in the direction the rover is currently turning.
         """
         print('Facing next point...')
@@ -831,7 +834,7 @@ class Planner:
         if self.avoid_targets is True:
             current_ignore |= Obstacle.TAG_TARGET
         elif self.avoid_home is True:
-            current_ignore |= Obstacle.TAG_HOME
+            current_ignore |= Obstacle.VISION_HOME
 
         self.goal.x = goal.x
         self.goal.y = goal.y

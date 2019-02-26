@@ -157,13 +157,13 @@ def main(**kwargs):
             pass
 
         try:
-            # planner.clear(math.pi / 4, ignore=Obstacle.TAG_HOME, throw=True)
+            # planner.clear(math.pi / 4, ignore=Obstacle.VISION_HOME, throw=True)
             # swarmie.drive(0.2, throw=False)
             # planner.sweep(throw=True)
             swarmie.circle()
             swarmie.set_heading(
                 last_pose.theta,
-                ignore=Obstacle.TAG_HOME
+                ignore=Obstacle.VISION_HOME
             )
         except TagException:
             rospy.sleep(0.3)  # build buffer a little
