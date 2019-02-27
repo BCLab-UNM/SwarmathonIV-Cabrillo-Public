@@ -12,7 +12,10 @@ TODO: Ideally, the rover will drive counter-clockwise around the home ring when
 """
 from __future__ import print_function
 
+import angles
+import math
 import rospy
+import tf.transformations
 
 from mobility.swarmie import swarmie, HomeCornerException, PathException
 from mobility import utils
@@ -84,6 +87,34 @@ def find_home_corner(max_fail_count=3):
             else:
                 rightmost_tag = sorted_tags[-1]
                 tag_xformed = swarmie.transform_pose('odom', rightmost_tag.pose)
+
+                # TODO: pull helpers out of home_transform.py and into utils.py
+                #  so you can use yaw_from_quaternion() here.
+                _r, _p, home_yaw = tf.transformations.euler_from_quaternion(
+                    [tag_xformed.pose.orientation.x,
+                     tag_xformed.pose.orientation.y,
+                     tag_xformed.pose.orientation.z,
+                     tag_xformed.pose.orientation.w]
+                )
+
+                # Using set heading before driving is useful when the rover is
+                # mostly facing the corner to its left (which isn't the one we
+                # want to drive to). Given the home tag's orientation on the
+                # home ring, this gets the rover facing to the right, and keeps
+                # it that way. Otherwise, it's possible for the rover to be
+                # facing a corner to its left, and the simple "drive to the
+                # rightmost tag" logic here will fail; the rover won't move at
+                # all because its already where it should be according to
+                # drive_to().
+                # TODO: this if statement's logic could be improved. The rover
+                #  frequently wastes time turning to the right when it arrives
+                #  oriented directly at one of the corners. It just needs to
+                #  drive a little bit forward in that case and it would see the
+                #  corner and get the corner exception.
+                rover_yaw = swarmie.get_odom_location().get_pose().theta
+                if (abs(angles.shortest_angular_distance(rover_yaw, home_yaw))
+                        > math.pi / 2):
+                    swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
 
                 swarmie.drive_to(tag_xformed.pose.position,
                                  claw_offset=claw_offset, ignore=ignore)
