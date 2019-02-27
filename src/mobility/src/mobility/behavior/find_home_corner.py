@@ -12,6 +12,8 @@ TODO: Ideally, the rover will drive counter-clockwise around the home ring when
 """
 from __future__ import print_function
 
+import rospy
+
 from mobility.swarmie import swarmie, HomeCornerException, PathException
 from mobility import utils
 
@@ -55,10 +57,17 @@ def find_home_corner(max_fail_count=3):
     ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
               Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
 
+    # Because this function's caller has likely only just seen a home tag,
+    # waiting for a brief moment here helps to ensure the first call to
+    # swarmie.get_targets_buffer() returns with home tags in the list.
+    rospy.sleep(0.1)
+
     while True:
         try:
+            # TODO: the last 1 second of buffer is probably too much. Change
+            #  the age argument to something like 0.5 if/when the API supports it.
             sorted_tags = utils.sort_tags_left_to_right(
-                swarmie.get_latest_targets(id=256)
+                swarmie.get_targets_buffer(id=256, age=2)
             )
             if len(sorted_tags) == 0:
                 fail_count += 1
