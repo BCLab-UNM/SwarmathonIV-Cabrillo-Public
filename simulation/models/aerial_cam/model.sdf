@@ -1,0 +1,43 @@
+<?xml version='1.0'?>
+<sdf version='1.0'>
+	<model name="aerial_cam">
+		<static>true</static>
+		<link name="link">
+			<sensor type="camera" name="prelim_camera">
+				<pose>0 0 13 0.0 1.57079 0.0</pose>
+				<visualize>false</visualize>
+				<update_rate>6.0</update_rate>
+				<camera name="prelim_camera">
+					<image>
+						<width>800</width>
+						<height>800</height>
+						<format>B8G8R8</format>
+					</image>
+				</camera>
+				<plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+					<cameraName>/aerial_cam/prelim_camera</cameraName>
+					<imageTopicName>/aerial_cam/prelim_camera/image</imageTopicName>
+					<cameraInfoTopicName>/aerial_cam/prelim_camera/camera_info</cameraInfoTopicName>
+				</plugin>
+			</sensor>
+			
+			<sensor type="camera" name="final_camera">
+				<pose>0 0 20.1 0.0 1.57079 0.0</pose>
+				<visualize>false</visualize>
+				<update_rate>6.0</update_rate>
+				<camera name="final_camera">
+					<image>
+						<width>1200</width>
+						<height>1200</height>
+						<format>B8G8R8</format>
+					</image>
+				</camera>
+				<plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+					<cameraName>/aerial_cam/final_camera</cameraName>
+					<imageTopicName>/aerial_cam/final_camera/image</imageTopicName>
+					<cameraInfoTopicName>/aerial_cam/final_camera/camera_info</cameraInfoTopicName>
+				</plugin>
+			</sensor>
+		</link>
+	</model>
+</sdf>
