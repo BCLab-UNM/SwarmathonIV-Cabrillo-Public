@@ -62,7 +62,7 @@ def find_home_corner(max_fail_count=3):
     # swarmie.get_targets_buffer() returns with home tags in the list.
     rospy.sleep(0.1)
 
-    while True:
+    for _ in range(10):
         try:
             # TODO: the last 1 second of buffer is probably too much. Change
             #  the age argument to something like 0.5 if/when the API supports it.
@@ -91,6 +91,8 @@ def find_home_corner(max_fail_count=3):
         except HomeCornerException:
             # success!!
             return True
+
+    raise PathException('Unable to find a home corner, I gave up.')
 
 
 def main():
