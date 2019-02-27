@@ -11,6 +11,7 @@ from mobility.msg import MoveResult
 from mobility.srv import QueueRemove, QueueRemoveRequest
 
 from mobility.swarmie import swarmie, Location
+from mobility.behavior.find_home_corner import find_home_corner
 
 def main(**kwargs):
     remove_from_queue = rospy.ServiceProxy('start_queue/remove', QueueRemove)
@@ -44,9 +45,11 @@ def main(**kwargs):
     )
     swarmie.set_home_odom_location(home_odom)
 
+    find_home_corner()
+
     swarmie.turn(
-        math.pi,
-        ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+        -2 * math.pi / 3,
+        ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR
     )
 
     remove_from_queue(QueueRemoveRequest(rover_name=swarmie.rover_name,
