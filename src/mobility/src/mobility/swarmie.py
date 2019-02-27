@@ -559,7 +559,7 @@ class Swarmie:
                         round(tag.pose.pose.position.y, 2),
                         round(tag.pose.pose.position.z, 2)):
                         tag for tag in detections
-                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
+                        if (((tag.pose.header.stamp + rospy.Duration(age)) > rospy.Time.now()) and (tag.id in id))}
         # get the tags from the dict and saves them to detections
         detections = targets_dict.values()
         return detections
