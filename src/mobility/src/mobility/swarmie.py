@@ -262,9 +262,11 @@ class Swarmie:
         if 'ignore' in kwargs :
             request.obstacles = ~kwargs['ignore']
             if kwargs['ignore'] & Obstacle.INSIDE_HOME == Obstacle.INSIDE_HOME:
-                rospy.logwarn('Ignoring INSIDE_HOME exceptions.')
+                rospy.logwarn_throttle(10.0,
+                                       'Ignoring INSIDE_HOME exceptions.')
             if kwargs['ignore'] & Obstacle.VISION_HOME == Obstacle.TAG_HOME:
-                rospy.logwarn(
+                rospy.logwarn_throttle(
+                    10.0,
                     'Ignoring only TAG_HOME and not also HOME_CORNER. ' +
                     'You usually want to use ignore=VISION_HOME'
                 )
