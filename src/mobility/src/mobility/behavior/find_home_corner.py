@@ -3,6 +3,12 @@
 
 This module provides an importable function that can be used in multiple
 behaviors if necessary.
+
+TODO: Ideally, the rover will drive counter-clockwise around the home ring when
+ it looks for a corner. This means it should generally be turning right. There
+ are currently still cases where the rover will start going in the wrong
+ direction. This is bad because another rover might be to the left of this
+ rover, coming straight toward it.
 """
 from __future__ import print_function
 
@@ -10,6 +16,15 @@ from mobility.swarmie import swarmie, HomeCornerException, PathException
 from mobility import utils
 
 from swarmie_msgs.msg import Obstacle
+
+
+def recover():
+    """Recover from the scenario where no home tags are in view anymore."""
+    # TODO: should sonar be ignored when recovering?
+    # TODO: is simply backing up a little bit a reliable recovery move?
+    ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
+              Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
+    swarmie.drive(-.1, ignore=ignore)
 
 
 def find_home_corner(max_fail_count=3):
@@ -36,6 +51,7 @@ def find_home_corner(max_fail_count=3):
     # How many times the rover has stopped with no home tags in view.
     fail_count = 0
 
+    # TODO: should sonar be ignored all the time?
     ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
               Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
 
@@ -47,18 +63,21 @@ def find_home_corner(max_fail_count=3):
             if len(sorted_tags) == 0:
                 fail_count += 1
                 if fail_count >= max_fail_count:
+                    # TODO: is it useful to raise a PathException here? Or would
+                    #  a sensible return value be better? An exception is likely
+                    #  to crash the caller, forcing the task manager to handle
+                    #  it appropriately.
                     raise PathException(
                         'Unable to find a home corner, no home tags are in view.'
                     )
 
-                swarmie.drive(-.1, ignore=ignore)
+                recover()
             else:
                 rightmost_tag = sorted_tags[-1]
                 tag_xformed = swarmie.transform_pose('odom', rightmost_tag.pose)
-                swarmie.drive_to(
-                    tag_xformed.pose.position, claw_offset=claw_offset,
-                    ignore=ignore
-                )
+
+                swarmie.drive_to(tag_xformed.pose.position,
+                                 claw_offset=claw_offset, ignore=ignore)
 
         except HomeCornerException:
             # success!!
