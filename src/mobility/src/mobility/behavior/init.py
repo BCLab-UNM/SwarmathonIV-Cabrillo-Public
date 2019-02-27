@@ -26,7 +26,9 @@ def main(**kwargs):
     #
     # Drive closer until we can see the center. 
     try:
-        swarmie.drive(1) 
+        # Ignore cubes if they're put in the way. It's more important to continue
+        # this behavior and find a corner of home than it is to stop for a cube.
+        swarmie.drive(1, ignore=Obstacle.TAG_TARGET)
     except: 
         # This could happen if we bump into another rover. 
         # Let's just call it good. 
