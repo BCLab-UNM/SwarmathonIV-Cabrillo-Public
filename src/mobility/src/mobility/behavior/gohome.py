@@ -193,6 +193,7 @@ if __name__ == '__main__' :
         )
     parser.add_argument(
         '--has-block',
+        action='store_true',
         help=('whether the rover currently has a block, and should ' +
               'accordingly either avoid cubes or stop for them')
     )
