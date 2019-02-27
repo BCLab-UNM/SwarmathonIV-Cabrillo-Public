@@ -7,10 +7,11 @@ import math
 import rospy
 import tf
 
-from geometry_msgs.msg import Pose2D
+from geometry_msgs.msg import Pose2D, PoseStamped
 from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import swarmie
+from mobility.behavior.find_home_corner import find_home_corner
 
 def look_for_tags():
     '''Looks pi/6 in either direction, then oreient to corner if it exisits or to area with the most amount of home tags '''
@@ -94,40 +95,52 @@ def find_center(tags):
 
 def main(**kwargs):
     '''Dropoff throws IndexError when no tags near swarmie '''
-    
+
     #move wrist down but not so down that the resource hits the ground
     swarmie.wrist_middle()
-    rospy.sleep(.5)
+
+    find_home_corner()
+
+    home_origin = PoseStamped()
+    home_origin.header.frame_id = 'home'
+
+    # TODO: what do we do if this raises a tf exception?
+    home_odom = swarmie.transform_pose('odom', home_origin)  # type: PoseStamed
+
+    # rospy.sleep(.5)
     
     try:
-        swarmie.targets_timeout = 0.1
-        rospy.sleep(0.2)
-        swarmie.targets_timeout = 9 # so they stay around for the decision making, should time it and reduce this
-        tags = look_for_tags()
+        # swarmie.targets_timeout = 0.1
+        # rospy.sleep(0.2)
+        # swarmie.targets_timeout = 9 # so they stay around for the decision making, should time it and reduce this
+        # tags = look_for_tags()
         #move the wrist up so the resource wont hit the homebase
         swarmie.set_wrist_angle(.3)
-        if(swarmie.simulator_running()):
-            swarmie.drive_to(find_center(tags), ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-        else:
-            swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
-        swarmie.targets_timeout = 3 #put it back
+        swarmie.drive_to(home_odom.pose.position, claw_offset=0.5,
+                         ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+
+        # if(swarmie.simulator_running()):
+            # swarmie.drive_to(find_center(tags), ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        # else:
+            # swarmie.drive_to(find_center(tags), claw_offset = 0.15, ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+        # swarmie.targets_timeout = 3 #put it back
     except:
         print("Somthing broke")
-        swarmie.targets_timeout = 3 #make sure it makes it back
+        # swarmie.targets_timeout = 3 #make sure it makes it back
         raise
     
     try:
         swarmie.set_wrist_angle(.7)
-        rospy.sleep(.4)
+        # rospy.sleep(.4)
         if(swarmie.simulator_running()):
             swarmie.fingers_open()
         else:
             swarmie.set_finger_angle(1)
-        rospy.sleep(.4)
+        # rospy.sleep(.4)
         swarmie.set_wrist_angle(0)
-        swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
     except: 
-        swarmie.drive(-.45, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
+        swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR) #make sure to get out of home
         raise
 
     return 0 
