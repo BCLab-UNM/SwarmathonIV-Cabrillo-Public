@@ -14,20 +14,26 @@ from mobility.swarmie import swarmie
 from mobility.behavior.find_home_corner import find_home_corner
 
 
-def main(**kwargs):
-    """Do dropoff behavior."""
-    # Move the wrist down, but not so far down that the resource hits the ground.
-    swarmie.wrist_middle()
+def find_home_pose():
+    # type: () -> PoseStamped
+    """Find home's pose in the odom frame.
 
-    # TODO: What should find_home_corner() do when it's called with no home tags
-    #  in view? Does this happen very often?
-    find_home_corner()
+    Returns:
+        The home plate's pose.
 
+    Raises:
+        tf.Exception if the transform fails.
+    """
     home_origin = PoseStamped()
     home_origin.header.frame_id = 'home'
 
     # TODO: what do we do if this raises a tf exception?
-    home_odom = swarmie.transform_pose('odom', home_origin)  # type: PoseStamed
+    return swarmie.transform_pose('odom', home_origin)
+
+
+def dropoff():
+    """Drive in and drop off a cube."""
+    home_odom = find_home_pose()
 
     # Move the wrist up so the resource won't hit the home plate.
     swarmie.set_wrist_angle(.3)
@@ -46,7 +52,29 @@ def main(**kwargs):
 
     # rospy.sleep(.4)
     swarmie.set_wrist_angle(0)
+
+
+def exit_home():
+    """Back up out of home after we drop of a cube."""
+    # TODO: Is this simple function call reliable enough during congested rounds?
+    #  it's very bad if the rover don't make it fully back out of the home ring.
     swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+
+
+def main(**kwargs):
+    """Do dropoff behavior."""
+    # Move the wrist down, but not so far down that the resource hits the
+    # ground. This is useful so the cube and claw don't obscure the camera's
+    # field of view while looking for the home corner.
+    swarmie.wrist_middle()
+
+    # TODO: What should find_home_corner() do when it's called with no home tags
+    #  in view? Does this happen very often?
+    find_home_corner()
+
+    dropoff()
+
+    exit_home()
 
     return 0
 
