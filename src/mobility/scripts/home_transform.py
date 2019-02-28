@@ -28,6 +28,7 @@ import threading
 import sys
 import tf
 import tf.transformations
+import traceback
 
 from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
                                PoseArray, Quaternion, TransformStamped)
@@ -60,6 +61,17 @@ def ps_to_p2d(ps):
     """Convert a PoseStamped to a Pose2D."""
     return Pose2D(x=ps.pose.position.x, y=ps.pose.position.y,
                   theta=yaw_from_quaternion(ps.pose.orientation))
+
+
+def ps_to_pt_stamped(ps):
+    # type: (PoseStamped) -> PointStamped
+    """Convert a PoseStamped to a PointStamped, dropping the orientation data."""
+    pnt = PointStamped(header=copy.deepcopy(ps.header))
+    pnt.point.x = ps.pose.position.x
+    pnt.point.y = ps.pose.position.y
+    pnt.point.z = ps.pose.position.z
+
+    return pnt
 
 
 def pnt_dist(p1, p2):
@@ -250,6 +262,13 @@ def needs_positve_norm(lo, hi):
 
 
 home_xform_lock = threading.Lock()
+
+
+class BoundsStillUnsetError(Exception):
+    """Raised when HomeTransformGen failed to set its corner orientation
+    bounds.
+    """
+    pass
 
 
 class HomeTransformGen:
@@ -491,8 +510,10 @@ class HomeTransformGen:
                                               PointStamped, queue_size=10)
         self._corner_pub = rospy.Publisher('targets/corner',
                                            PoseStamped, queue_size=10)
-        self._home_pub = rospy.Publisher('home_pose',
-                                         PoseStamped, queue_size=10)
+        self._home_pose_pub = rospy.Publisher('home_pose',
+                                              PoseStamped, queue_size=10)
+        self._home_point_pub = rospy.Publisher('home_point',
+                                               PointStamped, queue_size=10)
 
         # Timers
         self._xform_timer = rospy.Timer(rospy.Duration(self._xform_rate),
@@ -779,7 +800,7 @@ class HomeTransformGen:
         return False
 
     def _choose_bounds_option(self, corner_type, corner_pose):
-        # type: (int, PoseStamped) -> bool
+        # type: (int, PoseStamped) -> None
         """Given the corner pose in the odometry frame, choose which bounds
         option to use.
 
@@ -787,18 +808,20 @@ class HomeTransformGen:
             corner_type: The type (1, 2) of corner.
             corner_pose: The corner's pose in the odometry frame.
 
-        Returns:
-            Whether the bounds options was set.
+        Raises:
+            BoundsStillUnsetError: If we failed to set a bounds option.
         """
         for opt_num, bounds_opt in HomeTransformGen.BOUNDS.items():
             if self._set_bounds_option(corner_type, corner_pose, opt_num):
-                return True
+                return
 
-        return False
+        raise BoundsStillUnsetError(
+            'Unable to set the bounds using either Bounds Option'
+        )
 
     @sync(home_xform_lock)
     def _home_pose(self, corner_type, corner_pose):
-        # type: (int, PoseStamped) -> Optional[PoseStamped]
+        # type: (int, PoseStamped) -> Tuple[PointStamped, Optional[PoseStamped]]
         """Given a corner pose in the base_link frame, calculate the home
         plate's pose in the odometry frame.
 
@@ -807,8 +830,13 @@ class HomeTransformGen:
             corner_pose: The corner's pose in the base_link frame.
 
         Returns:
-            The home plate's pose in the odometry frame, or None, if it couldn't
-                be calculated.
+            A tuple containing the home plate's position in the odometry frame
+                and it's Pose in the odometry frame, if it could be calculated.
+
+        Raises:
+            tf.Exception: If the internal transform here fails.
+            BoundsStillUnsetError: If the bounds were unset prior to this call
+                and they couldn't be set here.
         """
         # This function acquires a lock to ensure the vote callback doesn't
         # modify self._bounds after its value is checked below, but before it's
@@ -820,24 +848,15 @@ class HomeTransformGen:
         # to temporarily ignore the vote for Option 2, although it would receive
         # another vote shortly from that rover or another rover who properly
         # accepted the vote.
-        try:
-            self._xform_l.waitForTransform(self._odom_frame,
-                                           corner_pose.header.frame_id,
-                                           corner_pose.header.stamp,
-                                           rospy.Duration(0.1))
-            c_pose_odom = self._xform_l.transformPose(self._odom_frame,
-                                                      corner_pose)
-        except tf.Exception as e:
-            # We can't do anything without having the transformed pose.
-            rospy.logwarn(
-                ('{}: Transform exception in HomeTransformGen._home_pose():\n' +
-                 '{}').format(self.rover_name, e)
-            )
-            return None
+        self._xform_l.waitForTransform(self._odom_frame,
+                                       corner_pose.header.frame_id,
+                                       corner_pose.header.stamp,
+                                       rospy.Duration(0.1))
+        c_pose_odom = self._xform_l.transformPose(self._odom_frame,
+                                                  corner_pose)
 
         if not self._are_bounds_set():
-            if not self._choose_bounds_option(corner_type, c_pose_odom):
-                return None
+            self._choose_bounds_option(corner_type, c_pose_odom)
 
         home_pose = copy.deepcopy(c_pose_odom)
 
@@ -853,6 +872,8 @@ class HomeTransformGen:
                                      + HomeTransformGen.CORNER_DIST
                                      * math.sin(angle_to_center))
 
+        home_point = ps_to_pt_stamped(home_pose)
+
         corner_num = self._id_corner(corner_type, c_pose_odom)
         if corner_num is None:
             rospy.logerr_throttle(
@@ -861,7 +882,7 @@ class HomeTransformGen:
                  "Current bounds are: {}").format(self.rover_name, corner_type,
                                                   c_pose_odom, self._bounds)
             )
-            return None
+            return home_point, None
 
         rospy.loginfo_throttle(self._log_rate,
                                '{}: looking at corner type {}, num {}'.format(
@@ -874,7 +895,7 @@ class HomeTransformGen:
             (0, 0, 1)
         )
 
-        return home_pose
+        return home_point, home_pose
 
     @sync(home_xform_lock)
     def _gen_home_xform(self, home_pose):
@@ -980,11 +1001,29 @@ class HomeTransformGen:
                         -yaw_from_quaternion(pose2.pose.orientation)
                     )
 
-                home_pose = self._home_pose(cor_type, cor_pose)
+                try:
+                    home_point, home_pose = self._home_pose(cor_type, cor_pose)
+                except tf.Exception as e:
+                    rospy.logwarn(
+                        ('{}: Transform exception raised by ' +
+                         'HomeTransformGen._home_pose():\n{}').format(
+                            self.rover_name, e
+                        )
+                    )
+                    return
+                except BoundsStillUnsetError:
+                    rospy.logerr_throttle(self._log_rate,
+                                          'BoundsStillUnsetError:\n{}'.format(
+                                              traceback.format_exc()
+                                          ))
+                    return
+
                 if home_pose is not None:
                     # generate transform
                     self._gen_home_xform(home_pose)
-                    self._home_pub.publish(home_pose)
+                    self._home_pose_pub.publish(home_pose)
+
+                self._home_point_pub.publish(home_point)
 
                 self._corner_pub.publish(cor_pose)
 
