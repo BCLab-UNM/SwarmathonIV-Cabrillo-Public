@@ -20,7 +20,7 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
-from geometry_msgs.msg import Point, Twist, Pose2D
+from geometry_msgs.msg import Point, PointStamped, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
 
 import threading 
@@ -128,6 +128,7 @@ class Swarmie:
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
+        self._home_odom_position = None
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -222,6 +223,7 @@ class Swarmie:
         # these and wait for valid data so that users of this data don't get errors.
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
+        rospy.Subscriber('home_point', PointStamped, self._home_point)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
@@ -249,7 +251,12 @@ class Swarmie:
     @sync(swarmie_lock)
     def _obstacle(self, msg) :
         self.Obstacles &= ~msg.mask 
-        self.Obstacles |= msg.msg 
+        self.Obstacles |= msg.msg
+
+    @sync(swarmie_lock)
+    def _home_point(self, msg):
+        """Update the home plate's position in the odometry frame."""
+        self._home_odom_position = msg
 
     @sync(swarmie_lock)
     def _targets(self, msg):
@@ -750,17 +757,9 @@ class Swarmie:
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
-        return Point(**rospy.get_param('home_odom', {'x' : 0, 'y' : 0})) 
+        return Point(x=self._home_odom_position.point.x,
+                     y=self._home_odom_position.point.y)
 
-    def has_home_odom_location(self):
-        '''Check to see if the home odometry location parameter is set.
-        
-        Returns:
-        
-        * (`bool`): `True` if the parameter exists, `False` otherwise.
-        '''
-        return rospy.has_param('home_odom')
-    
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
