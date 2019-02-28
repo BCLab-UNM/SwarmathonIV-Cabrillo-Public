@@ -107,6 +107,16 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Alpha: 1
+      Class: rviz/PointStamped
+      Color: 255; 255; 0
+      Enabled: true
+      History Length: 1
+      Name: Home Point
+      Radius: 0.0799999982
+      Topic: /achilles/home_point
+      Unreliable: false
+      Value: true
+    - Alpha: 1
       Axes Length: 0.5
       Axes Radius: 0.0500000007
       Class: rviz/Pose
@@ -148,8 +158,8 @@ Visualization Manager:
           Value: true
         achilles/odom:
           Value: true
-        tag_256:
-          Value: false
+        home:
+          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
@@ -159,8 +169,9 @@ Visualization Manager:
         achilles/odom:
           achilles/base_link:
             achilles/camera_link:
-              tag_256:
-                {}
+              {}
+        home:
+          {}
       Update Interval: 0
       Value: true
   Enabled: true
