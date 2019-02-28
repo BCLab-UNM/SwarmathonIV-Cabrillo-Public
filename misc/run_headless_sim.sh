@@ -262,7 +262,7 @@ while test $# -gt 0; do
 			#have permission to touch the file
 			if [ $# -gt 0 ] && touch "$1"; then
 				SCORE_OUTPUT_PATH=$1
-				echo "Setting  to: $"
+				echo "Setting output to: $SCORE_OUTPUT_PATH"
 				shift
 			else
 				echo "Missing/Invaild output file make sure you have permissions"
