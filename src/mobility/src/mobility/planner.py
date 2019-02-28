@@ -858,8 +858,6 @@ class Planner:
 
             # otherwise, something went wrong or we found home
             elif self.result == MoveResult.OBSTACLE_HOME:
-                self.set_home_locations()
-
                 # get around the home tag obstacle
                 count = 0
 
@@ -910,7 +908,6 @@ class Planner:
 
                 if (obstacle & Obstacle.TAG_HOME == Obstacle.TAG_HOME and
                         self.avoid_home is False):
-                    self.set_home_locations()
                     return MoveResult.OBSTACLE_HOME
 
                 if (obstacle & Obstacle.TAG_TARGET == Obstacle.TAG_TARGET and
@@ -1069,53 +1066,6 @@ class Planner:
             avoid_home=avoid_home,
             use_waypoints=use_waypoints
         )
-
-    def set_home_locations(self):
-        """Set the rover's home locations in the /odom and /map frames. Can
-        be called manually, but is also called from Planner.drive_to() when
-        a home tag is seen."""
-
-        current_location = swarmie.get_odom_location()
-        current_pose = current_location.get_pose()
-        home_odom = Location(current_location.Odometry)
-
-        detections = swarmie.get_latest_targets(id=256)
-        try:
-            for detection in detections:
-                    see_home_tag = True
-                    home_detection = swarmie.transform_pose('/odom',
-                                                            detection.pose)
-
-                    quat = [home_detection.pose.orientation.x,
-                            home_detection.pose.orientation.y,
-                            home_detection.pose.orientation.z,
-                            home_detection.pose.orientation.w]
-                    _r, _p, yaw = tf.transformations.euler_from_quaternion(
-                        quat
-                    )
-                    yaw += math.pi / 2
-
-                    home_odom.Odometry.pose.pose.position.x = float(
-                        home_detection.pose.position.x + 0.5 * math.cos(yaw)
-                    )
-                    home_odom.Odometry.pose.pose.position.y = float(
-                        home_detection.pose.position.y + 0.5 * math.sin(yaw)
-                    )
-                    swarmie.set_home_odom_location(home_odom)
-                    return
-
-        except tf.Exception:
-            pass  # use backup below
-
-        # project home_odom location 50cm in front of rover's current location
-        home_odom.Odometry.pose.pose.position.x = (
-            current_pose.x + 0.5 * math.cos(current_pose.theta)
-        )
-        home_odom.Odometry.pose.pose.position.y = (
-            current_pose.y + 0.5 * math.sin(current_pose.theta)
-        )
-        swarmie.set_home_odom_location(home_odom)
-        return
 
     def _get_spiral_points(self, start_distance, distance_step, num_legs=10):
         """Get a list of waypoints for the spiral search pattern. Waypoints
