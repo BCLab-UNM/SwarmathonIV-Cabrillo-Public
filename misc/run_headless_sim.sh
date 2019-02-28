@@ -308,8 +308,8 @@ done
 echo "Running in $dir" 
 previous_gazebo_model_path=${GAZEBO_MODEL_PATH}
 previous_gazebo_plugin_path=${GAZEBO_PLUGIN_PATH}
-#export GAZEBO_MODEL_PATH="$PWD/simulation/models"
-#export GAZEBO_PLUGIN_PATH=${GAZEBO_PLUGIN_PATH}:./build/lib/:$PWD/build/gazebo_plugins
+export GAZEBO_MODEL_PATH="$dir/simulation/models"
+export GAZEBO_PLUGIN_PATH=${GAZEBO_PLUGIN_PATH}:./build/lib/:$dir/build/gazebo_plugins
 spawn="rosrun gazebo_ros spawn_model -sdf -file $dir/simulation/models/"
 ROVER_NAMES=( "achilles" "aeneas" "ajax" "diomedes" "hector" "paris" "thor" "zeus" )
 SLEEP_INTERVAL=.5 # Set the interval at which to check whether the experiment duration has elapsed
