@@ -827,11 +827,11 @@ class HomeTransformGen:
                                            rospy.Duration(0.1))
             c_pose_odom = self._xform_l.transformPose(self._odom_frame,
                                                       corner_pose)
-        except tf.Exception:
+        except tf.Exception as e:
             # We can't do anything without having the transformed pose.
             rospy.logwarn(
-                ('{}: Transform exception in ' +
-                 'HomeTransformGen._home_pose().').format(self.rover_name)
+                ('{}: Transform exception in HomeTransformGen._home_pose():\n' +
+                 '{}').format(self.rover_name, e)
             )
             return None
 
