@@ -84,8 +84,6 @@ def spiral_search(has_block):
                 planner.face_home_tag()
             except tf.Exception:
                 pass  # good enough
-            if has_block is False:
-                planner.set_home_locations()
 
     elif drive_result == MoveResult.OBSTACLE_TAG:
         # This can happen if we're going home without a block.

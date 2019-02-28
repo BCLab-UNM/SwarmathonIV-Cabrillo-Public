@@ -191,8 +191,10 @@ def main(**kwargs):
 
             except HomeException :
                 print ("I saw home!")
-                planner.set_home_locations()
-
+                # TODO: We used to set the home odom location here, while we had
+                #  the chance. If finding home during gohome becomes difficult,
+                #  it may be useful to have home_transform publish a less
+                #  accurate, but easier to update, home position estimate.
                 turnaround()
 
     except TagException :
