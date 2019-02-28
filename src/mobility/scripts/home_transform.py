@@ -396,10 +396,10 @@ class HomeTransformGen:
     # BOUNDS is defined as an OrderedDict because it's important to iterate
     # through the options in the order they're defined below. This way Option 1
     # will be the most likely option to be used.
-    BOUNDS = OrderedDict({
-        BOUNDARY_OPT_1: _BOUNDS_1,
-        BOUNDARY_OPT_2: _BOUNDS_2
-    })
+    BOUNDS = OrderedDict((
+        (BOUNDARY_OPT_1, _BOUNDS_1),
+        (BOUNDARY_OPT_2, _BOUNDS_2)
+    ))
 
     def __init__(self):
         """Initialization."""
