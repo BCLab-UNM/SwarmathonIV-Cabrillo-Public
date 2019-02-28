@@ -735,19 +735,6 @@ class Swarmie:
         with swarmie_lock : 
             return self.Obstacles
 
-    def set_home_odom_location(self, loc):
-        '''Remember the home odometry location. The location can be recalled by other 
-        control programs. Set this every time we see the nest to minimize the effect
-        of drift. 
-        
-        Arguments:
-        
-        * loc: (`mobility.swarmie.Location`) The coordinates to remember. 
-        '''
-        rospy.set_param('home_odom', 
-                        {'x' : loc.Odometry.pose.pose.position.x, 
-                         'y' : loc.Odometry.pose.pose.position.y})
-    
     def get_home_odom_location(self):
         '''Recall the home odometry location. This is probably the most reliable memory
         of the location of the nest. Odometry drifts, so if we haven't seen home in a 
