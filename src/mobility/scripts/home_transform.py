@@ -240,6 +240,15 @@ def closest_inline_pair(poses1,  # type: List[PoseStamped]
     return None
 
 
+def needs_positve_norm(lo, hi):
+    """Given a low bound and a high bound for a range of angles, determine
+    whether you need to normalize the angles to be [0, 2*PI].
+    """
+    return (angles.normalize_angle_positive(lo)
+            < math.pi
+            < angles.normalize_angle_positive(hi))
+
+
 home_xform_lock = threading.Lock()
 
 
@@ -713,7 +722,23 @@ class HomeTransformGen:
                 hi_bound = bounds['bounds'][1] - self._phi
 
                 # Rotate the constrained bounds by theta radians.
-                bounds['bounds'] = (lo_bound + theta, hi_bound + theta)
+                lo_bound += theta
+                hi_bound += theta
+
+                # Re-determine whether positive normaliazation (0 to 2*PI) is
+                # necessary after the rotation.
+                if needs_positve_norm(lo_bound, hi_bound):
+                    bounds['norm_pos'] = True
+                    bounds['bounds'] = (
+                        angles.normalize_angle_positive(lo_bound),
+                        angles.normalize_angle_positive(hi_bound)
+                    )
+                else:
+                    bounds['norm_pos'] = False
+                    bounds['bounds'] = (
+                        angles.normalize_angle(lo_bound),
+                        angles.normalize_angle(hi_bound)
+                    )
 
     def _set_bounds_option(self, corner_type, corner_pose, opt_num):
         # type: (int, PoseStamped, int) -> bool
