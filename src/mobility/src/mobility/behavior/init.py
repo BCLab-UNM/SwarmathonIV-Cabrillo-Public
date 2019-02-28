@@ -34,19 +34,6 @@ def main(**kwargs):
         # Let's just call it good. 
         pass
 
-    current_location = swarmie.get_odom_location()
-    current_pose = current_location.get_pose()
-    home_odom = Location(current_location.Odometry)
-
-    # project home_odom location 50cm in front of rover's current location
-    home_odom.Odometry.pose.pose.position.x = (
-        current_pose.x + 0.5 * math.cos(current_pose.theta)
-    )
-    home_odom.Odometry.pose.pose.position.y = (
-        current_pose.y + 0.5 * math.sin(current_pose.theta)
-    )
-    swarmie.set_home_odom_location(home_odom)
-
     find_home_corner()
 
     swarmie.turn(
