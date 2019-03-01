@@ -541,12 +541,15 @@ class Swarmie:
             return [tag for tag in self.targets[self.targets_index] if tag.id == id]
 
     def get_targets_buffer(self, age=8, cleanup=True, id=-1):
-        ''' Return a buffer of the target detections from the AprilTagDetectionArray with an optional id
+        ''' Return a list of AprilTagDetections received in the last 'age' seconds,
+        filtered by id, with duplicates removed, if specified.
+
         Args
         
-        * `age` (`int`) - default to 8
+        * `age` (`float`) - how many seconds worth of the buffer to return.
         * `cleanup` (`bool`) - default to True, will remove duplicate detections 
         * `id` (`int`) - default to -1(all tags), can be used to filter specific tags, cleanup must be True
+
         Returns:
 
         * `buffer` (`list` [`apriltags_ros.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
