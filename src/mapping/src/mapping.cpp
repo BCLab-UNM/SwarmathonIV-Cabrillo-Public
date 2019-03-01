@@ -13,9 +13,13 @@
 #include <array>
 #include <queue>
 
+#include <boost/thread.hpp>
+
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
 #include <angles/angles.h>
+#include <dynamic_reconfigure/server.h>
+#include <dynamic_reconfigure/client.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -39,6 +43,7 @@
 #include <mapping/FindTarget.h>
 #include <mapping/GetMap.h>
 #include <mapping/GetNavPlan.h>
+#include <mapping/mappingConfig.h>
 
 #include <execinfo.h>
 #include <signal.h>
@@ -55,10 +60,31 @@ geometry_msgs::Pose2D currentLocation;
 bool isMoving = false;
 tf::TransformListener *cameraTF;
 
-double singleSensorCollisionDist = 0.35; // meters a single sensor will flag an obstacle
-double doubleSensorCollisionDist = 0.6; //meters the two sensors will flag obstacles
-const double SONAR_ANGLE = 0.436332; // 25 degrees. Mount angles of sonar sensors.
-const double MAP_RESOLUTION = 0.5; // map resolution, meters per cell
+// Dynamic reconfigure params
+bool params_configured = false; // wait until the parameters are initialized
+
+// param group map
+double sonar_angle; // Mount angles of sonar sensors.
+double single_sensor_obst_dist; // meters a single sensor will flag an obstacle
+double double_sensor_obst_dist; //meters the two sensors will flag obstacles
+// todo: what's a good number for sonar_view_range?
+// sonar_view_range can help avoid marking "fake" obstacles seen due to sonar
+// noise at longer ranges. It limits the mark_poly to this range, but
+// not clear_poly, so the map can still be cleared past this point.
+// todo: limit clear_poly left and right ranges using sonar_view_range?
+double sonar_view_range;  // don't mark obstacles past this range
+// todo: what's a good number for sonar_obst_depth?
+double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
+
+// param group search
+double obstacle_threshold; // min value for a cell to be considered impassable
+double inflation_pct; // Inflate cost of cells which are neighboring an obstacle
+double lethal_cost;
+// Not yet mapped obstacle layer cells will take this neutral value. This
+// helps to make the search prefer previously visited areas.
+double neutral_cost;
+bool visualize_frontier;
+
 unsigned int obstacle_status;
 
 std::string map_frame;
@@ -108,14 +134,6 @@ const std::array<GridLocation, 8> DIRECTIONS =
 		 GridLocation{1, 0}, GridLocation{1, -1},
 		 GridLocation{0, -1}, GridLocation{-1, -1}};
 
-// 2-step away neighbors for an 8-connected grid
-const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
-		{GridLocation{-2, 0}, GridLocation{-2, 1}, GridLocation{-2, 2},
-		 GridLocation{-1, 2}, GridLocation{0, 2}, GridLocation{1, 2},
-		 GridLocation{2, 2}, GridLocation{2, 1}, GridLocation{2, 0},
-		 GridLocation{2, -1}, GridLocation{2, -2}, GridLocation{1, -2},
-		 GridLocation{0, -2}, GridLocation{-1, -2}, GridLocation{-2, -2},
-		 GridLocation{-2, -1}};
 
 /*
  * Check if location and it's neighbors obstacle values are all below threshold.
@@ -123,16 +141,16 @@ const std::array<GridLocation, 16> TWO_STEP_DIRECTIONS =
  */
 bool passable(grid_map::GridMap& map, GridLocation location_from,
 			  GridLocation location_to, bool use_home_layer) {
-	const double OBSTACLE_THRESHOLD = 0.10;
+    // TODO: make passable() only use location_to's value, i.e. diagonal adjacents? In theory the cost() neighbor inflation should cover this case
     grid_map::Index index;
     index(0) = location_to.x;
 	index(1) = location_to.y;
     GridLocation direction{location_to.x - location_from.x,
 						   location_to.y - location_from.y};
-	if (map.at("obstacle", index) >= OBSTACLE_THRESHOLD) {
+	if (map.at("obstacle", index) >= obstacle_threshold) {
 		return false;
 	}
-    if (use_home_layer && map.at("home", index) >= OBSTACLE_THRESHOLD) {
+	if (use_home_layer && map.at("home", index) >= obstacle_threshold) {
 		return false;
 	}
 
@@ -142,15 +160,15 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
 
 		// not passable if both adjacent neighbors of diagonal are blocked
 		if (use_home_layer) {
-			if ((map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
-				 map.at("home", adjacent_x_axis) >= OBSTACLE_THRESHOLD)
+			if ((map.at("obstacle", adjacent_x_axis) >= obstacle_threshold ||
+				 map.at("home", adjacent_x_axis) >= obstacle_threshold)
 				&&
-				(map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD ||
-				 map.at("home", adjacent_y_axis) >= OBSTACLE_THRESHOLD)) {
+				(map.at("obstacle", adjacent_y_axis) >= obstacle_threshold ||
+				 map.at("home", adjacent_y_axis) >= obstacle_threshold)) {
 				return false;
 			}
-		} else if (map.at("obstacle", adjacent_x_axis) >= OBSTACLE_THRESHOLD ||
-				   map.at("obstacle", adjacent_y_axis) >= OBSTACLE_THRESHOLD) {
+		} else if (map.at("obstacle", adjacent_x_axis) >= obstacle_threshold ||
+				   map.at("obstacle", adjacent_y_axis) >= obstacle_threshold) {
 			return false;
 		}
 	}
@@ -183,11 +201,7 @@ std::vector<GridLocation> neighbors(grid_map::GridMap& map,
 // value, though.
 double cost(grid_map::GridMap& map,
 			GridLocation to_node, bool use_home_layer) {
-	// Inflate cost of cells which are neighboring an obstacle
-	const double INFLATION_PCT = 0.7;
-	const double LETHAL_COST = 255;
-	const double NEUTRAL_COST = 50; // not yet mapped cells will take this value
-	// minimum cost for a cell, must match the heuristic. This is slightly
+	// The minimum cost for a cell, must match the heuristic. This is slightly
 	// larger than sqrt(2), the heuristic value for a diagonal move
 	double cost = 1.5;
 
@@ -196,51 +210,38 @@ double cost(grid_map::GridMap& map,
 	index(1) = to_node.y;
 
 	if (map.isValid(index, "obstacle")) {
-        cost += 2 * LETHAL_COST * map.at("obstacle", index);
+		cost += lethal_cost * map.at("obstacle", index);
+	} else {
+		cost = neutral_cost;
 	}
 	if (use_home_layer && map.isValid(index, "home")) {
-		cost += LETHAL_COST * map.at("home", index);
+		cost += lethal_cost * map.at("home", index);
 	}
 
-	if (cost > LETHAL_COST) { // skip 2-layer neighbors check if possible
-		cost = LETHAL_COST;
+	if (cost > lethal_cost) { // skip 2-layer neighbors check if possible
+		cost = lethal_cost;
 		return cost;
 	}
 
     for (GridLocation direction : DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
+        GridLocation next{to_node.x + direction.x, to_node.y + direction.y};
 		index(0) = next.x;
 		index(1) = next.y;
         if (in_bounds(map, next)) {
             if (map.isValid(index, "obstacle")) {
-                cost += INFLATION_PCT * 2 * LETHAL_COST *
+                cost += inflation_pct * lethal_cost *
                         map.at("obstacle", index);
             }
             if (use_home_layer && map.isValid(index, "home")) {
-                cost += INFLATION_PCT * LETHAL_COST *
+                cost += inflation_pct * lethal_cost *
                         map.at("home", index);
             }
         }
     }
 
-    for (GridLocation direction : TWO_STEP_DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + to_node.y};
-		index(0) = next.x;
-		index(1) = next.y;
-        if (in_bounds(map, next)) {
-            if (map.isValid(index, "obstacle")) {
-                cost += INFLATION_PCT / 2.0 * 2 * LETHAL_COST *
-                        map.at("obstacle", index);
-            }
-            if (use_home_layer && map.isValid(index, "home")) {
-                cost += INFLATION_PCT / 2.0 * LETHAL_COST *
-                        map.at("home", index);
-            }
-        }
-    }
 
-	if (cost > LETHAL_COST) {
-		cost = LETHAL_COST;
+	if (cost > lethal_cost) {
+		cost = lethal_cost;
 	}
 
     return cost;
@@ -353,22 +354,21 @@ bool a_star_search(
  * start. Returns false otherwise.
  *
  * end is in line of sight if line iterator between the two indexes doesn't
- * cross a cell with value above OBSTACLE_THRESHOLD
+ * cross a cell with value above obstacle_threshold
  */
 bool in_line_of_sight(
 		grid_map::GridMap& map,
 		grid_map::Index start,
 		grid_map::Index end,
 		bool use_home_layer) {
-	const double OBSTACLE_THRESHOLD = 0.10;
 	for (grid_map::LineIterator iterator(map, start, end);
 		 !iterator.isPastEnd(); ++iterator) {
         if (map.isValid(*iterator, "obstacle")) {
-            if (map.at("obstacle", *iterator) > OBSTACLE_THRESHOLD) {
+            if (map.at("obstacle", *iterator) > obstacle_threshold) {
 				return false;
 			}
 			if (use_home_layer &&
-					map.at("home", *iterator) > OBSTACLE_THRESHOLD) {
+					map.at("home", *iterator) > obstacle_threshold) {
                 return false;
             }
         }
@@ -481,6 +481,9 @@ double decreaseVal(double val, double rate) {
  *
  */
 void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_msgs::Range::ConstPtr& sonarCenter, const sensor_msgs::Range::ConstPtr& sonarRight) {
+	if (!params_configured) {
+		return;
+	}
 
 	static unsigned int prev_status = 0;
 	unsigned int next_status = 0;
@@ -488,14 +491,6 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// Minimum distance sonar center obstacles will be marked at. Anything
 	// inside this distance should be a block in the claw.
     const double MIN_CENTER_DIST = 0.15;
-    // todo: what's a good number for SONAR_DEPTH?
-    const double SONAR_DEPTH = 0.75;  // limit mark_poly to 75cm past measured ranges
-    // todo: what's a good number for VIEW_RANGE?
-	// VIEW_RANGE can help avoid marking "fake" obstacles seen due to sonar
-	// noise at longer ranges. It limits the mark_poly to this range, but
-	// not clear_poly, so the map can still be cleared past this point.
-	// todo: limit clear_poly left and right ranges using VIEW_RANGE?
-    const double VIEW_RANGE = 1.0;  // don't mark obstacles past this range
 
 	// Update the timestamp in the Obstacle map.
 	rover_map.setTimestamp(ros::Time::now().toNSec());
@@ -503,24 +498,24 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	// Calculate the obstacle status.
 	// Single sensor ranges below single sensor threshold can trigger an
 	// obstacle message.
-	if (sonarLeft->range < singleSensorCollisionDist) {
+	if (sonarLeft->range < single_sensor_obst_dist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
 	}
-    if (sonarCenter->range < singleSensorCollisionDist &&
+    if (sonarCenter->range < single_sensor_obst_dist &&
         sonarCenter->range > 0.12) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
-    if (sonarRight->range < singleSensorCollisionDist) {
+    if (sonarRight->range < single_sensor_obst_dist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
 	}
 
 	// Two adjacent sensors both below double sensor threshold can also trigger
 	// an obstacle message.
-	if (sonarLeft->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
+	if (sonarLeft->range < double_sensor_obst_dist && sonarCenter->range < double_sensor_obst_dist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
-	if (sonarRight->range < doubleSensorCollisionDist && sonarCenter->range < doubleSensorCollisionDist) {
+	if (sonarRight->range < double_sensor_obst_dist && sonarCenter->range < double_sensor_obst_dist) {
 		next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
 		next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
 	}
@@ -538,8 +533,8 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Left sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
-					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
+			grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + sonar_angle),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + sonar_angle)
 			));
 
 	// Center sonar
@@ -555,8 +550,8 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 
 	// Right sonar
 	clear_poly.addVertex(
-			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
-					currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
+			grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - sonar_angle),
+					currentLocation.y + sonarRight->range * sin(currentLocation.theta - sonar_angle)
 			));
 
 	// Clear the area that's clear in sonar.
@@ -570,20 +565,20 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	mark_poly.setFrameId(rover_map.getFrameId());
 	bool do_marking = false;
 
-	if (sonarLeft->range < VIEW_RANGE) {
+	if (sonarLeft->range < sonar_view_range) {
 		do_marking = true;
 		// Left sonar
 		mark_poly.addVertex(
-				grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + SONAR_ANGLE),
-					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + SONAR_ANGLE)
+				grid_map::Position(currentLocation.x + sonarLeft->range * cos(currentLocation.theta + sonar_angle),
+					currentLocation.y + sonarLeft->range * sin(currentLocation.theta + sonar_angle)
 				));
 		mark_poly.addVertex(
-				grid_map::Position(currentLocation.x + (sonarLeft->range + SONAR_DEPTH) * cos(currentLocation.theta + SONAR_ANGLE),
-                    currentLocation.y + (sonarLeft->range + SONAR_DEPTH) * sin(currentLocation.theta + SONAR_ANGLE)
+				grid_map::Position(currentLocation.x + (sonarLeft->range + sonar_obst_depth) * cos(currentLocation.theta + sonar_angle),
+                    currentLocation.y + (sonarLeft->range + sonar_obst_depth) * sin(currentLocation.theta + sonar_angle)
 				));
 	}
 
-	if (sonarCenter->range > MIN_CENTER_DIST && sonarCenter->range < VIEW_RANGE) {
+	if (sonarCenter->range > MIN_CENTER_DIST && sonarCenter->range < sonar_view_range) {
 		do_marking = true;
 		// Center sonar
 		mark_poly.addVertex(
@@ -591,21 +586,21 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 					currentLocation.y + sonarCenter->range * sin(currentLocation.theta)
 				));
 		mark_poly.addVertex(
-				grid_map::Position(currentLocation.x + (sonarCenter->range + SONAR_DEPTH) * cos(currentLocation.theta),
-                    currentLocation.y + (sonarCenter->range + SONAR_DEPTH) * sin(currentLocation.theta)
+				grid_map::Position(currentLocation.x + (sonarCenter->range + sonar_obst_depth) * cos(currentLocation.theta),
+                    currentLocation.y + (sonarCenter->range + sonar_obst_depth) * sin(currentLocation.theta)
 				));
 	}
 
-	if (sonarRight->range < VIEW_RANGE) {
+	if (sonarRight->range < sonar_view_range) {
         do_marking = true;
 		// Right sonar
 		mark_poly.addVertex(
-				grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - SONAR_ANGLE),
-                    currentLocation.y + sonarRight->range * sin(currentLocation.theta - SONAR_ANGLE)
+				grid_map::Position(currentLocation.x + sonarRight->range * cos(currentLocation.theta - sonar_angle),
+                    currentLocation.y + sonarRight->range * sin(currentLocation.theta - sonar_angle)
 				));
 		mark_poly.addVertex(
-				grid_map::Position(currentLocation.x + (sonarRight->range + SONAR_DEPTH) * cos(currentLocation.theta - SONAR_ANGLE),
-                    currentLocation.y + (sonarRight->range + SONAR_DEPTH) * sin(currentLocation.theta - SONAR_ANGLE)
+				grid_map::Position(currentLocation.x + (sonarRight->range + sonar_obst_depth) * cos(currentLocation.theta - sonar_angle),
+                    currentLocation.y + (sonarRight->range + sonar_obst_depth) * sin(currentLocation.theta - sonar_angle)
 				));
 	}
 
@@ -679,6 +674,10 @@ bool isBadOrientation(const geometry_msgs::PoseStamped& tagpose) {
  *
  */
 void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+	if (!params_configured) {
+		return;
+	}
+
 	// Measurements defining camera field of view for polygon iterator
 	const double CAMERA_NEAR_ANGLE = 0.28; // radians
 	const double CAMERA_FAR_ANGLE = 0.34;
@@ -911,7 +910,7 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 
 	int tolerance = 0; // default tolerance for search, must reach goal exactly
 	if (req.tolerance > 0) {
-		tolerance = int(req.tolerance / MAP_RESOLUTION);
+		tolerance = int(req.tolerance / rover_map.getResolution());
 	}
 
 	std::map<GridLocation, GridLocation> came_from;
@@ -919,6 +918,18 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 
 	bool success = a_star_search(rover_map, start, goal, tolerance,
 								 use_home_layer, came_from, cost_so_far);
+
+	if (visualize_frontier) {
+		rover_map.clear("frontier");
+		grid_map::Index frontier_index;
+
+		for (auto const &item : came_from) {
+			frontier_index(0) = item.first.x;
+			frontier_index(1) = item.first.y;
+			rover_map.at("frontier", frontier_index) = 1.0;
+		}
+	}
+
 	if (!success) {
 		return false;
 	}
@@ -957,6 +968,30 @@ bool get_plan(mapping::GetNavPlan::Request &req,
 	return true;
 }
 
+/*
+ * Subscriber to help with testing/debugging. Responds to RViz nav_goals
+ * published with a mouse click and gets path from the rover's current location
+ * to the goal location.
+ */
+void navGoalHandler(const geometry_msgs::PoseStamped::ConstPtr& goal) {
+	mapping::GetNavPlan::Request request;
+	mapping::GetNavPlan::Response response;
+
+	bool use_home_layer = false;
+	ros::param::param<bool>("use_home_layer", use_home_layer, false);
+	if (use_home_layer) {
+		ROS_INFO("Using home layer in this path search.");
+	}
+
+	request.start.pose.position.x = currentLocation.x;
+	request.start.pose.position.y = currentLocation.y;
+	request.goal.pose.position.x = goal->pose.position.x;
+	request.goal.pose.position.y = goal->pose.position.y;
+	request.use_home_layer.data = use_home_layer;
+
+	get_plan(request, response);
+}
+
 void crashHandler(int s) {
   int j, nptrs;
   void *buffer[1000];
@@ -965,6 +1000,46 @@ void crashHandler(int s) {
   printf("backtrace() returned %d addresses\n", nptrs);
   backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO);
   exit(-s);
+}
+
+/*
+ * Reconfigure obstacle mapping and path search parameters.
+ */
+void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
+    sonar_angle = cfg.groups.map.sonar_angle;
+    single_sensor_obst_dist = cfg.groups.map.single_sensor_obstacle_dist;
+    double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
+    sonar_view_range = cfg.groups.map.sonar_view_range;
+    sonar_obst_depth = cfg.groups.map.sonar_obstacle_depth;
+
+    obstacle_threshold = cfg.groups.search.obstacle_threshold;
+    inflation_pct = cfg.groups.search.inflation_pct;
+    lethal_cost = cfg.groups.search.lethal_cost;
+    neutral_cost = cfg.groups.search.neutral_cost;
+
+    params_configured = true;
+    ROS_INFO_THROTTLE(1, "Reconfigured mapping parameters.");
+}
+
+void initialconfig() {
+    mapping::mappingConfig cfg;
+
+    ros::param::get("~sonar_angle", cfg.sonar_angle);
+    ros::param::get("~single_sensor_obstacle_dist", cfg.single_sensor_obstacle_dist);
+    ros::param::get("~double_sensor_obstacle_dist", cfg.double_sensor_obstacle_dist);
+    ros::param::get("~sonar_view_range", cfg.sonar_view_range);
+    ros::param::get("~sonar_obstacle_depth", cfg.sonar_obstacle_depth);
+
+    ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
+    ros::param::get("~inflation_pct", cfg.inflation_pct);
+    ros::param::get("~lethal_cost", cfg.lethal_cost);
+    ros::param::get("~neutral_cost", cfg.neutral_cost);
+
+    dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
+
+    if (client.setConfiguration(cfg)){
+        ROS_INFO("Sent initial mapping config.");
+    }
 }
 
 int main(int argc, char **argv) {
@@ -979,7 +1054,22 @@ int main(int argc, char **argv) {
     // Parameters
     ros::param::param<std::string>("odom_frame", map_frame, "odom");
     ros::param::param<std::string>("base_link_frame", base_link_frame, "base_link");
-    
+
+    double map_size;
+    double map_resolution;
+    ros::param::param<double>("~map_size", map_size, 25.0);
+    ros::param::param<double>("~map_resolution", map_resolution, 0.5);
+    ros::param::param<bool>("~visualize_frontier", visualize_frontier, false);
+
+    // Setup dynamic reconfigure server, which also automatically reads any
+    // initial parameters put on the parameter server at startup.
+    dynamic_reconfigure::Server<mapping::mappingConfig> config_server;
+    dynamic_reconfigure::Server<mapping::mappingConfig>::CallbackType f;
+    f = boost::bind(&reconfigure, _1, _2);
+    config_server.setCallback(f);
+
+    boost::thread t(initialconfig);
+
     // Transform Listener
     //
     // C++ Tutorial Here:
@@ -993,6 +1083,7 @@ int main(int argc, char **argv) {
     //
     ros::Subscriber odomSubscriber = mNH.subscribe("odom/filtered", 10, odometryHandler);
     ros::Subscriber targetSubscriber = mNH.subscribe("targets", 10, targetHandler);
+    ros::Subscriber goalSubscriber = mNH.subscribe("goal", 10, navGoalHandler);
 
     message_filters::Subscriber<sensor_msgs::Range> sonarLeftSubscriber(mNH, "sonarLeft", 10);
     message_filters::Subscriber<sensor_msgs::Range> sonarCenterSubscriber(mNH, "sonarCenter", 10);
@@ -1018,9 +1109,20 @@ int main(int argc, char **argv) {
 	ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
     // Initialize the maps.
-    rover_map = grid_map::GridMap({"obstacle", "target", "home"});
+    std::vector<std::string> layers({"obstacle", "target", "home"});
+    if (visualize_frontier) {
+        layers.emplace_back("frontier");
+        ROS_INFO("Visualizing A* search frontier.");
+    }
+    rover_map = grid_map::GridMap(layers);
     rover_map.setFrameId(map_frame);
-    rover_map.setGeometry(grid_map::Length(25, 25), MAP_RESOLUTION);
+
+    ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
+             map_size,
+             map_size,
+             map_resolution);
+
+    rover_map.setGeometry(grid_map::Length(map_size, map_size), map_resolution);
 
     ros::spin();
     return 0;
