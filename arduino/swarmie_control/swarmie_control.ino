@@ -151,7 +151,7 @@ void parse() {
 
     Serial.print("GRF,");
     Serial.print(String(fingers.attached()) + ",");
-    if (fingers.attached()) {
+    if (fingers.attached()) { // if fails, maybe print nothing?
       Serial.println(String(DEG2RAD(fingers.read())));
     }
     else {
@@ -168,7 +168,7 @@ void parse() {
     }
 
     if (imuStatus()) {
-      imuInit();
+      imuInit(); 
       Serial.println(updateIMU());
     }
 
@@ -177,18 +177,23 @@ void parse() {
     // Only do one sonar at a time to prevent crosstalk.
     if (ping_state == 0) {
       leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
-      //leftUSValue = leftUS.ping_cm();
-      Serial.println("USL,1," + String(leftUSValue));
+      // leftUSValue = leftUS.ping_cm();
+      // new code
+      if(leftUSValue > 0.015) // hack for checking that the sonar is plugged in
+	
+	Serial.println("USL,1," + String(leftUSValue));
     }
     else if (ping_state == 1) {
       rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
       //rightUSValue = rightUS.ping_cm();
-      Serial.println("USR,1," + String(rightUSValue));
+      if(rightUSValue > 0.015)
+	Serial.println("USR,1," + String(rightUSValue));
     }
     else{
       centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
       //centerUSValue = centerUS.ping_cm();
-      Serial.println("USC,1," + String(centerUSValue));
+      if(centerUSValue > 0.015)
+	Serial.println("USC,1," + String(centerUSValue));
     }
     ping_state = (ping_state + 1) % 3;
 
