@@ -541,7 +541,19 @@ class Swarmie:
             return [tag for tag in self.targets[self.targets_index] if tag.id == id]
 
     def get_targets_buffer(self, age=8, cleanup=True, id=-1):
-        """ Return a buffer of the target detections from the AprilTagDetectionArray with an optional id"""
+        ''' Return a list of AprilTagDetections received in the last 'age' seconds,
+        filtered by id, with duplicates removed, if specified.
+
+        Args
+        
+        * `age` (`float`) - how many seconds worth of the buffer to return.
+        * `cleanup` (`bool`) - default to True, will remove duplicate detections 
+        * `id` (`int`) - default to -1(all tags), can be used to filter specific tags, cleanup must be True
+
+        Returns:
+
+        * `buffer` (`list` [`apriltags_ros.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
+        '''
         buffer = sum(self.targets, [])
         if cleanup:
             buffer = self._detection_cleanup(buffer, age, id)
@@ -559,7 +571,7 @@ class Swarmie:
                         round(tag.pose.pose.position.y, 2),
                         round(tag.pose.pose.position.z, 2)):
                         tag for tag in detections
-                        if (((tag.pose.header.stamp.secs + age) > rospy.Time.now().secs) and (tag.id in id))}
+                        if (((tag.pose.header.stamp + rospy.Duration(age)) > rospy.Time.now()) and (tag.id in id))}
         # get the tags from the dict and saves them to detections
         detections = targets_dict.values()
         return detections
