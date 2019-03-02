@@ -500,8 +500,12 @@ class HomeTransformGen:
                                              Obstacle,
                                              queue_size=1,
                                              latch=True)
+        self._home_point_pub = rospy.Publisher('home_point',
+                                               PointStamped,
+                                               queue_size=10,
+                                               latch=True)
 
-        # For visualizing intermediate steps in RViz.
+        # Additional publishers, for visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
                                             PoseArray, queue_size=10)
         self._rotated_pub = rospy.Publisher('targets/closest_pair/rotated',
@@ -512,8 +516,6 @@ class HomeTransformGen:
                                            PoseStamped, queue_size=10)
         self._home_pose_pub = rospy.Publisher('home_pose',
                                               PoseStamped, queue_size=10)
-        self._home_point_pub = rospy.Publisher('home_point',
-                                               PointStamped, queue_size=10)
 
         # Timers
         self._xform_timer = rospy.Timer(rospy.Duration(self._xform_rate),
