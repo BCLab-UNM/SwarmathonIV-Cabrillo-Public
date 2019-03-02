@@ -41,17 +41,21 @@ def dropoff():
                      ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
 
     swarmie.set_wrist_angle(.7)
-    # TODO: Are the sleep statements here and a few lines below useful for
-    #  giving the wrist and fingers time to move?
-    # rospy.sleep(.4)
+    # Wait a moment for the wrist to move down before opening the fingers next.
+    rospy.sleep(.4)
 
     if swarmie.simulator_running():
         swarmie.fingers_open()
     else:
+        # Open the fingers just enough to release the block. This only works in
+        # the real world because the simulator's gripper plugin makes a physical
+        # attachment between the finger and the block, and it doesn't remove the
+        # attachment unless the fingers open wider than this angle.
         swarmie.set_finger_angle(1)
 
-    # rospy.sleep(.4)
-    swarmie.set_wrist_angle(0)
+    # Wait a moment for the fingers to open before moving the wrist back up.
+    rospy.sleep(.4)
+    swarmie.wrist_up()
 
 
 def exit_home():
