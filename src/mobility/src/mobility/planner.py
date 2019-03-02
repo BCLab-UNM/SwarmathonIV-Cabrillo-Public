@@ -22,7 +22,9 @@ from mapping.srv import GetNavPlanResponse
 from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 
-from mobility.swarmie import swarmie, Location, HomeException, TagException, PathException, ObstacleException
+from mobility.swarmie import (swarmie, Location, HomeException, TagException,
+                              PathException, ObstacleException,
+                              InsideHomeException)
 from mobility import utils
 
 
@@ -982,8 +984,11 @@ class Planner:
                                    reset_heading=False)
                         self._go_around(math.pi / 4, 0.75)
 
+            elif self.result == MoveResult.INSIDE_HOME:
+                raise InsideHomeException(MoveResult.INSIDE_HOME)
+
             elif self.result == MoveResult.PATH_FAIL:
-                # shit, hope we can back up if this ever happens
+                # Hope we can back up if this ever happens
                 self.fail_count += 1
 
                 print('\nPath Failure. Backing up.')
