@@ -20,7 +20,7 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
-from geometry_msgs.msg import Point, PointStamped, Twist, Pose2D
+from geometry_msgs.msg import Point, PointStamped, PoseStamped, Twist, Pose2D
 from apriltags_ros.msg import AprilTagDetectionArray 
 
 import threading 
@@ -744,6 +744,28 @@ class Swarmie:
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
+        if self._home_odom_position is None:
+            # Try to set the home position using tf. This is unlikely, but could
+            # possibly happen while running behaviors individually as standalone
+            # scripts and this function is called before the most recent latched
+            # home_point message has been received.
+            try:
+                home_origin = PoseStamped()
+                home_origin.header.frame_id = 'home'
+                home_origin.header.stamp = rospy.Time.now()
+                home_odom = self.transform_pose('odom', home_origin)
+
+                rospy.logwarn(("{}: No home location has been received yet, " +
+                               "using tf to calculate it.").format(self.rover_name))
+                return Point(x=home_odom.pose.position.x,
+                             y=home_odom.pose.position.y)
+
+            except tf.Exception:
+                rospy.logwarn(("{}: No home location has been received yet, " +
+                               "returning odom's origin as the estimated home " +
+                               "location.").format(self.rover_name))
+                return Point(x=0, y=0)
+
         return Point(x=self._home_odom_position.point.x,
                      y=self._home_odom_position.point.y)
 
