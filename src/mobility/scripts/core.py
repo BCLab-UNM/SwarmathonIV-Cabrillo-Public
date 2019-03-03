@@ -46,7 +46,9 @@ def main() :
         if rover_mode > 1 :
             if task is None: 
                 status_pub.publish("starting")
-                node = roslaunch.core.Node('mobility', 'task.py', namespace=rospy.get_namespace())
+                node = roslaunch.core.Node('mobility', 'task.py',
+                                           name='task',
+                                           namespace=rospy.get_namespace())
                 task = launcher.launch(node)
             else:
                 if not task.is_alive() : 
