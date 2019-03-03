@@ -15,7 +15,9 @@ from geometry_msgs.msg import Point
 from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import (swarmie, TagException, HomeException,
+                              ObstacleException, PathException, AbortException,
+                              DriveException, InsideHomeException)
 
 '''Pickup node.''' 
 
@@ -108,8 +110,11 @@ def recover():
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
-    except: 
-        print("Oh no, we have an exception!")
+    except (AbortException, InsideHomeException):
+        raise
+    except DriveException as e:
+        print("Oh no, we have an exception!", e)
+        pass
 
 def main(**kwargs):
     global claw_offset_distance
