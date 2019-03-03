@@ -765,7 +765,7 @@ class Swarmie:
                 home_origin = PoseStamped()
                 home_origin.header.frame_id = 'home'
                 home_origin.header.stamp = rospy.Time.now()
-                home_odom = self.transform_pose('odom', home_origin)
+                home_odom = self.transform_pose('odom', home_origin, timeout=1.0)
 
                 rospy.logwarn(("{}: No home location has been received yet, " +
                                "using tf to calculate it.").format(self.rover_name))
