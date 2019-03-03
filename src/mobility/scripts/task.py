@@ -51,11 +51,16 @@ class Task :
     PROG_ESCAPE_HOME = 'escape_home.py'
 
     def __init__(self):
-        self.current_state = Task.STATE_IDLE
+        self.current_state = rospy.get_param('~task_state', Task.STATE_IDLE)
         self.prev_state = None
-        self.has_block = False
+        self.has_block = rospy.get_param('~has_block', False)
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
+        rospy.on_shutdown(self.save_state)
+
+    def save_state(self):
+        rospy.set_param('~task_state', self.current_state)
+        rospy.set_param('~has_block', self.has_block)
                         
     def print_state(self, msg):
         s = String()
