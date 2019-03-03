@@ -5,6 +5,7 @@
   <arg name="swarmie_dev"/>
 
   <param name="rover_name" value="$(arg name)"/>
+  <param name="home_frame" value="home"/>
   <param name="odom_frame" value="$(arg name)/odom"/>
   <param name="base_link_frame" value="$(arg name)/base_link"/>
   <param name="camera_link_frame" value="$(arg name)/camera_link"/>
@@ -24,6 +25,7 @@
   
   <include file="$(find swarmie)/launch/tf.xml">
       <arg name="name" value="$(arg name)"/>
+      <arg name="simulation" value="$(arg simulation)"  />
   </include>
 
   <node name="diagnostics" pkg="diagnostics" type="diags_node.py" required="True" respawn="false"/> 
@@ -38,6 +40,17 @@
     <param name="GOAL_DISTANCE_OK" value="0.1"/>
     <param name="ROTATE_THRESHOLD" value="0.19"/>
     <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
+  </node>
+
+  <node name="coordinate" pkg="mobility" type="coordinate.py" respawn="true"/>
+
+  <node name="home_transform" pkg="mobility" type="home_transform.py" respawn="true">
+    <param name="transform_publish_rate" value="0.1" />
+    <param name="vote_rate" value="1.0" />
+    <param name="log_rate" value="5.0" />
+
+    <!-- ~15 degrees TODO: measure this value, see home_transform.py for info -->
+    <param name="phi" value="0.25"/>
   </node>
 
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">

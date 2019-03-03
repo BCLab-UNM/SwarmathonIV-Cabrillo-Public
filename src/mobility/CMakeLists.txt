@@ -26,11 +26,11 @@ generate_dynamic_reconfigure_options(
 )
 
 add_message_files ( 
-	FILES MoveResult.msg MoveRequest.msg 
+	FILES MoveResult.msg MoveRequest.msg HomeTransformAuthority.msg
 )
 
 add_service_files (
-	FILES Core.srv
+	FILES Core.srv Queue.srv QueueRemove.srv GetRoverNames.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs)
@@ -49,6 +49,8 @@ catkin_install_python (
 	scripts/cal_imu.py
 	scripts/test_square.py
 	scripts/task.py
+	scripts/coordinate.py
+	scripts/home_transform.py
 	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

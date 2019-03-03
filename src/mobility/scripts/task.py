@@ -17,6 +17,8 @@ from mobility import sync
 
 # Behavior programs
 import mobility.behavior.init
+import mobility.behavior.calibrate_imu
+import mobility.behavior.queue
 import mobility.behavior.search 
 import mobility.behavior.pickup
 import mobility.behavior.gohome
@@ -30,14 +32,18 @@ from mobility.swarmie import swarmie, AbortException, InsideHomeException
 class Task : 
     
     STATE_IDLE        = 0
-    STATE_INIT        = 1
-    STATE_SEARCH      = 2
-    STATE_PICKUP      = 3
-    STATE_GOHOME      = 4
-    STATE_DROPOFF     = 5
-    STATE_ESCAPE_HOME = 6
-    
+    STATE_CAL_IMU     = 1
+    STATE_QUEUE       = 2
+    STATE_INIT        = 3
+    STATE_SEARCH      = 4
+    STATE_PICKUP      = 5
+    STATE_GOHOME      = 6
+    STATE_DROPOFF     = 7
+    STATE_ESCAPE_HOME = 8
+
     PROG_INIT        = 'init.py'
+    PROG_CAL_IMU     = 'calibrate_imu.py'
+    PROG_QUEUE       = 'queue.py'
     PROG_SEARCH      = 'search.py'
     PROG_PICKUP      = 'pickup.py'
     PROG_GOHOME      = 'gohome.py'
@@ -69,6 +75,10 @@ class Task :
     def get_task(self) :
         if self.current_state == Task.STATE_IDLE : 
             return "idle"
+        elif self.current_state == Task.STATE_CAL_IMU :
+            return "cal IMU"
+        elif self.current_state == Task.STATE_QUEUE :
+            return "queue"
         elif self.current_state == Task.STATE_INIT : 
             return "init"
         elif self.current_state == Task.STATE_SEARCH :
@@ -89,7 +99,23 @@ class Task :
 
         try:
             if self.current_state == Task.STATE_IDLE:
-                self.current_state = Task.STATE_INIT
+                self.current_state = Task.STATE_CAL_IMU
+
+            elif self.current_state == Task.STATE_CAL_IMU :
+                if self.launch(mobility.behavior.calibrate_imu.main) == 0:
+                    self.print_state('IMU is calibrated. Entering start queue.')
+                    self.current_state = Task.STATE_QUEUE
+                else:
+                    # TODO: Can the 2D calibration behavior fail? ServiceException's for example?
+                    self.print_state('IMU calibration failed!')
+
+            elif self.current_state == Task.STATE_QUEUE:
+                if self.launch(mobility.behavior.queue.main) == 0:
+                    self.print_state('Finished queuing. Starting init.')
+                    self.current_state = Task.STATE_INIT
+                else:
+                    # TODO: Can the queue behavior fail?
+                    self.print_state('Queue failed!')
 
             elif self.current_state == Task.STATE_INIT:
                 if self.launch(mobility.behavior.init.main) == 0:

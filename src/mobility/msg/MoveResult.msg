@@ -6,5 +6,6 @@ int32 PATH_FAIL        = 4
 int32 USER_ABORT       = 5
 int32 TIMEOUT          = 6
 int32 INSIDE_HOME      = 7
+int32 OBSTACLE_CORNER  = 8
 
 int32 result 
