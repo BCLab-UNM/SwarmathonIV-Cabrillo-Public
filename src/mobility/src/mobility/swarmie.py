@@ -781,6 +781,15 @@ class Swarmie:
         return Point(x=self._home_odom_position.point.x,
                      y=self._home_odom_position.point.y)
 
+    def has_home_odom_location(self):
+        '''Check to see if the rover knows home's odometry location.
+        
+        Returns:
+        
+        * (`bool`): `True` if the rover knows where home is, `False` otherwise.
+        '''
+        return self.get_home_odom_location() != Point(x=0, y=0)
+    
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
         the odometry reference frame. 
