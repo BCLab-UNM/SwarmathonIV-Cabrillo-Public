@@ -22,61 +22,57 @@ from mobility.swarmie import swarmie, TagException, HomeException, ObstacleExcep
 def approach():
     global claw_offset_distance
     print ("Attempting a pickup.")
-    try:
-        swarmie.fingers_open()
-        rospy.sleep(1)
-        swarmie.set_wrist_angle(1.15)
-        
-        try:
-            block = swarmie.get_nearest_block_location()
-        except tf.Exception as e:
-            print("Something went wrong and we can't locate the block. ", e)
-            swarmie.wrist_up()
-            sys.exit(1)
 
-        if block is not None:           
-            # claw_offset should be a positive distance of how short drive_to needs to be.
-            if swarmie.simulator_running():
-                swarmie.drive_to(
-                    block,
-                    claw_offset=0.1,
-                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
-                )
-            else: 
-                swarmie.drive_to(
-                    block,
-                    claw_offset=claw_offset_distance,
-                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
-                )
-            # Grab - minimal pickup with sim_check.
-            
-            if swarmie.simulator_running():
-                finger_close_angle = 0
-            else:
-                finger_close_angle = 0.5
-              
-            swarmie.set_finger_angle(finger_close_angle) #close
-            rospy.sleep(1)
-            swarmie.wrist_up()
-            rospy.sleep(.5)
-            # did we succesuflly grab a block?
-            if swarmie.has_block():
-                swarmie.wrist_middle()
-                swarmie.drive(-0.3,
-                              ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
-                return True
-            else:
-                swarmie.set_wrist_angle(0.55)
-                rospy.sleep(1)
-                swarmie.fingers_open()
-                # Wait a moment for a block to fall out of claw
-                rospy.sleep(0.25)
+    swarmie.fingers_open()
+    rospy.sleep(1)
+    swarmie.set_wrist_angle(1.15)
+
+    try:
+        block = swarmie.get_nearest_block_location()
+    except tf.Exception as e:
+        print("Something went wrong and we can't locate the block. ", e)
+        swarmie.wrist_up()
+        sys.exit(1)
+
+    if block is not None:
+        # claw_offset should be a positive distance of how short drive_to needs to be.
+        if swarmie.simulator_running():
+            swarmie.drive_to(
+                block,
+                claw_offset=0.1,
+                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+            )
         else:
-            print("No legal blocks detected.")
-            swarmie.wrist_up()
-            sys.exit(1)
-    except rospy.ServiceException as e:
-        print ("There doesn't seem to be any blocks on the map. ", e)
+            swarmie.drive_to(
+                block,
+                claw_offset=claw_offset_distance,
+                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+            )
+        # Grab - minimal pickup with sim_check.
+
+        if swarmie.simulator_running():
+            finger_close_angle = 0
+        else:
+            finger_close_angle = 0.5
+
+        swarmie.set_finger_angle(finger_close_angle) #close
+        rospy.sleep(1)
+        swarmie.wrist_up()
+        rospy.sleep(.5)
+        # did we succesuflly grab a block?
+        if swarmie.has_block():
+            swarmie.wrist_middle()
+            swarmie.drive(-0.3,
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+            return True
+        else:
+            swarmie.set_wrist_angle(0.55)
+            rospy.sleep(1)
+            swarmie.fingers_open()
+            # Wait a moment for a block to fall out of claw
+            rospy.sleep(0.25)
+    else:
+        print("No legal blocks detected.")
         swarmie.wrist_up()
         sys.exit(1)
 
