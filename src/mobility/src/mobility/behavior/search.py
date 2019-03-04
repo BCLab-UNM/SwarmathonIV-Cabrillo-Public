@@ -96,7 +96,7 @@ def main(**kwargs):
 
     if not planner.sees_home_tag():
         try:
-            swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
+            swarmie.drive(0.5)
         except HomeException:
             swarmie.turn(math.pi,
                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
@@ -110,6 +110,8 @@ def main(**kwargs):
                     search_exit(0)  # found a tag?
             except tf.Exception:
                 pass
+        except ObstacleException:
+            pass
     else:
         swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
