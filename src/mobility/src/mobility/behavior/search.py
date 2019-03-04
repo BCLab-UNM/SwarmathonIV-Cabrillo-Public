@@ -166,27 +166,6 @@ def main(**kwargs):
     }
     param_client.update_configuration(speeds)
 
-    if not planner.sees_home_tag():
-        try:
-            swarmie.drive(0.5)
-        except HomeException:
-            swarmie.turn(math.pi,
-                         ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
-        except TagException:
-            rospy.sleep(0.3)  # build the buffer a little
-            try:
-                if swarmie.get_nearest_block_location() is not None:
-                    found_tag = True
-                    # print('Found a tag! Turning to face.')
-                    # planner.face_nearest_block()
-                    search_exit(0)  # found a tag?
-            except tf.Exception:
-                pass
-        except ObstacleException:
-            pass
-    else:
-        swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
-
     # Return to our last search exit pose if possible
     if swarmie.has_search_exit_poses():
         cur_pose = swarmie.get_odom_location().get_pose()
