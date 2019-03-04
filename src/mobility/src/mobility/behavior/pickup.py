@@ -36,18 +36,11 @@ def approach():
 
     if block is not None:
         # claw_offset should be a positive distance of how short drive_to needs to be.
-        if swarmie.simulator_running():
-            swarmie.drive_to(
-                block,
-                claw_offset=0.1,
-                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
-            )
-        else:
-            swarmie.drive_to(
-                block,
-                claw_offset=claw_offset_distance,
-                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
-            )
+        swarmie.drive_to(
+            block,
+            claw_offset=claw_offset_distance,
+            ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+        )
         # Grab - minimal pickup with sim_check.
 
         if swarmie.simulator_running():
@@ -82,7 +75,10 @@ def approach():
 
 def recover():
     global claw_offset_distance
-    claw_offset_distance -= 0.02
+
+    if not swarmie.simulator_running():
+        claw_offset_distance -= 0.02
+
     print ("Missed, trying to recover.")
     try:
         swarmie.drive(-0.15,
@@ -111,8 +107,8 @@ def main(**kwargs):
     global claw_offset_distance
     
     claw_offset_distance = 0.24 
-    if(swarmie.simulator_running()):
-        claw_offset_distance -= 0.02
+    if swarmie.simulator_running():
+        claw_offset_distance = 0.12
 
     print ('Waiting for camera/base_link tf to become available.')
     swarmie.xform.waitForTransform(swarmie.rover_name + '/base_link', swarmie.rover_name + '/camera_link', rospy.Time(), rospy.Duration(10))
