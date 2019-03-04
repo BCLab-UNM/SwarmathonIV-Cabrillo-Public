@@ -401,9 +401,7 @@ class Planner:
         Swarmie.get_nearest_block_location() and does nothing.
         """
         try:
-            block = swarmie.get_nearest_block_location(
-                use_targets_buffer=True
-            )
+            block = swarmie.get_nearest_block_location(targets_buffer_age=8)
         except tf.Exception:
             # The caller should be about to exit with a normal exit code
             # after this call anyway, so the pickup behavior is launched.
