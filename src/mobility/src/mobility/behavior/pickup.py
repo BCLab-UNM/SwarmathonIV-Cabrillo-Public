@@ -24,8 +24,8 @@ def approach():
     print ("Attempting a pickup.")
 
     swarmie.fingers_open()
-    rospy.sleep(1)
     swarmie.set_wrist_angle(1.15)
+    rospy.sleep(1)
 
     try:
         block = swarmie.get_nearest_block_location(targets_buffer_age=5.0)
