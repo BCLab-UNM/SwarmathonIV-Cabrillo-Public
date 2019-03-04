@@ -28,7 +28,7 @@ def approach():
     swarmie.set_wrist_angle(1.15)
 
     try:
-        block = swarmie.get_nearest_block_location()
+        block = swarmie.get_nearest_block_location(targets_buffer_age=5.0)
     except tf.Exception as e:
         print("Something went wrong and we can't locate the block. ", e)
         swarmie.wrist_up()
@@ -90,7 +90,7 @@ def recover():
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
         try:
-            block = swarmie.get_nearest_block_location()
+            block = swarmie.get_nearest_block_location(targets_buffer_age=1.0)
         except tf.Exception as e:
             print("Something went wrong recovering and we can't locate the block. ", e)
             swarmie.wrist_up()
