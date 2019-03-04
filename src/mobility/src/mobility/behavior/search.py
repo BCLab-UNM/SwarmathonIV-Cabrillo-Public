@@ -47,6 +47,29 @@ def wander():
         turnaround(ignore=Obstacle.IS_SONAR)
 
 
+def random_walk(num_moves):
+    """Do random walk `num_moves` times."""
+    global planner, found_tag
+
+    try:
+        for move in range(num_moves) :
+            if rospy.is_shutdown() :
+                search_exit(-1)
+
+            wander()
+
+    except TagException :
+        print("I found a tag!")
+        # Let's drive there to be helpful.
+        rospy.sleep(0.3)
+        if not planner.sees_home_tag():
+            found_tag = True
+            # print('Found a tag! Turning to face.')
+            # planner.face_nearest_block()
+            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
+            search_exit(0)
+
+
 def search_exit(code):
     global planner, found_tag
     
@@ -177,23 +200,7 @@ def main(**kwargs):
         if dist > 1:  # only bother if it was reasonably far away
             return_to_last_exit_position(last_pose)
 
-    try:
-        for move in range(30) :
-            if rospy.is_shutdown() :
-                search_exit(-1)
-
-            wander()
-
-    except TagException :
-        print("I found a tag!")
-        # Let's drive there to be helpful.
-        rospy.sleep(0.3)
-        if not planner.sees_home_tag():
-            found_tag = True
-            # print('Found a tag! Turning to face.')
-            # planner.face_nearest_block()
-            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
-            search_exit(0)
+    random_walk(num_moves=30)
 
     print ("I'm homesick!")
     search_exit(1)
