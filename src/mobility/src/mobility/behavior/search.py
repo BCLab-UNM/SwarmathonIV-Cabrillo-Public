@@ -23,7 +23,8 @@ def turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE):
         random.gauss(math.pi/2, math.pi/4),
         ignore=ignore
     )
-    
+
+
 def wander():
     try :
         rospy.loginfo("Wandering...")
@@ -32,7 +33,15 @@ def wander():
 
         rospy.loginfo("Circling...")
         swarmie.circle()
-        
+
+    except HomeException :
+        print ("I saw home!")
+        # TODO: We used to set the home odom location here, while we had
+        #  the chance. If finding home during gohome becomes difficult,
+        #  it may be useful to have home_transform publish a less
+        #  accurate, but easier to update, home position estimate.
+        turnaround()
+
     except ObstacleException :
         print ("I saw an obstacle!")
         turnaround(ignore=Obstacle.IS_SONAR)
@@ -188,16 +197,8 @@ def main(**kwargs):
         for move in range(30) :
             if rospy.is_shutdown() :
                 search_exit(-1)
-            try:
-                wander()
 
-            except HomeException :
-                print ("I saw home!")
-                # TODO: We used to set the home odom location here, while we had
-                #  the chance. If finding home during gohome becomes difficult,
-                #  it may be useful to have home_transform publish a less
-                #  accurate, but easier to update, home position estimate.
-                turnaround()
+            wander()
 
     except TagException :
         print("I found a tag!")
