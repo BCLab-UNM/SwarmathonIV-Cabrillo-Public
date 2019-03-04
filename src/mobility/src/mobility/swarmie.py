@@ -869,28 +869,28 @@ class Swarmie:
 
         return swarmie.xform.transformPose(target_frame, pose)
 
-    def get_nearest_block_location(self, use_targets_buffer=False):
+    def get_nearest_block_location(self, targets_buffer_age=0):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
         Nearest block will be the nearest to the camera, which should almost always be good enough.
 
         Args:
 
-        * `use_targets_buffer` (`bool`) - whether to use the rolling buffer
-        of AprilTagDetections. Default value of False uses
-        Swarmie.get_latest_targets(), which you can rely on to return only
-        targets currently in view.
+        * `targets_buffer_age` (`float`) - how many seconds worth of the AprilTagDetections
+          buffer to use. The default value of 0 uses `Swarmie.get_latest_targets()`, which
+          you can rely on to return only targets currently in view, but may be affected by
+          tag flicker from frame to frame.
 
         Returns:
 
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
         '''
-        # Finds all visible apriltags
-        if use_targets_buffer is True:
-            blocks = self.get_targets_buffer()
+        if targets_buffer_age > 0:
+            blocks = self.get_targets_buffer(age=targets_buffer_age)
         else:
             blocks = self.get_latest_targets()
-        if len(blocks) == 0 :
+
+        if len(blocks) == 0:
             return None
 
         # Sort blocks by their distance from the camera_link frame
