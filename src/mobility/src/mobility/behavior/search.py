@@ -17,11 +17,11 @@ from mobility.swarmie import swarmie, TagException, HomeException, ObstacleExcep
 
 '''Searcher node.''' 
 
-def turnaround():
-    #TODO: should this be ignoring TAG_TARGET's???
+
+def turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE):
     swarmie.turn(
         random.gauss(math.pi/2, math.pi/4),
-        ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE
+        ignore=ignore
     )
     
 def wander():
@@ -35,7 +35,7 @@ def wander():
         
     except ObstacleException :
         print ("I saw an obstacle!")
-        turnaround()
+        turnaround(ignore=Obstacle.IS_SONAR)
 
 
 def search_exit(code):
