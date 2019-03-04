@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+"""Searcher node."""
 
 from __future__ import print_function
 
@@ -15,18 +16,13 @@ from swarmie_msgs.msg import Obstacle
 from mobility.planner import Planner
 from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
-'''Searcher node.'''
-
 
 def turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE):
-    swarmie.turn(
-        random.gauss(math.pi/2, math.pi/4),
-        ignore=ignore
-    )
+    swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=ignore)
 
 
 def wander():
-    try :
+    try:
         rospy.loginfo("Wandering...")
         swarmie.turn(random.gauss(0, math.pi/6))
         swarmie.drive(random.gauss(2.5, 1))
@@ -34,7 +30,7 @@ def wander():
         rospy.loginfo("Circling...")
         swarmie.circle()
 
-    except HomeException :
+    except HomeException:
         print ("I saw home!")
         # TODO: We used to set the home odom location here, while we had
         #  the chance. If finding home during gohome becomes difficult,
@@ -42,7 +38,7 @@ def wander():
         #  accurate, but easier to update, home position estimate.
         turnaround()
 
-    except ObstacleException :
+    except ObstacleException:
         print ("I saw an obstacle!")
         turnaround(ignore=Obstacle.IS_SONAR)
 
@@ -52,21 +48,18 @@ def random_walk(num_moves):
     global planner, found_tag
 
     try:
-        for move in range(num_moves) :
-            if rospy.is_shutdown() :
+        for move in range(num_moves):
+            if rospy.is_shutdown():
                 search_exit(-1)
 
             wander()
 
-    except TagException :
+    except TagException:
         print("I found a tag!")
         # Let's drive there to be helpful.
         rospy.sleep(0.3)
         if not planner.sees_home_tag():
             found_tag = True
-            # print('Found a tag! Turning to face.')
-            # planner.face_nearest_block()
-            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
             search_exit(0)
 
 
@@ -131,30 +124,27 @@ def return_to_last_exit_position(last_pose):
         pass
 
     try:
-        # planner.clear(math.pi / 4, ignore=Obstacle.VISION_HOME, throw=True)
-        # swarmie.drive(0.2, throw=False)
-        # planner.sweep(throw=True)
         swarmie.circle()
         swarmie.set_heading(
             last_pose.theta,
             ignore=Obstacle.VISION_HOME
         )
+
     except TagException:
         rospy.sleep(0.3)  # build buffer a little
         # too risky to stop for targets if home is in view too
         if not planner.sees_home_tag():
             # success!
             found_tag = True
-            # print('Found a tag! Turning to face.')
-            # planner.face_nearest_block()
             search_exit(0)
+
     except HomeException:
-        # Just move onto random search, but this shouldn't really happen
-        # either.
+        # Just move onto random search, but this shouldn't really happen either.
         pass
+
     except ObstacleException:
         print('ObstacleException while finishing return to last search exit location.')
-        pass # good enough
+        pass  # good enough
 
 
 def main(**kwargs):
@@ -204,6 +194,7 @@ def main(**kwargs):
 
     print ("I'm homesick!")
     search_exit(1)
+
 
 if __name__ == '__main__' : 
     swarmie.start(node_name='search')
