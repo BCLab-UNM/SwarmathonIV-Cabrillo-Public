@@ -504,36 +504,32 @@ class Swarmie:
         
         Uses the algorithm:
 
-         * Put wrist down to a middle position. Can help avoid any sun glare or \
-          shadows seen in wrist up position.
+        * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position (This skipped in the simulation \
+          because there is no sun glare).
         * Check if we can see a block that's close to the camera. If so, return `True`
         * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
         * Return `False`
         '''
+        if self.simulator_running():
+            wrist_angles = (0.0,)
+            max_z_dist = (0.11,)
+        else:
+            wrist_angles = (0.55, 0.0)
+            max_z_dist = (0.18, 0.15)
 
-        # First test: Can we see a bock that's close to the camera with the wrist middle.
-        self.set_wrist_angle(.55)
-        rospy.sleep(1)
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
-        if len(blocks) > 0:
-            nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18:
-                return True 
-
-        # Second test: Can we see a bock that's close to the camera with the wrist up.
-        self.wrist_up()
-        rospy.sleep(1)
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
-            nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.15 :
-                return True 
+        for angle, max_z in zip(wrist_angles, max_z_dist):
+            self.set_wrist_angle(angle)
+            rospy.sleep(1)
+            blocks = self.get_latest_targets()
+            blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
+            if len(blocks) > 0 :
+                nearest = blocks[0]
+                z_dist = nearest.pose.pose.position.z
+                if abs(z_dist) < max_z:
+                    return True
 
         # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
