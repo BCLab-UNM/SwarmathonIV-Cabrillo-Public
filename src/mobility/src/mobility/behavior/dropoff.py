@@ -59,10 +59,11 @@ def dropoff():
 
 
 def exit_home():
-    """Back up out of home after we drop of a cube."""
+    """After we drop of a cube, back up out of home and turn away from home."""
     # TODO: Is this simple function call reliable enough during congested rounds?
     #  it's very bad if the rover don't make it fully back out of the home ring.
     swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    swarmie.turn(-8 * math.pi / 9, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
 
 def main(**kwargs):
