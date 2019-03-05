@@ -48,6 +48,7 @@
     <param name="transform_publish_rate" value="0.1" />
     <param name="vote_rate" value="1.0" />
     <param name="log_rate" value="5.0" />
+    <param name="inside_home_threshold" value="0.6" />
 
     <!-- ~15 degrees TODO: measure this value, see home_transform.py for info -->
     <param name="phi" value="0.25"/>
