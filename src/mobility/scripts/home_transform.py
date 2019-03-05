@@ -484,14 +484,6 @@ class HomeTransformGen:
         # Default value of ~15 degrees, Where 15 degrees is the avg error
         self._phi = rospy.get_param('~phi', 0.25)
 
-        # Subscribers
-        self._targets_sub = rospy.Subscriber('targets',
-                                             AprilTagDetectionArray,
-                                             self._targets_cb)
-        self._xform_auth_sub = rospy.Subscriber('/home_xform_vote',
-                                                HomeTransformAuthority,
-                                                self._home_xform_vote_cb)
-
         # Publishers
         self._xform_vote_pub = rospy.Publisher('/home_xform_vote',
                                                HomeTransformAuthority,
@@ -516,6 +508,14 @@ class HomeTransformGen:
                                            PoseStamped, queue_size=10)
         self._home_pose_pub = rospy.Publisher('home_pose',
                                               PoseStamped, queue_size=10)
+
+        # Subscribers
+        self._targets_sub = rospy.Subscriber('targets',
+                                             AprilTagDetectionArray,
+                                             self._targets_cb)
+        self._xform_auth_sub = rospy.Subscriber('/home_xform_vote',
+                                                HomeTransformAuthority,
+                                                self._home_xform_vote_cb)
 
         # Timers
         self._xform_timer = rospy.Timer(rospy.Duration(self._xform_rate),
