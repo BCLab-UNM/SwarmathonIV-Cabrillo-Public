@@ -477,6 +477,8 @@ class HomeTransformGen:
         self._xform_rate = rospy.get_param('~transform_publish_rate', 0.1)
         self._vote_rate = rospy.get_param('~vote_rate', 1.0)
         self._log_rate = rospy.get_param('~log_rate', 5.0)
+        self._inside_home_threshold = rospy.get_param('~inside_home_threshold',
+                                                      0.6)
 
         # TODO: calculate a good number for Phi.
         # When oriented in exactly the same direction, two rovers may have
@@ -980,9 +982,8 @@ class HomeTransformGen:
         return abs(tag_yaw) < yaw_threshold
 
     @sync(home_xform_lock)
-    def _is_rover_inside_home(self, good_yaw_count, bad_yaw_count,
-                              position_threshold=0.6):
-        # type: (float, float, float) -> bool
+    def _is_rover_inside_home(self, good_yaw_count, bad_yaw_count):
+        # type: (float, float) -> bool
         """Return True if the rover appears to be inside of home.
 
         This method first compares the good and bad counts, and if they're
@@ -997,8 +998,6 @@ class HomeTransformGen:
         Args:
             good_yaw_count: The count of acceptably-oriented home tags.
             bad_yaw_count: The count of dangerously-oriented home tags.
-            position_threshold: How close the rover's x and y position must be
-                to home's position to think we're inside of home.
         """
         if bad_yaw_count == 0 or bad_yaw_count < good_yaw_count:
             return False
@@ -1009,8 +1008,8 @@ class HomeTransformGen:
             y_dist = (self._cur_odom.pose.pose.position.y
                       - self._home_point.point.y)
 
-            return (abs(x_dist) < position_threshold and
-                    abs(y_dist) < position_threshold)
+            return (abs(x_dist) < self._inside_home_threshold and
+                    abs(y_dist) < self._inside_home_threshold)
 
         return True
 
