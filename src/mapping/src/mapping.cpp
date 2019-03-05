@@ -17,7 +17,6 @@
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
-#include <angles/angles.h>
 #include <dynamic_reconfigure/server.h>
 #include <dynamic_reconfigure/client.h>
 #include <message_filters/subscriber.h>
@@ -88,7 +87,6 @@ bool visualize_frontier;
 unsigned int obstacle_status;
 
 std::string map_frame;
-std::string base_link_frame;
 
 /*
  * Data structures and A* Search adapted from:
@@ -633,34 +631,6 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
 	publishRoverMap();
 }
 
-/*
- * Helper to targetHandler()
- * Returns true if the april tag's orientation in the base_link frame is such
- * that the rover may be inside of home.
- */
-bool isBadOrientation(const geometry_msgs::PoseStamped& tagpose) {
-	const double YAW_THRESHOLD = 1.3; // radians
-
-	try {
-		geometry_msgs::PoseStamped pose;
-		cameraTF->transformPose(
-				base_link_frame,
-				tagpose,
-				pose);
-
-		double yaw = tf::getYaw(pose.pose.orientation);
-		yaw -= M_PI_2;
-		yaw = angles::normalize_angle(yaw);
-
-		if (abs(yaw) < YAW_THRESHOLD)
-			return true;
-
-	} catch (tf::TransformException &e) {
-		ROS_ERROR("%s", e.what());
-	}
-
-	return false;
-}
 
 /* targetHandler() - Called when there's new Apriltag detection data.
  *
@@ -755,12 +725,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 
 	// Handle target detections
 
-	// Counts of acceptable and not-acceptable orientations of home tags in
-	// the base_link frame. If there are more bad orientations then good ones,
-	// it's likely the rover is inside of the home ring.
-	int good_orientations = 0;
-	int bad_orientations = 0;
-
 	if (message->detections.size() > 0) {
 
 		try {
@@ -777,12 +741,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 					message->detections[0].pose.header.frame_id, // Source frame
 					message->detections[0].pose.header.stamp,    // Time
 					ros::Duration(0.2) // How long to wait for the tf.
-			);
-			cameraTF->waitForTransform(
-					base_link_frame,
-					message->detections[0].pose.header.frame_id,
-					message->detections[0].pose.header.stamp,
-					ros::Duration(0.2)
 			);
 
             for (int i=0; i<message->detections.size(); i++) {
@@ -803,12 +761,6 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
                     rover_map.at("target", ind) = 1;
                 } else if (message->detections[i].id == 256) {
                     rover_map.at("home", ind) = 1;
-
-                    if (isBadOrientation(message->detections[i].pose)) {
-                        bad_orientations += 1;
-                    } else {
-                        good_orientations += 1;
-                    }
                 }
 			}
 		} catch (tf::TransformException &e) {
@@ -828,14 +780,10 @@ void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& messag
 		}
 	}
 
-    if (bad_orientations > 0 && bad_orientations >= good_orientations) {
-        next_status |= swarmie_msgs::Obstacle::INSIDE_HOME;
-    }
-
 	if (next_status != prev_status) {
 		swarmie_msgs::Obstacle msg;
 		msg.msg = next_status;
-		msg.mask = swarmie_msgs::Obstacle::TAG_TARGET | swarmie_msgs::Obstacle::TAG_HOME | swarmie_msgs::Obstacle::INSIDE_HOME;
+		msg.mask = swarmie_msgs::Obstacle::TAG_TARGET | swarmie_msgs::Obstacle::TAG_HOME;
 		obstaclePublish.publish(msg);
 	}
 
@@ -1053,7 +1001,6 @@ int main(int argc, char **argv) {
 
     // Parameters
     ros::param::param<std::string>("odom_frame", map_frame, "odom");
-    ros::param::param<std::string>("base_link_frame", base_link_frame, "base_link");
 
     double map_size;
     double map_resolution;
