@@ -951,10 +951,34 @@ class HomeTransformGen:
         self._home_xform.header.stamp = rospy.Time().now()
         self._xform_b.sendTransformMessage(self._home_xform)
 
+    @staticmethod
+    def _is_bad_orientation(tag_yaw):
+        # type: (float) -> bool
+        """Return True if the AprilTag's orientation in the base_link frame is
+        such that the rover may be inside of home.
+
+        Args:
+            tag_yaw: The tag's yaw in the base_link frame.
+        """
+        yaw_threshold = 1.3  # radians
+
+        tag_yaw -= math.pi / 2
+        tag_yaw = angles.normalize_angle(tag_yaw)
+
+        return abs(tag_yaw) < yaw_threshold
+
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
         next_obst_status = Obstacle.PATH_IS_CLEAR
+
+        # Counts of acceptable and not-acceptable orientations of home tags in
+        # the base_link frame. If there are more bad orientations than good
+        # ones, it's likely the rover is inside of the home ring, and we'll
+        # consider more closely using the rover's current position in the
+        # home frame.
+        good_yaw_count = 0
+        bad_yaw_count = 0
 
         detections = []  # type: List[PoseStamped]
         for detection in msg.detections:  # type: AprilTagDetection
@@ -976,16 +1000,24 @@ class HomeTransformGen:
                         # calculated very well, and its orientation has a very
                         # large roll and/or pitch component, when we know the
                         # tags are flat on the ground.
+                        if self._is_bad_orientation(y):
+                            bad_yaw_count += 1
+                        else:
+                            good_yaw_count += 1
+
                         detections.append(xpose)
 
                 except tf.Exception:
                     pass
 
+        if bad_yaw_count > 0 and bad_yaw_count >= good_yaw_count:
+            next_obst_status |= Obstacle.INSIDE_HOME
+
         # If a home tag is in view
         if len(detections) > 0:
             corner = self._find_corner_tags(detections)
             if corner is not None:
-                next_obst_status = Obstacle.HOME_CORNER
+                next_obst_status |= Obstacle.HOME_CORNER
 
                 pose1, pose2 = corner
                 int_ = intersected(pose1, pose2)
@@ -1060,7 +1092,7 @@ class HomeTransformGen:
         if next_obst_status != self._prev_obst_status:
             msg = Obstacle()
             msg.msg = next_obst_status
-            msg.mask = Obstacle.HOME_CORNER
+            msg.mask = Obstacle.HOME_CORNER | Obstacle.INSIDE_HOME
             self._obstacle_pub.publish(msg)
 
         self._prev_obst_status = next_obst_status
