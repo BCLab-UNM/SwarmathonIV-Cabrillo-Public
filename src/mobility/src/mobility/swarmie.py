@@ -21,7 +21,7 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, PointStamped, PoseStamped, Twist, Pose2D
-from apriltags_ros.msg import AprilTagDetectionArray 
+from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
 
 import threading 
 
@@ -868,7 +868,6 @@ class Swarmie:
     def get_nearest_block_location(self, targets_buffer_age=0):
         '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
 
-        Nearest block will be the nearest to the camera, which should almost always be good enough.
 
         Args:
 
@@ -879,31 +878,62 @@ class Swarmie:
 
         Returns:
 
-        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
+        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if
+          no blocks are seen or the nearest tag is a home tag.
         '''
         if targets_buffer_age > 0:
             blocks = self.get_targets_buffer(age=targets_buffer_age)
         else:
             blocks = self.get_latest_targets()
 
-        if len(blocks) == 0:
+        blocks_xformed = []
+        now = rospy.Time.now()
+
+        # Wait for a little more than a 1/10th sec for each transform, since
+        # transforms are published at approximately 10 Hz in this system.
+        timeout = 0.15
+
+        for block in blocks:  # type: AprilTagDetection
+            try:
+                # One simple method of getting a tag's current position relative
+                # to the base_link frame is using a 2-step transform: first into
+                # the fixed odom frame, and then into the base_link frame. We
+                # need to re-stamp the pose after performing the first transform
+                # in order to get the tag's current pose in the base_link frame,
+                # instead of its pose in the base_link frame when it was seen.
+                ps_odom = swarmie.transform_pose('odom', block.pose,
+                                                 timeout=timeout)
+                ps_odom.header.stamp = now
+                ps_base_link = swarmie.transform_pose('base_link', ps_odom,
+                                                      timeout=timeout)
+
+                blocks_xformed.append(
+                    (AprilTagDetection(block.id, block.size, ps_odom),
+                     AprilTagDetection(block.id, block.size, ps_base_link))
+                )
+            except tf.Exception as e:
+                rospy.logwarn_throttle(
+                    1.0,
+                    ('Transform exception in' +
+                     'Swarmie.get_nearest_block_location(): {}').format(e)
+                )
+
+        if len(blocks_xformed) == 0:
             return None
 
-        # Sort blocks by their distance from the camera_link frame
-        blocks = sorted(blocks, key=lambda x :
-                        math.sqrt(x.pose.pose.position.x**2
-                                  + x.pose.pose.position.y**2
-                                  + x.pose.pose.position.z**2))
+        # Sort blocks by their distance from the base_link frame
+        blocks_xformed = sorted(blocks_xformed, key=lambda x:
+                                math.sqrt(x[1].pose.pose.position.x**2
+                                          + x[1].pose.pose.position.y**2
+                                          + x[1].pose.pose.position.z**2))
 
-        nearest = blocks[0]
+        nearest = blocks_xformed[0][0]
 
-        # checks for hometag between rover and block.
-        if nearest.id==256:
+        # Check for a home tag between the rover and the block.
+        if nearest.id == 256:
             return None
 
-        result = self.transform_pose('/odom', nearest.pose, timeout=3.0)
-
-        return result.pose.position
+        return nearest.pose.pose.position
 
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
