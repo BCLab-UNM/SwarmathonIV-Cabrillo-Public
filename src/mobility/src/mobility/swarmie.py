@@ -866,8 +866,7 @@ class Swarmie:
         return swarmie.xform.transformPose(target_frame, pose)
 
     def get_nearest_block_location(self, targets_buffer_age=0):
-        '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
-
+        '''Find the block closest to the rover's claw.
 
         Args:
 
@@ -881,6 +880,11 @@ class Swarmie:
         * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if
           no blocks are seen or the nearest tag is a home tag.
         '''
+        # Given the claw's position relative to the base_link is an x-only
+        # translation, we can use this offset to modify tag poses in the
+        # base_link frame and estimate their position relative to the claw.
+        claw_offset = 0.2  # meters
+
         if targets_buffer_age > 0:
             blocks = self.get_targets_buffer(age=targets_buffer_age)
         else:
@@ -906,6 +910,7 @@ class Swarmie:
                 ps_odom.header.stamp = now
                 ps_base_link = swarmie.transform_pose('base_link', ps_odom,
                                                       timeout=timeout)
+                ps_base_link.pose.position.x -= claw_offset
 
                 blocks_xformed.append(
                     (AprilTagDetection(block.id, block.size, ps_odom),
