@@ -226,8 +226,13 @@ class Coordinator(rospy.SubscribeListener):
 
         done_once = False
         while not done_once or rospy.Time().now() < timeout_time:
-            if (self._start_queues[self._queue_priority.queue_index][0][1]
-                    == self._queue_priority.rover_name):
+            if len(self._start_queues[self._queue_priority.queue_index]) == 0:
+                rospy.logwarn(("{}: This start queue is empty, so there's " +
+                               "nothing to wait for.").format(self._rover_name))
+                return QueueResponse(result=QueueResponse.SUCCESS)
+
+            elif (self._start_queues[self._queue_priority.queue_index][0][1]
+                  == self._queue_priority.rover_name):
                 return QueueResponse(result=QueueResponse.SUCCESS)
 
             done_once = True
