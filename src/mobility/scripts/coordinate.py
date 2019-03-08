@@ -93,6 +93,17 @@ class Coordinator(rospy.SubscribeListener):
                     'odom/filtered', Odometry, timeout=2
                 )
 
+                if self._initial_pose.get_pose().theta == 0:
+                    # This can happen occasionally in the sim. It's probably
+                    # because the robot_localization node hasn't received IMU
+                    # data yet.
+                    rospy.logwarn(
+                        ('{}: This initial odometry message has a heading of ' +
+                         'exactly 0. Dropping this message and waiting for a ' +
+                         'better one.').format(self._rover_name)
+                    )
+                    self._initial_pose.Odometry = None
+
             except rospy.ROSException:
                 rospy.logwarn(rospy.get_namespace().strip('/') +
                               ': timed out waiting for filtered odometry data.')
