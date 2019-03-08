@@ -17,18 +17,46 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
 
-'''Pickup node.''' 
+'''Pickup node.'''
 
-def approach():
+
+def setup_first_approach():
+    """Drive a little closer to the nearest block if it's far enough away."""
     global claw_offset_distance
-    print ("Attempting a pickup.")
+    extra_offset = 0.20
 
     swarmie.fingers_open()
     swarmie.set_wrist_angle(1.15)
     rospy.sleep(1)
 
+    block = swarmie.get_nearest_block_location(targets_buffer_age=5.0)
+
+    if block is not None:
+        print("Getting setup for pickup.")
+        cur_loc = swarmie.get_odom_location().get_pose()
+        dist = math.hypot(cur_loc.x - block.x, cur_loc.y - block.y)
+
+        if dist > (claw_offset_distance + extra_offset):
+            swarmie.drive_to(
+                block,
+                claw_offset=claw_offset_distance+extra_offset,
+                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+            )
+
+
+def approach(setup_claw=True):
+    global claw_offset_distance
+    print ("Attempting a pickup.")
+
+    if setup_claw:
+        swarmie.fingers_open()
+        swarmie.set_wrist_angle(1.15)
+        rospy.sleep(1)
+    else:
+        rospy.sleep(0.25)
+
     try:
-        block = swarmie.get_nearest_block_location(targets_buffer_age=5.0)
+        block = swarmie.get_nearest_block_location(targets_buffer_age=0.5)
     except tf.Exception as e:
         print("Something went wrong and we can't locate the block. ", e)
         swarmie.wrist_up()
@@ -110,9 +138,10 @@ def main(**kwargs):
     if swarmie.simulator_running():
         claw_offset_distance = 0.12
 
+    setup_first_approach()
 
-    for i in range(3): 
-        if approach():
+    for i in range(3):
+        if approach(setup_claw=bool(i > 0)):
             print ("Got it!")
             sys.exit(0)        
         recover()
