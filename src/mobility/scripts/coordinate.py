@@ -52,6 +52,7 @@ class Coordinator(rospy.SubscribeListener):
         self._rover_name = rospy.get_namespace().strip('/')
         self._initial_pose = Location(None)
         self._queue_priority = StartQueuePriority()
+        self._queue_priority.is_finished = False
 
         # Rovers sorted by their priority.
         self._start_queues = [[], []]  # type: List[List[Tuple[float, str]], List[Tuple[float, str]]]
@@ -137,14 +138,9 @@ class Coordinator(rospy.SubscribeListener):
     @sync(coord_lock)
     def _insert_to_start_queue(self, msg):
         # type: (StartQueuePriority) -> None
-        """Insert rover into the appropriate start queue and re-sort the queue
-        by priorities.
+        """Insert a rover into the appropriate start queue, if it says it hasn't
+        finished queueing yet, and re-sort the queue by priorities.
         """
-        self._start_queues[msg.queue_index].append(
-            (msg.priority, msg.rover_name)
-        )
-        self._start_queues[msg.queue_index].sort(key=lambda tup: tup[0])
-
         if msg.rover_name != self._queue_priority.rover_name:
             self._remove_proxies.append(
                 rospy.ServiceProxy(
@@ -153,6 +149,17 @@ class Coordinator(rospy.SubscribeListener):
                 )
             )
             self._rovers.add(msg.rover_name)
+
+        if msg.is_finished:
+            rospy.loginfo(('{}: {} has already finished queueing. Not adding ' +
+                           'them to my start queue.').format(self._rover_name,
+                                                             msg.rover_name))
+            return
+
+        self._start_queues[msg.queue_index].append(
+            (msg.priority, msg.rover_name)
+        )
+        self._start_queues[msg.queue_index].sort(key=lambda tup: tup[0])
 
         log_msg = []
 
@@ -180,7 +187,6 @@ class Coordinator(rospy.SubscribeListener):
         Returns:
             None
         """
-        # rospy.loginfo('New subscriber to: {}'.format(topic_name))
         peer_publish(self._queue_priority)
 
     @sync(coord_lock)
@@ -254,6 +260,9 @@ class Coordinator(rospy.SubscribeListener):
         Returns:
             The empty service response.
         """
+        if req.rover_name == self._rover_name:
+            self._queue_priority.is_finished = True
+
         for queue in self._start_queues:
             for index, rover in enumerate(queue):
                 if rover[1] == req.rover_name:
