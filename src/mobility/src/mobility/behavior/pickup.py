@@ -106,6 +106,8 @@ def recover():
 
     if not swarmie.simulator_running():
         claw_offset_distance -= 0.02
+    else:
+        claw_offset_distance += 0.02
 
     print ("Missed, trying to recover.")
     try:
@@ -136,7 +138,7 @@ def main(**kwargs):
     
     claw_offset_distance = 0.24 
     if swarmie.simulator_running():
-        claw_offset_distance = 0.12
+        claw_offset_distance = 0.17
 
     setup_first_approach()
 
