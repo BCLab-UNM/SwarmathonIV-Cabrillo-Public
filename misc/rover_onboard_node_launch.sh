@@ -2,12 +2,19 @@
 
 set -e
 
-if [ -z "$1" ]
-then
-    export ROS_MASTER_URI=http://$(echo $SSH_CLIENT | cut -d' ' -f 1):11311
-else
-    export ROS_MASTER_URI=http://$1:11311
-fi
+skip_arduino=0
+for arg in "$@"
+do
+    case "$arg" in
+    --skip-arduino|-s) 
+        skip_arduino=1
+        ;;
+    *)
+	echo "Unknown argument: $arg"
+	exit -1
+        ;;
+    esac
+done
 
 projdir=$(dirname $0)/..
 
@@ -51,7 +58,11 @@ build=$repo/build
 echo Sketch: $sketch
 echo Build Dir: $build
 
-$arduino --upload --preserve-temp-files --pref serial.port=$swarmie_dev --pref build.verbose=1 --pref upload.verbose=1 --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
+if [ $skip_arduino -eq 0 ]; then
+  $arduino --upload --preserve-temp-files --pref serial.port=$swarmie_dev --pref build.verbose=1 --pref upload.verbose=1 --pref build.path=$build --pref sketchbook.path=$repo --pref board=leonardo $sketch
+else
+  echo "Skipping Arduino load."
+fi
 
 if [ -f $projdir/devel/setup.bash ]; then
     echo "deploy_host.sh not called assuming rover_onboard_node_launch"

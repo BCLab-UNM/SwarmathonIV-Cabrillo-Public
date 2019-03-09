@@ -7,7 +7,7 @@
   <arg name="startsim" default="false"/>
   <arg name="gazebo" default="false"/>
 
-<node name="rqt_rover_gui" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
+  <node name="$(anon rqt_rover_gui)" pkg="rqt_gui" type="rqt_gui" args="-s rqt_rover_gui" required="True" output="screen">
 
     <env name="SWARMATHON_APP_ROOT" value="$(env PWD)" />
     <env name="GAZEBO_MODEL_PATH" value="$(env PWD)/simulation/models" />
@@ -18,5 +18,15 @@
     <param name="numrovers" type="int" value="$(arg numrovers)"/>
     <param name="startsim" value="$(arg startsim)"/>
     <param name="gazebo" value="$(arg gazebo)"/>
+  </node>
+
+  <node name="$(anon master_discovery)" pkg="master_discovery_fkie" type="zeroconf" respawn="true" output="screen"/>
+  <node name="$(anon master_sync)" pkg="master_sync_fkie" type="master_sync" respawn="true" output="screen">
+    <rosparam param="ignore_topics">
+- /rosout
+- /rosout_agg
+- /tf
+- /tf_static
+    </rosparam>
   </node>
 </launch>
