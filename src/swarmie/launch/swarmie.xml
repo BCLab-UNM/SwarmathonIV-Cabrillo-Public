@@ -28,7 +28,7 @@
       <arg name="simulation" value="$(arg simulation)"  />
   </include>
 
-  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" required="True" respawn="false"/> 
+  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" respawn="true"/> 
   
   <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
@@ -76,6 +76,8 @@
   </group>
   
   <group unless="$(arg simulation)">
+
+    <node name="master_discovery" pkg="master_discovery_fkie" type="zeroconf" respawn="true"/>
 
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
       <param name="device" value="$(arg swarmie_dev)"/>
