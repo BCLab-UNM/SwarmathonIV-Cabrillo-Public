@@ -2,8 +2,25 @@
 
 set -e
 
-if [ -z "$1" ]; then
-    echo "usage: $0 <rovername>"
+# Parse arguments
+skip_arduino=
+rovername=
+for arg in "$@"
+do
+    case "$arg" in
+    --skip-arduino|-s) 
+        skip_arduino=--skip-arduino
+        ;;
+    *)
+	rovername=$arg
+        ;;
+    esac
+done
+
+if [ -z "$rovername" ]; then
+    echo "usage: $0 [options] <rovername>"
+    echo "  options:"
+    echo "    -s | --skip-arduino : Skip loading the Arduino sketch"
     exit -1
 fi
 
@@ -58,7 +75,7 @@ cd $TEMPDIR
 pwd
 source /opt/ros/kinetic/setup.bash
 source ./install/setup.bash
-./misc/rover_onboard_node_launch.sh 
+./misc/rover_onboard_node_launch.sh $skip_arduino
 
 EOF
 chmod u+x $TEMPDIR/bootstrap.sh
@@ -66,9 +83,9 @@ chmod u+x $TEMPDIR/bootstrap.sh
 (
     # Copy the build products to the swarmie. 
     cd $TEMPDIR
-    tar -cf - $TEMPDIR 2>/dev/null | ssh swarmie@$1 "cd /; tar -xf -"
+    tar -cf - $TEMPDIR 2>/dev/null | ssh swarmie@$rovername "cd /; tar -xf -"
 )
 
 echo "Executing rover code."
 # Execute the bootstrap code.
-ssh -t swarmie@$1 $TEMPDIR/bootstrap.sh
+ssh -t swarmie@$rovername $TEMPDIR/bootstrap.sh
