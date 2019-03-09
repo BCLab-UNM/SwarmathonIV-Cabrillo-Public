@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ -z "$1" ]
 then
     export ROS_MASTER_URI=http://$(echo $SSH_CLIENT | cut -d' ' -f 1):11311
