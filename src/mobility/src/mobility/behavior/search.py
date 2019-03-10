@@ -2,18 +2,12 @@
 
 from __future__ import print_function
 
-speeds = {
-    'linear'  : 0.25,
-    'angular' : 0.7,
-}
-
 import sys
 import rospy
 import tf
 import math
 import random 
 
-import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
@@ -26,16 +20,15 @@ def turnaround():
     #TODO: should this be ignoring TAG_TARGET's???
     swarmie.turn(
         random.gauss(math.pi/2, math.pi/4),
-        ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE
+        ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE,
+        **swarmie.speed_fast
     )
     
 def wander():
-    global speeds
-    
     try :
         rospy.loginfo("Wandering...")
-        swarmie.turn(random.gauss(0, math.pi/6), **speeds)
-        swarmie.drive(random.gauss(2.5, 1), **speeds)
+        swarmie.turn(random.gauss(0, math.pi/6), **swarmie.speed_fast)
+        swarmie.drive(random.gauss(2.5, 1), **swarmie.speed_fast)
 
         rospy.loginfo("Circling...")
         swarmie.circle()
@@ -48,8 +41,6 @@ def wander():
 def search_exit(code):
     global planner, found_tag
     
-    reset_speeds()
-    
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
@@ -60,17 +51,12 @@ def search_exit(code):
     sys.exit(code)
 
 
-def reset_speeds():
-    global initial_config, param_client
-    param_client.update_configuration(initial_config)
-
-
 def set_search_exit_poses():
     swarmie.set_search_exit_poses()
 
 
 def main(**kwargs):
-    global planner, found_tag, speeds
+    global planner, found_tag
 
     found_tag = False
 
@@ -81,10 +67,11 @@ def main(**kwargs):
 
     if not planner.sees_home_tag():
         try:
-            swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
+            swarmie.drive(0.5, ignore=Obstacle.IS_SONAR, **swarmie.speed_fast)
         except HomeException:
             swarmie.turn(math.pi,
-                         ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                         ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                         **swarmie.speed_fast)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
@@ -96,7 +83,9 @@ def main(**kwargs):
             except tf.Exception:
                 pass
     else:
-        swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+        swarmie.turn(math.pi,
+                     ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                     **swarmie.speed_fast)
 
     # Return to our last search exit pose if possible
     dist = 0
