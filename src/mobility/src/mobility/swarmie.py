@@ -284,6 +284,11 @@ class Swarmie:
 
         value = self.control([request]).result.result
 
+        # Always raise AbortExceptions when the service response is USER_ABORT,
+        # even if throw=False was passed as a keyword argument.
+        if value == MoveResult.USER_ABORT:
+            raise AbortException(value)
+
         if 'throw' not in kwargs or kwargs['throw'] : 
             if value == MoveResult.OBSTACLE_SONAR :
                 raise ObstacleException(value)
@@ -293,8 +298,6 @@ class Swarmie:
                 raise HomeException(value)
             elif value == MoveResult.PATH_FAIL :
                 raise PathException(value)
-            elif value == MoveResult.USER_ABORT : 
-                raise AbortException(value)
             elif value == MoveResult.TIMEOUT :
                 raise TimeoutException(value)
             elif value == MoveResult.INSIDE_HOME:
@@ -370,7 +373,9 @@ class Swarmie:
         Returns:
             
         * If `throw=False` was given returns a `mobility_msgs.msg.MoveResult` containing an integer. \
-         Values are described in `src/mobility/msg/MoveResult.msg`    
+         Values are described in `src/mobility/msg/MoveResult.msg`. Note: if the rover is placed in \
+         manual mode mid-drive, a `mobility`swarmie.AbortException` will be raised regardless of the \
+         `throw` keyword argument's value.
 
         * If `throw=True` (the default) is given the return value will be converted into an exception. \
         The following exceptions are defined:
