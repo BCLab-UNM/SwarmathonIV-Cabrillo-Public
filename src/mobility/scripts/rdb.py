@@ -2,10 +2,6 @@
 
 from __future__ import print_function
 
-if __name__ == '__main__':
-    from mobility.namespace import parse_args_and_set_namespace
-    parse_args_and_set_namespace()
-
 import os
 import sys
 import math
@@ -22,7 +18,7 @@ from mobility.srv import Core
 from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle 
 
-from mobility.swarmie import Swarmie 
+from mobility.swarmie import swarmie
 from ctypes import CDLL, util
 
 redraw = CDLL(util.find_library('readline')).rl_forced_update_display
@@ -55,7 +51,7 @@ if __name__ == '__main__' :
     namespace = rospy.get_namespace()
     rover = namespace.strip('/')
 
-    swarmie = Swarmie(tf_rover_name=rover, node_name='rdb')
+    swarmie.start(tf_rover_name=rover, node_name='rdb')
     print ('Connected.')
     
     rospy.Subscriber('status', String, lambda msg : logHandler('/status:', msg))

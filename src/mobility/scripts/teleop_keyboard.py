@@ -6,6 +6,8 @@ Uses Swarmie API or Joy messages published on the driver's /joystick topic to
 drive the rover with keyboard.
 """
 from __future__ import print_function
+
+from collections import OrderedDict
 import math
 import sys
 import select
@@ -13,33 +15,23 @@ import termios
 import textwrap
 import traceback
 import tty
-
-if __name__ == '__main__':
-    from mobility.namespace import parser, set_namespace
-
-    parser.add_argument(
-        '-s',
-        '--swarmie',
-        action='store_true',
-        help='use Swarmie API instead to issue driving commands'
-    )
-    args = parser.parse_args()
-
-    set_namespace(args.rovername)
+import argparse
 
 import rospy
 
 import dynamic_reconfigure.client
 from sensor_msgs.msg import Joy
 from swarmie_msgs.msg import Obstacle
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import (swarmie, TagException, HomeException,
+                              ObstacleException, PathException, AbortException,
+                              InsideHomeException, HomeCornerException)
 
 
 class Teleop(object):
     """Teleop base class."""
 
     def __init__(self, rovername):
-        self.swarmie = Swarmie(node_name='teleop_keyboard')
+        # self.swarmie = Swarmie(node_name='teleop_keyboard')
 
         self.params = {}
         self.param_client = dynamic_reconfigure.client.Client(
@@ -51,11 +43,11 @@ class Teleop(object):
 
         # Keybindings common to both derived classes:
         self.claw_bindings = {
-            'O': self.swarmie.fingers_open,
-            'U': self.swarmie.fingers_close,
-            't': self.swarmie.wrist_up,
-            'g': self.swarmie.wrist_middle,
-            'b': self.swarmie.wrist_down,
+            'O': swarmie.fingers_open,
+            'U': swarmie.fingers_close,
+            't': swarmie.wrist_up,
+            'g': swarmie.wrist_middle,
+            'b': swarmie.wrist_down,
         }
         self.param_bindings = {
             '1': ['drive_speed', 0.9],
@@ -116,17 +108,21 @@ class TeleopSwarmie(Teleop):
             'j': 1,  # turn left, positive theta
             'l': -1,  # turn right, negative theta
         }
-        self.obst_bindings = {
-            '!': Obstacle.PATH_IS_CLEAR,
-            'a': Obstacle.SONAR_LEFT,
-            's': Obstacle.SONAR_CENTER,
-            'd': Obstacle.SONAR_RIGHT,
-            'f': Obstacle.SONAR_BLOCK,
-            'T': Obstacle.TAG_TARGET,
-            'H': Obstacle.TAG_HOME,
-            'S': Obstacle.IS_SONAR,
-            'V': Obstacle.IS_VISION
-        }
+        self.obst_bindings = OrderedDict((
+            ('!', ('PATH_IS_CLEAR', Obstacle.PATH_IS_CLEAR)),
+            ('a', ('SONAR_LEFT',    Obstacle.SONAR_LEFT)),
+            ('s', ('SONAR_CENTER',  Obstacle.SONAR_CENTER)),
+            ('d', ('SONAR_RIGHT',   Obstacle.SONAR_RIGHT)),
+            ('f', ('SONAR_BLOCK',   Obstacle.SONAR_BLOCK)),
+            ('T', ('TAG_TARGET',    Obstacle.TAG_TARGET)),
+            ('h', ('TAG_HOME',      Obstacle.TAG_HOME)),
+            ('n', ('INSIDE_HOME',   Obstacle.INSIDE_HOME)),
+            ('C', ('HOME_CORNER',   Obstacle.HOME_CORNER)),
+            ('S', ('IS_SONAR',      Obstacle.IS_SONAR)),
+            ('V', ('IS_VISION',     Obstacle.IS_VISION)),
+            ('v', ('VISION_SAFE',   Obstacle.VISION_SAFE)),
+            ('H', ('VISION_HOME',   Obstacle.VISION_HOME))
+        ))
         self.param_bindings['3'] = ['reverse_speed', 0.9]
         self.param_bindings['4'] = ['reverse_speed', 1.1]
         self.param_bindings['I'] = ['drive_dist', 1.1]
@@ -135,45 +131,45 @@ class TeleopSwarmie(Teleop):
         self.param_bindings['J'] = ['turn_theta', 0.9]
 
     def obstacle_msg(self):
-        obstacles = [
-            ['PATH_IS_CLEAR', 0],
-            ['SONAR_LEFT', 1],
-            ['SONAR_RIGHT', 2],
-            ['SONAR_CENTER', 4],
-            ['SONAR_BLOCK', 8],
-            ['TAG_TARGET', 256],
-            ['TAG_HOME', 512],
-            ['IS_SONAR', 15],
-            ['IS_VISION', 768]
-        ]
         msg = """
         Toggle Obstacles to ignore (* = currently ignored):
         -----------------
-        (!) {:<14}= 0{}
-        (a) {:<14}= 1{}
-        (d) {:<14}= 2{}
-        (s) {:<14}= 4{}
-        (f) {:<14}= 8{}
-        (T) {:<14}= 256{}
-        (H) {:<14}= 512{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
 
-        (S) {:<14}= 15{}
-        (V) {:<14}= 768{}
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
+
+        ({}) {:<14}= {}{}
+        ({}) {:<14}= {}{}
         """
-        msg_formatter = []
+        cur_ignore = []
+
         if self.ignore_obst == 0:
-            msg_formatter = ['*', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']
+            cur_ignore = ['*'] + [''] * (len(self.obst_bindings) - 1)
         else:
-            msg_formatter.append('')
-            for i in xrange(1, len(obstacles)):
-                if obstacles[i][1] & self.ignore_obst == obstacles[i][1]:
-                    msg_formatter.append('*')
+            cur_ignore.append('')
+            for key, obstacle in self.obst_bindings.items()[1:]:
+                if obstacle[1] & self.ignore_obst == obstacle[1]:
+                    cur_ignore.append('*')
                 else:
-                    msg_formatter.append(' ')
+                    cur_ignore.append(' ')
+
         result = []
-        for obstacle, formatter in zip(obstacles, msg_formatter):
-            result.append(obstacle[0])
+
+        for (key, obstacle), formatter in zip(self.obst_bindings.items(),
+                                              cur_ignore):
+            result.append(key)
+            result.extend(obstacle)
             result.append(formatter)
+
         return textwrap.dedent(msg.format(*result))
 
     def params_msg(self):
@@ -212,12 +208,12 @@ class TeleopSwarmie(Teleop):
                         dist = self.params['drive_dist']
                         if self.drive_bindings[key] < 0:
                             dist = -dist
-                        self.swarmie.drive(dist, ignore=self.ignore_obst)
+                        swarmie.drive(dist, ignore=self.ignore_obst)
                     elif key in self.turn_bindings.keys():
                         theta = self.params['turn_theta']
                         if self.turn_bindings[key] < 0:
                             theta = -theta
-                        self.swarmie.turn(theta, ignore=self.ignore_obst)
+                        swarmie.turn(theta, ignore=self.ignore_obst)
                     elif key in self.claw_bindings.keys():
                         self.claw_bindings[key]()
                     elif key in self.param_bindings.keys():
@@ -240,14 +236,14 @@ class TeleopSwarmie(Teleop):
                         server_config = self.param_client.get_configuration()
                         self.update_params(server_config)
                     elif key in self.obst_bindings.keys():
-                        if self.obst_bindings[key] == 0:
+                        if self.obst_bindings[key][1] == 0:
                             self.ignore_obst = 0
                         else:
-                            if (self.obst_bindings[key] & self.ignore_obst
-                                    == self.obst_bindings[key]):
-                                self.ignore_obst ^= self.obst_bindings[key]
+                            if (self.obst_bindings[key][1] & self.ignore_obst
+                                    == self.obst_bindings[key][1]):
+                                self.ignore_obst ^= self.obst_bindings[key][1]
                             else:
-                                self.ignore_obst |= self.obst_bindings[key]
+                                self.ignore_obst |= self.obst_bindings[key][1]
                     else:
                         if (key == '\x03'):
                             break
@@ -255,6 +251,14 @@ class TeleopSwarmie(Teleop):
                     status_msgs.append('\033[91m*****I saw a tag!*****\033[0m')
                 except HomeException as e:
                     status_msgs.append('\033[91m*****I saw Home!*****\033[0m')
+                except HomeCornerException as e:
+                    status_msgs.append(
+                        '\033[91m*****I saw a corner of Home!*****\033[0m'
+                    )
+                except InsideHomeException as e:
+                    status_msgs.append(
+                        '\033[91m*****I might be inside of Home!*****\033[0m'
+                    )
                 except ObstacleException as e:
                     status_msgs.append(
                         "\033[91m*****There's an obstacle in front of "
@@ -369,6 +373,7 @@ class TeleopKey(Teleop):
 
 def main(use_swarmie=False):
     rovername = rospy.get_namespace().strip('/')
+    swarmie.start(node_name='teleop')
 
     if use_swarmie:
         teleop = TeleopSwarmie(rovername)
@@ -379,5 +384,14 @@ def main(use_swarmie=False):
 
 
 if __name__== '__main__':
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument(
+        '-s',
+        '--swarmie',
+        action='store_true',
+        help='use Swarmie API instead to issue driving commands'
+    )
+    args = parser.parse_args()
     main(use_swarmie=args.swarmie)
-

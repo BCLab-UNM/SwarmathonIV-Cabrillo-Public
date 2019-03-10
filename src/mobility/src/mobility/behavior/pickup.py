@@ -2,10 +2,6 @@
 
 from __future__ import print_function
 
-if __name__ == '__main__':
-    from mobility.namespace import parse_args_and_set_namespace
-    parse_args_and_set_namespace()
-
 import sys
 import rospy 
 import math
@@ -19,12 +15,13 @@ from geometry_msgs.msg import Point
 from mobility.msg import MoveResult
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException
+from mobility.swarmie import (swarmie, TagException, HomeException,
+                              ObstacleException, PathException, AbortException,
+                              DriveException, InsideHomeException)
 
 '''Pickup node.''' 
 
 def approach():
-    global swarmie
     global claw_offset_distance
     print ("Attempting a pickup.")
     try:
@@ -42,15 +39,23 @@ def approach():
         if block is not None:           
             # claw_offset should be a positive distance of how short drive_to needs to be.
             if swarmie.simulator_running():
-                swarmie.drive_to(block, claw_offset = 0.1, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+                swarmie.drive_to(
+                    block,
+                    claw_offset=0.1,
+                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+                )
             else: 
-                swarmie.drive_to(block, claw_offset = claw_offset_distance, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR )
+                swarmie.drive_to(
+                    block,
+                    claw_offset=claw_offset_distance,
+                    ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+                )
             # Grab - minimal pickup with sim_check.
             
             if swarmie.simulator_running():
                 finger_close_angle = 0
             else:
-              finger_close_angle = 0.5
+                finger_close_angle = 0.5
               
             swarmie.set_finger_angle(finger_close_angle) #close
             rospy.sleep(1)
@@ -60,7 +65,7 @@ def approach():
             if swarmie.has_block():
                 swarmie.wrist_middle()
                 swarmie.drive(-0.3,
-                              ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+                              ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
                 return True
             else:
                 swarmie.set_wrist_angle(0.55)
@@ -82,12 +87,12 @@ def approach():
     return False
 
 def recover():
-    global swarmie 
     global claw_offset_distance
     claw_offset_distance -= 0.02
     print ("Missed, trying to recover.")
     try:
-        swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.drive(-0.15,
+                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
         try:
@@ -99,19 +104,21 @@ def recover():
         if block is not None:
             pass
         else:
-            swarmie.drive(-0.15, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            swarmie.drive(-0.15,
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
         #swarmie.turn(math.pi/2)
         #swarmie.turn(-math.pi)
         #swarmie.turn(math.pi/2)
-    except: 
-        print("Oh no, we have an exception!")
+    except (AbortException, InsideHomeException):
+        raise
+    except DriveException as e:
+        print("Oh no, we have an exception!", e)
+        pass
 
-def main(s, **kwargs):
-    global swarmie 
+def main(**kwargs):
     global claw_offset_distance
     
-    swarmie = s
     claw_offset_distance = 0.24 
     if(swarmie.simulator_running()):
         claw_offset_distance -= 0.02
@@ -129,4 +136,5 @@ def main(s, **kwargs):
     return 1
 
 if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+    swarmie.start(node_name='pickup')
+    sys.exit(main())

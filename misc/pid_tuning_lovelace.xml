@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget parent="main_window" name="Main Window">
+  <plotmatrix tab_name="plot" rows="2" columns="1">
+   <plot col="0" row="0">
+    <range left="1540941419.145116" bottom="-0.011504" top="0.471652" right="1540941419.459375"/>
+    <limitY/>
+    <curve R="255" G="0" name="/lovelace/bridge/debugPID/left_wheel/d_term" B="0"/>
+    <curve R="0" G="128" name="/lovelace/bridge/debugPID/left_wheel/i_term" B="0"/>
+    <curve R="0" G="0" name="/lovelace/bridge/debugPID/left_wheel/p_term" B="255"/>
+    <curve R="0" G="128" name="/lovelace/bridge/debugPID/right_wheel/d_term" B="128"/>
+    <curve R="0" G="0" name="/lovelace/bridge/debugPID/right_wheel/i_term" B="128"/>
+    <curve R="255" G="0" name="/lovelace/bridge/debugPID/right_wheel/p_term" B="255"/>
+    <transform axisX="/lovelace/bridge/debugPID/header/stamp" value="XYPlot"/>
+   </plot>
+   <plot col="0" row="1">
+    <range left="1540941419.145116" bottom="-115.036976" top="4716.516023" right="1540941419.459375"/>
+    <limitY/>
+    <curve R="160" G="160" name="/lovelace/bridge/debugPID/left_wheel/error" B="164"/>
+    <curve R="128" G="128" name="/lovelace/bridge/debugPID/left_wheel/feedback" B="0"/>
+    <curve R="128" G="0" name="/lovelace/bridge/debugPID/left_wheel/setpoint" B="0"/>
+    <curve R="0" G="0" name="/lovelace/bridge/debugPID/linear_setpoint" B="255"/>
+    <curve R="0" G="128" name="/lovelace/bridge/debugPID/right_wheel/error" B="0"/>
+    <curve R="255" G="0" name="/lovelace/bridge/debugPID/right_wheel/feedback" B="0"/>
+    <curve R="255" G="0" name="/lovelace/bridge/debugPID/right_wheel/setpoint" B="255"/>
+    <transform axisX="/lovelace/bridge/debugPID/header/stamp" value="XYPlot"/>
+   </plot>
+  </plotmatrix>
+  <currentPlotMatrix index="0"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <Plugins>
+  <DataLoad_CSV>
+   <default time_axis=""/>
+  </DataLoad_CSV>
+  <DataLoad_ROS_bags>
+   <selected_topics list=""/>
+  </DataLoad_ROS_bags>
+  <ROS_Topic_Streamer>
+   <selected_topics list="/lovelace/bridge/debugPID"/>
+  </ROS_Topic_Streamer>
+  <RosoutPublisherROS/>
+  <TopicPublisherROS/>
+ </Plugins>
+ <previouslyLoadedStreamer name="ROS_Topic_Streamer"/>
+</root>
+

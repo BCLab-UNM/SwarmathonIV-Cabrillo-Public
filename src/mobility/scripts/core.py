@@ -21,7 +21,6 @@ def mode(msg):
 def main() :     
     global driver, heartbeat_pub, rover_mode, status_pub
     
-    task = None 
     rover_mode = 0 
     
     rospy.init_node('mobility')
@@ -41,19 +40,22 @@ def main() :
     launcher = roslaunch.scriptapi.ROSLaunch()
     launcher.start()
     task = None 
-    status_pub.publish("Okay")
+    status_pub.publish("idle")
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
         if rover_mode > 1 :
-            print ('The mode is: ', mode)
             if task is None: 
-                node = roslaunch.core.Node('mobility', 'task.py', namespace=rospy.get_namespace())
+                status_pub.publish("starting")
+                node = roslaunch.core.Node('mobility', 'task.py',
+                                           name='task',
+                                           namespace=rospy.get_namespace())
                 task = launcher.launch(node)
             else:
                 if not task.is_alive() : 
                     task = None
         else :
             if task is not None and task.is_alive() :
+                status_pub.publish("stopped")
                 task.stop()
                 task = None 
                 

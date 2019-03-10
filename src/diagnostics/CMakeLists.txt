@@ -1,47 +1,20 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(diagnostics)
 
-set(CMAKE_BUILD_TYPE "Release")
-
-SET(CMAKE_CXX_FLAGS "-std=c++11")
-
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
+  rospy
   std_msgs
-  gazebo_ros
 )
+
+catkin_python_setup()
 
 catkin_package(
   DEPENDS
-  roscpp
-  std_msgs
-  gazebo_ros
+  rospy
 )
 
-# Depend on system install of Gazebo
-find_package(gazebo REQUIRED)
-
-link_directories(${GAZEBO_LIBRARY_DIRS})
-include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
-
-add_executable(
-  diagnostics 
-  src/driver.cpp
-  src/Diagnostics.cpp
-  src/WirelessDiags.cpp
+catkin_install_python (
+	PROGRAMS 
+	scripts/diags_node.py 
+	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
-
-add_dependencies(diagnostics ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(
-  diagnostics
-  usb
-  ${catkin_LIBRARIES}
-  ${GAZEBO_LIBRARIES}
-)
-
-install(TARGETS diagnostics
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
-

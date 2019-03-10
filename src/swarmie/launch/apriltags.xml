@@ -16,6 +16,7 @@
 
     <rosparam param="tag_descriptions">[
     {id: 0, size: 0.038},
+    {id: 1, size: 0.038},
     {id: 256, size: 0.038}]</rosparam>
   </node>
 

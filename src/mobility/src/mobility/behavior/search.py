@@ -7,10 +7,6 @@ speeds = {
     'angular' : 0.7,
 }
 
-if __name__ == '__main__':
-    from mobility.namespace import parse_args_and_set_namespace
-    parse_args_and_set_namespace()
-
 import sys
 import rospy
 import tf
@@ -22,16 +18,20 @@ from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
 from mobility.planner import Planner
-from mobility.swarmie import Swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
+from mobility.swarmie import swarmie, TagException, HomeException, ObstacleException, PathException, AbortException, MoveResult
 
 '''Searcher node.''' 
 
-def turnaround(): 
-    global swarmie
-    swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION)
+def turnaround():
+    #TODO: should this be ignoring TAG_TARGET's???
+    swarmie.turn(
+        random.gauss(math.pi/2, math.pi/4),
+        ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE
+    )
     
 def wander():
-    global swarmie, speeds
+    global speeds
+    
     try :
         rospy.loginfo("Wandering...")
         swarmie.turn(random.gauss(0, math.pi/6), **speeds)
@@ -45,32 +45,19 @@ def wander():
         turnaround()
 
 
-def escape_home(detections):
-    global swarmie, planner
-
-    print('\nGetting out of the home ring!!')
-    angle, dist = planner.get_angle_and_dist_to_escape_home(detections)
-    swarmie.turn(
-        angle,
-        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-    )
-    swarmie.drive(
-        dist,
-        ignore=Obstacle.IS_SONAR | Obstacle.IS_VISION
-    )
-
-
-def handle_exit():
-    global planner, swarmie, found_tag
-
+def search_exit(code):
+    global planner, found_tag
+    
     reset_speeds()
-
+    
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
-
-    swarmie.print_infoLog('Setting search exit poses.')
-    set_search_exit_poses()
+    
+    if code == 0:
+        swarmie.print_infoLog('Setting search exit poses.')
+        set_search_exit_poses()
+    sys.exit(code)
 
 
 def reset_speeds():
@@ -79,34 +66,25 @@ def reset_speeds():
 
 
 def set_search_exit_poses():
-    global swarmie
     swarmie.set_search_exit_poses()
 
 
-def main(s, **kwargs):
-    global swarmie, planner, found_tag, speeds
+def main(**kwargs):
+    global planner, found_tag, speeds
 
-    swarmie = s
     found_tag = False
 
-    planner = Planner(swarmie)
+    planner = Planner()
 
     swarmie.fingers_open()
     swarmie.wrist_middle()
-
-    rospy.on_shutdown(handle_exit)
 
     if not planner.sees_home_tag():
         try:
             swarmie.drive(0.5, ignore=Obstacle.IS_SONAR)
         except HomeException:
-            # get out of from inside home if it ever happens
-            detections = swarmie.get_latest_targets().detections
-            if planner.is_inside_home_ring(detections):
-                escape_home(detections)
-            else:
-                swarmie.turn(math.pi,
-                             ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+            swarmie.turn(math.pi,
+                         ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
             try:
@@ -114,16 +92,11 @@ def main(s, **kwargs):
                     found_tag = True
                     # print('Found a tag! Turning to face.')
                     # planner.face_nearest_block()
-                    sys.exit(0)  # found a tag?
+                    search_exit(0)  # found a tag?
             except tf.Exception:
                 pass
     else:
-        # get out of from inside home if it ever happens
-        detections = swarmie.get_latest_targets().detections
-        if planner.is_inside_home_ring(detections):
-            escape_home(detections)
-        else:
-            swarmie.turn(math.pi, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+        swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
     # Return to our last search exit pose if possible
     dist = 0
@@ -169,13 +142,13 @@ def main(s, **kwargs):
             pass
 
         try:
-            # planner.clear(math.pi / 4, ignore=Obstacle.TAG_HOME, throw=True)
+            # planner.clear(math.pi / 4, ignore=Obstacle.VISION_HOME, throw=True)
             # swarmie.drive(0.2, throw=False)
             # planner.sweep(throw=True)
             swarmie.circle()
             swarmie.set_heading(
                 last_pose.theta,
-                ignore=Obstacle.TAG_HOME
+                ignore=Obstacle.VISION_HOME
             )
         except TagException:
             rospy.sleep(0.3)  # build buffer a little
@@ -185,7 +158,7 @@ def main(s, **kwargs):
                 found_tag = True
                 # print('Found a tag! Turning to face.')
                 # planner.face_nearest_block()
-                sys.exit(0)
+                search_exit(0)
         except HomeException:
             # Just move onto random search, but this shouldn't really happen
             # either.
@@ -197,19 +170,16 @@ def main(s, **kwargs):
     try:
         for move in range(30) :
             if rospy.is_shutdown() :
-                sys.exit(-1)
+                search_exit(-1)
             try:
                 wander()
 
             except HomeException :
                 print ("I saw home!")
-                planner.set_home_locations()
-
-                # get out of from inside home if it ever happens
-                detections = swarmie.get_latest_targets().detections
-                if planner.is_inside_home_ring(detections):
-                    escape_home(detections)
-
+                # TODO: We used to set the home odom location here, while we had
+                #  the chance. If finding home during gohome becomes difficult,
+                #  it may be useful to have home_transform publish a less
+                #  accurate, but easier to update, home position estimate.
                 turnaround()
 
     except TagException :
@@ -220,11 +190,12 @@ def main(s, **kwargs):
             found_tag = True
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
-            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.IS_VISION)
-            sys.exit(0)
+            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
+            search_exit(0)
 
     print ("I'm homesick!")
-    return 1 
+    search_exit(1)
 
 if __name__ == '__main__' : 
-    sys.exit(main(Swarmie()))
+    swarmie.start(node_name='search')
+    sys.exit(main())

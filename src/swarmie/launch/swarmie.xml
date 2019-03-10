@@ -5,6 +5,7 @@
   <arg name="swarmie_dev"/>
 
   <param name="rover_name" value="$(arg name)"/>
+  <param name="home_frame" value="home"/>
   <param name="odom_frame" value="$(arg name)/odom"/>
   <param name="base_link_frame" value="$(arg name)/base_link"/>
   <param name="camera_link_frame" value="$(arg name)/camera_link"/>
@@ -24,9 +25,10 @@
   
   <include file="$(find swarmie)/launch/tf.xml">
       <arg name="name" value="$(arg name)"/>
+      <arg name="simulation" value="$(arg simulation)"  />
   </include>
 
-  <node name="diagnostics" pkg="diagnostics" type="diagnostics" respawn="true"/>
+  <node name="diagnostics" pkg="diagnostics" type="diags_node.py" respawn="true"/> 
   
   <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
@@ -40,7 +42,33 @@
     <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
   </node>
 
+  <node name="coordinate" pkg="mobility" type="coordinate.py" respawn="true"/>
+
+  <node name="home_transform" pkg="mobility" type="home_transform.py" respawn="true">
+    <param name="transform_publish_rate" value="0.1" />
+    <param name="vote_rate" value="1.0" />
+    <param name="log_rate" value="5.0" />
+    <param name="inside_home_threshold" value="0.6" />
+
+    <!-- ~15 degrees TODO: measure this value, see home_transform.py for info -->
+    <param name="phi" value="0.25"/>
+  </node>
+
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
+    <param name="map_size" value="25.0"/>
+    <param name="map_resolution" value="0.5"/>
+    <param name="visualize_frontier" value="false"/>
+
+    <param name="sonar_angle" value="0.436332"/> <!-- 25 degrees -->
+    <param name="single_sensor_obstacle_dist" value="0.35"/>
+    <param name="double_sensor_obstacle_dist" value="0.6"/>
+    <param name="sonar_view_range" value="1.0"/>
+    <param name="sonar_obstacle_depth" value="0.75"/>
+
+    <param name="obstacle_threshold" value="0.1"/>
+    <param name="inflation_pct" value="0.7"/>
+    <param name="lethal_cost" value="255"/>
+    <param name="neutral_cost" value="50"/>
   </node>
     
   <group if="$(arg simulation)">
@@ -50,16 +78,24 @@
   
   <group unless="$(arg simulation)">
 
+    <node name="master_discovery" pkg="master_discovery_fkie" type="zeroconf" respawn="true"/>
+    <node name="master_sync" pkg="master_sync_fkie" type="master_sync" respawn="true">
+      <rosparam param="sync_topics">
+- /mode
+      </rosparam>
+    </node>
+
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
       <param name="device" value="$(arg swarmie_dev)"/>
-      <param name="scale" value="0.001" />
-      <param name="Kp" value="0.1" />
-      <param name="Ki" value="0.0" />
-      <param name="Kd" value="0.0" />
+      <param name="scale" value="0.1" />
+      <param name="Kp" value="0.005" />
+      <param name="Ki" value="0.15" />
+      <param name="Kd" value="0.01" />
       <param name="db" value="0.0" />
       <param name="st" value="0.0" />
       <param name="wu" value="65535" />
-      <param name="ff" value="0.009" />
+      <param name="ff_l" value="0.0095" />
+      <param name="ff_r" value="0.012" />
     </node>
 
     <node name="imu" pkg="mobility" type="cal_imu.py"
