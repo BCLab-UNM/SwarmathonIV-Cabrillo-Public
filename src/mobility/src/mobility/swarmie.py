@@ -116,7 +116,7 @@ class Location:
         '''
         return (self.Odometry.pose.covariance[0:15:7])
 
-class Swarmie: 
+class Swarmie(object):
     '''Class that embodies the Swarmie's API
     
     This is the Python API used to drive the rover. The API interfaces 
@@ -338,6 +338,34 @@ class Swarmie:
                 raise HomeCornerException(value)
         
         return value
+
+    def _get_speeds(self, speeds):
+        if speeds[0] is None or speeds[1] is None:
+            raise AttributeError(
+                'Drive speeds are not set. Have you called swarmie.start()?'
+            )
+        return {'linear': speeds[0], 'angular': speeds[1]}
+
+    @property
+    def speed_slow(self):
+        """Get the current slow speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['slow'])
+
+    @property
+    def speed_normal(self):
+        """Get the current normal/default speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['normal'])
+
+    @property
+    def speed_fast(self):
+        """Get the current fast speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['fast'])
         
     def stop(self):
         '''Stop the rover by placing it in manual mode.''' 
@@ -350,7 +378,7 @@ class Swarmie:
         msg = UInt8() 
         msg.data = 2
         self.mode_publisher.publish(msg)
-            
+
     def circle(self, **kwargs):
         '''Drive in a small circle
         
@@ -443,6 +471,20 @@ class Swarmie:
 
             * `mobility.swarmie.HomeCornerException` - Exception caused when the rover sees a corner of \
             the home ring.
+
+        Examples:
+
+            >>> from mobility.swarmie import swarmie
+            >>> swarmie.start(node_name='swarmie')
+            >>>
+            >>> # Drive the current default speed
+            >>> swarmie.drive(1)
+            >>>
+            >>> # Drive using the current slow speed
+            >>> swarmie.drive(1, **swarmie.speed_slow)
+            >>>
+            >>> # Drive using the current fast speed
+            >>> swarmie.drive(1, **swarmie.speed_fast)
         '''
         req = MoveRequest(
             r=distance, 
