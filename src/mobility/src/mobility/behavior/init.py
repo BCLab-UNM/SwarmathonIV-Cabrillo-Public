@@ -16,11 +16,14 @@ from mobility.behavior.find_home_corner import find_home_corner
 def main(**kwargs):
     remove_from_queue = rospy.ServiceProxy('start_queue/remove', QueueRemove)
 
-    # During a normal startup the rover will be facing the center and
-    # close to the nest. But there's no guarantee where we will be if 
-    # mobility crashes and is forced to restart. This checks to see 
-    # if we've set home location prviously.
-    
+    # During a normal startup the rover will be facing the center and close to
+    # the nest. But there's no guarantee where we will be if mobility crashes
+    # and is forced to restart. This checks to see if we know home's location.
+    if swarmie.has_home_odom_location():
+        rospy.logwarn("Init started, but home's location is already known. " +
+                      "Returning normally.")
+        return 0
+
     # Assume the starting position is facing the center.
     # This should be valid by contest rules. 
     #
