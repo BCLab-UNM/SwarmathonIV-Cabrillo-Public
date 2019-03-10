@@ -9,7 +9,8 @@ import rospy
 import math 
 import random 
 import angles 
-import tf 
+import tf
+import dynamic_reconfigure.client
 
 from mobility.srv import Core
 from mapping.srv import GetNavPlan, GetNavPlanRequest
@@ -136,6 +137,13 @@ class Swarmie:
         self.finger_publisher = None
         self.wrist_publisher = None
 
+        self._param_client = None
+        self._drive_speeds = {
+            'slow':   (None, None),
+            'normal': (None, None),
+            'fast':   (None, None)
+        }
+
         self.control = None
         self._get_plan = None
         self._imu_is_finished_validating = None
@@ -189,6 +197,15 @@ class Swarmie:
             node_name = kwargs['node_name']
 
         rospy.init_node(node_name, anonymous=anon)
+
+        # Setup dynamic reconfigure client to get notifications of drive speed
+        # changes on the server.
+        self._param_client = dynamic_reconfigure.client.Client(
+            'mobility',
+            config_callback=self._update_params
+        )
+        config = self._param_client.get_configuration()
+        self._update_params(config)
         
         # Create publishiers.
         self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
@@ -243,6 +260,15 @@ class Swarmie:
                           ': timed out waiting for /targets data.')
 
         print ('Welcome', self.rover_name, 'to the world of the future.')
+
+    def _update_params(self, config):
+        """Update drive parameters with the new configuration."""
+        self._drive_speeds['slow'] = (config['DRIVE_SPEED_SLOW'],
+                                      config['TURN_SPEED_SLOW'])
+        self._drive_speeds['normal'] = (config['DRIVE_SPEED'],
+                                        config['TURN_SPEED'])
+        self._drive_speeds['fast'] = (config['DRIVE_SPEED_FAST'],
+                                      config['TURN_SPEED_FAST'])
 
     @sync(swarmie_lock)
     def _odom(self, msg) : 
