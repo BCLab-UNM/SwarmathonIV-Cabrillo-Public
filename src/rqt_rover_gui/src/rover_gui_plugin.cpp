@@ -271,7 +271,7 @@ namespace rqt_rover_gui
     emit updateNumberOfSatellites("<font color='white'>---</font>");
 
     // Add ROS parameters to assist the easy setup of simulations...
-    ros::NodeHandle nh("rqt_rover_gui");
+    ros::NodeHandle nh("simulation");
     std::string world;
     if (nh.getParam("world", world)) {
     	// Load the specified world.
