@@ -5,18 +5,12 @@ obstacles, and hopefully not dropping the cube in its claw.
 """
 from __future__ import print_function
 
-speeds = {
-    'linear'  : 0.25,
-    'angular' : 0.7,
-}
-
 import sys
 import math 
 import rospy
 import tf
 import angles
-import dynamic_reconfigure.client
-import argparse 
+import argparse
 
 from geometry_msgs.msg import Point
 
@@ -31,14 +25,14 @@ GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
 def drive_straight_home_odom() :
-    global speeds
-
     # We remember home in the Odom frame when we see it. Unlike GPS
     # there's no need to translate the location into r and theta. The
     # swarmie's drive_to function takes a point in odometry space.
 
     home = swarmie.get_home_odom_location()
-    swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER, **speeds)
+    swarmie.drive_to(home,
+                     ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER,
+                     **swarmie.speed_fast)
 
 def drive_home(has_block, home_loc):
     global planner, use_waypoints, GOHOME_FAIL
@@ -68,7 +62,7 @@ def drive_home(has_block, home_loc):
 
 
 def spiral_search(has_block):
-    global planner, speeds
+    global planner
 
     # no map waypoints
     try:
@@ -137,7 +131,7 @@ def main(**kwargs):
         cur_loc = swarmie.get_odom_location()
         if not cur_loc.at_goal(home, 0.3):
             print('Getting a little closer to home position.')
-            swarmie.drive_to(home, ignore=ignore)
+            swarmie.drive_to(home, ignore=ignore, **swarmie.speed_fast)
 
         planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
