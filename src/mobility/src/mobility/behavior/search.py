@@ -61,6 +61,34 @@ def reset_speeds():
 def set_search_exit_poses():
     swarmie.set_search_exit_poses()
 
+################################# Working area
+def set_search_start_theta(theta=None):
+        '''Remember the search start theta.'''
+        if theta == None: 
+            theta =  swarmie.get_odom_location().get_pose().theta
+        rospy.set_param('search_start_theta', theta)
+        
+def get_search_start_theta():
+        '''
+        Will return invalid poses (containing all zeroes) if search exit
+        location hasn't been set yet.
+
+        Examples:
+        >>> swarmie.set_heading(
+        >>>     odom_pose.theta,
+        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
+        >>> )
+        '''
+        theta = rospy.get_param('search_start_poses')
+        return theta
+
+def has_search_start_theta():
+    '''Check to see if the search start location parameter is set.
+    Returns:
+    * (`bool`): True if the parameter exists, False otherwise.
+    '''
+    return rospy.has_param('search_start_poses')
+#################################
 
 def main(**kwargs):
     global planner, found_tag
@@ -112,103 +140,31 @@ def main(**kwargs):
                 pass
     else:
         swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
-
-    # Return to our last search exit pose if possible
-    dist = 0
-    cur_pose = swarmie.get_odom_location().get_pose()
-
-    if swarmie.has_search_exit_poses():
-        last_pose = swarmie.get_search_exit_poses()
-        dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
-                         + (last_pose.y - cur_pose.y) ** 2)
-
-    if dist > 1:  # only bother if it was reasonably far away
-        print('Driving to last search exit position.')
-        swarmie.print_infoLog('Driving to last search exit position.')
-        try:
-            planner.drive_to(last_pose,
-                             tolerance=0.5,
-                             tolerance_step=0.5,
-                             avoid_targets=False,
-                             avoid_home=True)
-
-            cur_loc = swarmie.get_odom_location()
-            if not cur_loc.at_goal(last_pose, 0.3):
-                print('Getting a little closer to last exit position.')
-                swarmie.drive_to(last_pose, throw=False)
-
-        except rospy.ServiceException:
-            # try again without map waypoints
-            planner.drive_to(last_pose,
-                             tolerance=0.5,
-                             tolerance_step=0.5,
-                             avoid_targets=False,
-                             avoid_home=True,
-                             use_waypoints=False)
-
-            cur_loc = swarmie.get_odom_location()
-            if not cur_loc.at_goal(last_pose, 0.3):
-                print('Getting a little closer to last exit position.')
-                swarmie.drive_to(last_pose, throw=False)
-
-        except PathException:
-            print('PathException on our way to last search exit location.')
-            # good enough
-            pass
-
-        try:
-            # planner.clear(math.pi / 4, ignore=Obstacle.VISION_HOME, throw=True)
-            # swarmie.drive(0.2, throw=False)
-            # planner.sweep(throw=True)
-            swarmie.circle()
-            swarmie.set_heading(
-                last_pose.theta,
-                ignore=Obstacle.VISION_HOME
-            )
-        except TagException:
-            rospy.sleep(0.3)  # build buffer a little
-            # too risky to stop for targets if home is in view too
-            if not planner.sees_home_tag():
-                # success!
-                found_tag = True
-                # print('Found a tag! Turning to face.')
-                # planner.face_nearest_block()
-                search_exit(0)
-        except HomeException:
-            # Just move onto random search, but this shouldn't really happen
-            # either.
-            pass
-        except ObstacleException:
-            print('ObstacleException while finishing return to last search exit location.')
-            pass # good enough
-
+        
+    if has_search_start_theta():
+        theta = swarmie.get_odom_location().get_pose().theta + (math.pi/10)
+        set_search_start_theta(theta)
+    else:
+        set_search_start_theta()
+        theta = swarmie.get_odom_location().get_pose().theta
+    
+    swarmie.set_heading( theta, ignore=Obstacle.VISION_HOME )
     try:
-        for move in range(30) :
-            if rospy.is_shutdown() :
-                search_exit(-1)
-            try:
-                wander()
-
-            except HomeException :
-                print ("I saw home!")
-                # TODO: We used to set the home odom location here, while we had
-                #  the chance. If finding home during gohome becomes difficult,
-                #  it may be useful to have home_transform publish a less
-                #  accurate, but easier to update, home position estimate.
-                turnaround()
-
-    except TagException :
-        print("I found a tag!")
-        # Let's drive there to be helpful.
-        rospy.sleep(0.3)
+        swarmie.drive(50) #going for an exeption
+    except TagException:
+        rospy.sleep(0.3)  # build buffer a little
+        # too risky to stop for targets if home is in view too
         if not planner.sees_home_tag():
+            # success!
             found_tag = True
             # print('Found a tag! Turning to face.')
             # planner.face_nearest_block()
-            # swarmie.drive_to(swarmie.get_nearest_block_location(), claw_offset=0.6, ignore=Obstacle.VISION_SAFE)
-            search_exit(0)
-
-    print ("I'm homesick!")
+            search_exit(0) 
+    except ObstacleException:
+        print("Hit a will or Obstacle bouceing back to home")
+        search_exit(1)# Must have hit a wall going back home
+        
+    print("Drive alot or crashed unexpectly")
     search_exit(1)
 
 if __name__ == '__main__' : 
