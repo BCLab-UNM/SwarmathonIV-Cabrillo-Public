@@ -203,8 +203,7 @@ class Task :
 
         except Exception as e:
             # FIXME: What do we do with bugs in task code?
-            print ('Task caught unknown exception: ', e)
-            traceback.print_exc()
+            print('Task caught unknown exception:\n' + traceback.format_exc())
             sys.exit(-2)
 
 def main() :
