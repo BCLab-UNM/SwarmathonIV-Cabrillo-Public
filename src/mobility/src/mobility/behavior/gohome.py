@@ -50,7 +50,8 @@ def drive_home(has_block, home_loc):
                 tolerance=0.5+counter,
                 tolerance_step=0.5+counter,
                 avoid_targets=has_block,
-                use_waypoints=use_waypoints
+                use_waypoints=use_waypoints,
+                **swarmie.speed_fast
             )
         except rospy.ServiceException:
             use_waypoints = False  # fallback if map service fails
@@ -73,7 +74,8 @@ def spiral_search(has_block):
             tolerance_step=0.5,
             avoid_targets=has_block,
             avoid_home=False,
-            use_waypoints=False
+            use_waypoints=False,
+            **swarmie.speed_fast
         )
     except PathException:
         raise
