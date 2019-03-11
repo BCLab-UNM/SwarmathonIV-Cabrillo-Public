@@ -35,7 +35,15 @@ if [ "$exe" == "run.sh" ]; then
     # Delete the rqt cache - can take 24 hours for changes in the UI
     # to show up otherwise
     rm ~/.config/ros.org/rqt_gui.ini
-    roslaunch ./launch/rover_gui.launch "$@"
+    if [ $1 = "-noMM" ]; then
+        shift
+        echo -e "\e[1;36m Running GUI without Multimaster \e[0m"
+        roslaunch ./launch/rover_gui_no_multimaster.launch "$@"
+    else
+        echo -e "\e[1;36m Running GUI with Multimaster \e[0m"
+        roslaunch ./launch/rover_gui.launch "$@"
+    fi
+    
 elif [ "$exe" == "dev.sh" ]; then
     get_rover
     echo "Connecting to rover $rover"
