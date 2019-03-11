@@ -55,12 +55,7 @@ def approach(setup_claw=True):
     else:
         rospy.sleep(0.25)
 
-    try:
-        block = swarmie.get_nearest_block_location(targets_buffer_age=0.5)
-    except tf.Exception as e:
-        print("Something went wrong and we can't locate the block. ", e)
-        swarmie.wrist_up()
-        sys.exit(1)
+    block = swarmie.get_nearest_block_location(targets_buffer_age=0.5)
 
     if block is not None:
         # claw_offset should be a positive distance of how short drive_to needs to be.
@@ -115,12 +110,9 @@ def recover():
                       ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
-        try:
-            block = swarmie.get_nearest_block_location(targets_buffer_age=1.0)
-        except tf.Exception as e:
-            print("Something went wrong recovering and we can't locate the block. ", e)
-            swarmie.wrist_up()
-            sys.exit(1)
+
+        block = swarmie.get_nearest_block_location(targets_buffer_age=1.0)
+
         if block is not None:
             pass
         else:
