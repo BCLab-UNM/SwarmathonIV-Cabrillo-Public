@@ -104,7 +104,8 @@ def main(**kwargs):
                              tolerance=0.5,
                              tolerance_step=0.5,
                              avoid_targets=False,
-                             avoid_home=True)
+                             avoid_home=True,
+                             **swarmie.speed_fast)
 
             cur_loc = swarmie.get_odom_location()
             if not cur_loc.at_goal(last_pose, 0.3):
@@ -118,7 +119,8 @@ def main(**kwargs):
                              tolerance_step=0.5,
                              avoid_targets=False,
                              avoid_home=True,
-                             use_waypoints=False)
+                             use_waypoints=False,
+                             **swarmie.speed_fast)
 
             cur_loc = swarmie.get_odom_location()
             if not cur_loc.at_goal(last_pose, 0.3):
