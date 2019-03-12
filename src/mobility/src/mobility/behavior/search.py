@@ -87,41 +87,43 @@ def set_search_exit_poses():
     swarmie.set_search_exit_poses()
 
 
+def drive_to(pose, use_waypoints):
+    planner.drive_to(pose,
+                     tolerance=0.5,
+                     tolerance_step=0.5,
+                     avoid_targets=False,
+                     avoid_home=True,
+                     use_waypoints=use_waypoints)
+
+    cur_loc = swarmie.get_odom_location()
+    if not cur_loc.at_goal(pose, 0.3):
+        print('Getting a little closer to last exit position.')
+        swarmie.drive_to(pose, throw=False)
+
+
 def return_to_last_exit_position(last_pose):
     global planner, found_tag
 
     print('Driving to last search exit position.')
     swarmie.print_infoLog('Driving to last search exit position.')
-    try:
-        planner.drive_to(last_pose,
-                         tolerance=0.5,
-                         tolerance_step=0.5,
-                         avoid_targets=False,
-                         avoid_home=True)
 
-        cur_loc = swarmie.get_odom_location()
-        if not cur_loc.at_goal(last_pose, 0.3):
-            print('Getting a little closer to last exit position.')
-            swarmie.drive_to(last_pose, throw=False)
+    count = 0
+    use_waypoints = True
 
-    except rospy.ServiceException:
-        # try again without map waypoints
-        planner.drive_to(last_pose,
-                         tolerance=0.5,
-                         tolerance_step=0.5,
-                         avoid_targets=False,
-                         avoid_home=True,
-                         use_waypoints=False)
+    while count < 2:
+        try:
+            drive_to(last_pose, use_waypoints)
 
-        cur_loc = swarmie.get_odom_location()
-        if not cur_loc.at_goal(last_pose, 0.3):
-            print('Getting a little closer to last exit position.')
-            swarmie.drive_to(last_pose, throw=False)
+        except rospy.ServiceException:
+            # try again without map waypoints
+            use_waypoints = False
 
-    except PathException:
-        print('PathException on our way to last search exit location.')
-        # good enough
-        pass
+        except PathException:
+            print('PathException on our way to last search exit location.')
+            # good enough
+            break
+
+        count += 1
 
     try:
         swarmie.circle()
