@@ -10,7 +10,8 @@ from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 from mobility.srv import QueueRemove, QueueRemoveRequest
 
-from mobility.swarmie import swarmie, Location, AbortException, DriveException
+from mobility.swarmie import (swarmie, Location, AbortException, DriveException,
+                              PathException)
 from mobility.behavior.find_home_corner import find_home_corner
 
 def main(**kwargs):
@@ -39,7 +40,11 @@ def main(**kwargs):
         # Let's just call it good. 
         pass
 
-    find_home_corner()
+    try:
+        find_home_corner()
+    except PathException as e:
+        rospy.logwarn(e.status)
+        return -1
 
     swarmie.turn(
         -2 * math.pi / 3,
