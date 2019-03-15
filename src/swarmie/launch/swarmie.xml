@@ -9,9 +9,9 @@
   <param name="odom_frame" value="$(arg name)/odom"/>
   <param name="base_link_frame" value="$(arg name)/base_link"/>
   <param name="camera_link_frame" value="$(arg name)/camera_link"/>
-  <param name="sonar_right_frame" value="$(arg name)/sonar_right"/>
-  <param name="sonar_center_frame" value="$(arg name)/sonar_center"/>
-  <param name="sonar_left_frame" value="$(arg name)/sonar_left"/>
+  <param name="sonar_right_frame" value="$(arg name)/us_right_link"/>
+  <param name="sonar_center_frame" value="$(arg name)/us_center_link"/>
+  <param name="sonar_left_frame" value="$(arg name)/us_left_link"/>
 
   <include file="$(find swarmie)/launch/robot_localization.xml">
       <arg name="name" value="$(arg name)"/>
