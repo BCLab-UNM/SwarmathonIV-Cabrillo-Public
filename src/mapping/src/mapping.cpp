@@ -57,7 +57,7 @@ ros::Publisher path_publisher;
 
 geometry_msgs::Pose2D currentLocation;
 bool isMoving = false;
-tf::TransformListener *cameraTF;
+tf::TransformListener *tf_l;
 
 // Dynamic reconfigure params
 bool params_configured = false; // wait until the parameters are initialized
@@ -793,7 +793,7 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
             // This ensures that the transform is ready to be used below.
             // Wait for 0.2 seconds to try to avoid transform exceptions
             //
-            cameraTF->waitForTransform(
+            tf_l->waitForTransform(
                 map_frame,   // Target frame
                 message->detections[0].pose.header.frame_id, // Source frame
                 message->detections[0].pose.header.stamp,    // Time
@@ -802,9 +802,9 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
 
             for (int i=0; i<message->detections.size(); i++) {
                 geometry_msgs::PoseStamped tagpose;
-                cameraTF->transformPose(map_frame,
-                                        message->detections[i].pose,
-                                        tagpose);
+                tf_l->transformPose(map_frame,
+                                    message->detections[i].pose,
+                                    tagpose);
 
                 grid_map::Position pos(tagpose.pose.position.x,
                                        tagpose.pose.position.y);
@@ -1078,7 +1078,7 @@ int main(int argc, char **argv) {
     //
     // C++ Tutorial Here:
     // http://wiki.ros.org/tf/Tutorials/Writing%20a%20tf%20listener%20%28C%2B%2B%29
-    cameraTF = new tf::TransformListener(ros::Duration(10));
+    tf_l = new tf::TransformListener(ros::Duration(10));
 
     // Subscribers
     //
