@@ -102,14 +102,13 @@ def main(**kwargs):
                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
         except TagException:
             rospy.sleep(0.3)  # build the buffer a little
-            try:
-                if swarmie.get_nearest_block_location() is not None:
-                    found_tag = True
-                    # print('Found a tag! Turning to face.')
-                    # planner.face_nearest_block()
-                    search_exit(0)  # found a tag?
-            except tf.Exception:
-                pass
+
+            if swarmie.get_nearest_block_location() is not None:
+                found_tag = True
+                # print('Found a tag! Turning to face.')
+                # planner.face_nearest_block()
+                search_exit(0)  # found a tag?
+
     else:
         swarmie.turn(math.pi, ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
