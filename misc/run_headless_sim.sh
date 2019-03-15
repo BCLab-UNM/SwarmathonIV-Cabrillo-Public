@@ -19,7 +19,7 @@ function userExit() {
 		echo -e "$red Received SIGINT. Exiting. $reset"
 	fi
 	echo Cleaning up ROS and Gazebo Processes
-	rosnode kill -all
+	rosnode kill -a
 	pkill rosmaster
 	pkill roscore
 	chmod +x $(catkin locate)/cleanup.sh
@@ -28,6 +28,9 @@ function userExit() {
 	# Restore previous environment
 	export GAZEBO_MODEL_PATH=$previous_gazebo_model_path
 	export GAZEBO_PLUGIN_PATH=$previous_gazebo_plugin_path
+	echo -e "$cyan Waiting ... $reset"
+	sleep 10
+	echo -e "$cyan ... Done waiting $reset"
 	exit $code
 } #end userExit
 
@@ -161,16 +164,6 @@ startRoverNodes() {
 	echo "Attempted to start rover ROS nodes"
 } #end startRoverNodes
 
-# Stops the ROS nodes associated with rovers
-stopRoverNodes() {
-	local rover_name=$1
-	rosnode kill rover_name_APRILTAG rover_name_BASE2CAM rover_name_DIAGNOSTICS \
-				 rover_name_MAP rover_name_BEHAVIOUR rover_name_SBRIDGE \ 
-				 rover_name_NAVSAT rover_name_ODOM 
-	rosnode cleanup
-	echo "Attempted to kill rover ROS nodes: name=$rover_name"
-} #end stopRoverNodes
-
 publishRoverModes(){
 	local NUM_ROVERS=$1
 	local mode=$2
@@ -200,8 +193,8 @@ green="\e[1;32m"
 #---------------------------------------------------------#
 
 export dir=$(catkin locate)
-# Exit script if user enters ctl-c or sends interrupt or just exits
-trap userExit SIGINT SIGTERM EXIT 
+# Exit script if user enters ctl-c or sends interrupt
+trap userExit SIGINT SIGTERM 
 
 #defalts
 WORLD_FILE_PATH=`find ./simulation/worlds -type f -name "*.world" | head -n1` #find the first world
@@ -312,7 +305,7 @@ export GAZEBO_MODEL_PATH="$dir/simulation/models"
 export GAZEBO_PLUGIN_PATH=${GAZEBO_PLUGIN_PATH}:./build/lib/:$dir/build/gazebo_plugins
 spawn="rosrun gazebo_ros spawn_model -sdf -file $dir/simulation/models/"
 ROVER_NAMES=( "achilles" "aeneas" "ajax" "diomedes" "hector" "paris" "thor" "zeus" )
-SLEEP_INTERVAL=.5 # Set the interval at which to check whether the experiment duration has elapsed
+SLEEP_INTERVAL=.4 # Set the interval at which to check whether the experiment duration has elapsed
 source "$dir/devel/setup.bash"
 echo Cleaning up ROS and Gazebo Processes
 chmod +x $dir/cleanup.sh
@@ -321,6 +314,7 @@ echo Killing rosmaster
 pkill rosmaster
 echo Killing roscore
 pkill roscore
+sleep 2
 roscore &
 sleep 2
 
@@ -355,22 +349,21 @@ done #end foreach checking rovers status exists
 
 # Read the current sim time (in seconds) from the ros topic /clock
 rosstart=`rostopic echo -n 1 /clock/clock/secs | head -n 1`; start=$(date +%s)
-score=0
+score="Error"
 echo "Time, Score" | tee -a $SCORE_OUTPUT_PATH
 # Let the simulation run until the experiment duration is reached arg 4 is the time in mins
 until (( $(( $rosnow-$rosstart )) >= $(( $duration*60 )) )); do
 	score=`rostopic echo -n 1 /collectionZone/score/data | head -n1 | tr -d '"'`  # update the score
-	rosnow=`rostopic echo -n 1 /clock/clock/secs | head -n 1` # get the current ros time
+	rosnow=`rostopic echo -n 1 /clock/clock/secs | head -n 1` # get the current ros time # lookinto the --filter 
 	echo "$(( $rosnow-$rosstart )) : $score" | tee -a $SCORE_OUTPUT_PATH  # print out something that looks like 492 : 3 time_in_secs : score
 	sleep $SLEEP_INTERVAL
 done
-
+now=$(date +%s) #system time in seconds since epoch
 echo "Sim Complete, Ending autonomous mode for all rovers."
 publishRoverModes $NUM_ROVERS "manual" # Send the manual command to all rovers
 
-rosnow=`rostopic echo -n 1 /clock/clock/secs | head -n 1`; now=$(date +%s)  # lookinto the --filter 
-
 echo "Sys Time:" $((now - start)) ", Sim Time:"  $((rosnow - rosstart)) | tee -a $SCORE_OUTPUT_PATH
 echo "Score:$score" | tee -a $SCORE_OUTPUT_PATH
+echo $score >/tmp/finalScore
 userExit 0
 

@@ -396,18 +396,8 @@ class Planner:
         Does nothing if no blocks are seen, if there is a home tag closer
         to the rover than the nearest block, or if a sonar obstacle prevents
         the rover from making the turn.
-
-        Catches any transform exception raised by
-        Swarmie.get_nearest_block_location() and does nothing.
         """
-        try:
-            block = swarmie.get_nearest_block_location(
-                use_targets_buffer=True
-            )
-        except tf.Exception:
-            # The caller should be about to exit with a normal exit code
-            # after this call anyway, so the pickup behavior is launched.
-            return
+        block = swarmie.get_nearest_block_location(targets_buffer_age=8)
 
         if block is not None:
             angle = self.get_angle_to_face_point(block)

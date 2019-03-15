@@ -145,13 +145,13 @@ void parse() {
   }
   else if (rxBuffer == "d") {
     static int ping_state = 0;
-    static int leftUSValue = 300;
-    static int rightUSValue = 300;
-    static int centerUSValue = 300;
+    static unsigned long leftUSValue = 300;
+    static unsigned long rightUSValue = 300;
+    static unsigned long centerUSValue = 300;
 
     Serial.print("GRF,");
     Serial.print(String(fingers.attached()) + ",");
-    if (fingers.attached()) {
+    if (fingers.attached()) { // if fails, maybe print nothing?
       Serial.println(String(DEG2RAD(fingers.read())));
     }
     else {
@@ -176,23 +176,23 @@ void parse() {
 
     // Only do one sonar at a time to prevent crosstalk.
     if (ping_state == 0) {
-      leftUSValue = NewPing::convert_cm(leftUS.ping_median(3));
-      //leftUSValue = leftUS.ping_cm();
-      Serial.println("USL,1," + String(leftUSValue));
+      leftUSValue = leftUS.ping_median(3);
+      if(leftUSValue != NO_ECHO)
+	Serial.println("USL,1," + String(NewPing::convert_cm(leftUSValue)));
     }
     else if (ping_state == 1) {
-      rightUSValue = NewPing::convert_cm(rightUS.ping_median(3));
-      //rightUSValue = rightUS.ping_cm();
-      Serial.println("USR,1," + String(rightUSValue));
+      rightUSValue = rightUS.ping_median(3);
+      if(rightUSValue != NO_ECHO)
+	Serial.println("USR,1," + String(NewPing::convert_cm(rightUSValue)));
     }
     else{
-      centerUSValue = NewPing::convert_cm(centerUS.ping_median(3));
-      //centerUSValue = centerUS.ping_cm();
-      Serial.println("USC,1," + String(centerUSValue));
+      centerUSValue = centerUS.ping_median(3);
+      if(centerUSValue != NO_ECHO)
+	Serial.println("USC,1," + String(NewPing::convert_cm(centerUSValue)));
     }
     ping_state = (ping_state + 1) % 3;
-
   }
+
   else if (rxBuffer == "f") {
     float radianAngle = Serial.parseFloat();
     int angle = RAD2DEG(radianAngle); // Convert float radians to int degrees

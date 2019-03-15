@@ -97,3 +97,7 @@ class TopicWatcher:
     def get_message(self):
         """Return the warning or failure message."""
         return self._msg
+
+    def get_state_message(self):
+        """Return the state and warning or failure message."""
+        return (self._state, self._msg)

@@ -58,8 +58,7 @@ class Diagnostics:
     
     INITIALIZING = 0 
     READY        = 1 
-    WARNING      = 2
-    FAILED       = 3
+    FAILED       = 2
 
     def __init__(self):
         self._rover_name = rospy.get_namespace()      
@@ -112,7 +111,22 @@ class Diagnostics:
             print ('Could not open interface', self.interface)
         
         return total 
-    
+
+    def do_stop(self):    
+        self.do_messages()
+        msg = UInt8() 
+        msg.data = 1
+        self._mode_pub.publish(msg)
+        self._diags_log.publish(_err('Rover', self._rover_name, 'is stopping!'))
+
+    def do_messages(self):
+        for w in self._watchers: 
+            stat, msg = w.get_state_message()
+            if stat == TopicWatcher.WARNING_STATUS:
+                self._diags_log.publish(_warn(w.get_message()))
+            if stat == TopicWatcher.FAILED_STATUS:
+                self._diags_log.publish(_err(w.get_message()))
+            
     def run(self):
         """
         Execute the diagnostics logic. Returns if the rover has failed. 
@@ -126,16 +140,16 @@ class Diagnostics:
             for w in self._watchers:
                 stat = w.check()
                 statuses.append(stat)
-                if stat == TopicWatcher.WARNING_STATUS:
-                    self._diags_log.publish(_warn(w.get_message()))
-                elif stat == TopicWatcher.FAILED_STATUS:
-                    self._diags_log.publish(_err(w.get_message()))
 
             if self._status == Diagnostics.INITIALIZING:
                 if _is_failed(statuses):
                     self._diags_log.publish(_err("Rover", self._rover_name, 'has failed.'))
                     self._status = Diagnostics.FAILED
-                
+                    self.do_stop()
+
+                if _is_warning(statuses):
+                    self.do_messages()
+                             
                 if _all_ok(statuses):
                     self._diags_log.publish(_ok("Rover", self._rover_name, 'is ready.'))
                     self._status = Diagnostics.READY
@@ -144,11 +158,11 @@ class Diagnostics:
                 if _is_failed(statuses):
                     self._diags_log.publish(_err("Rover", self._rover_name, 'has failed.'))
                     self._status = Diagnostics.FAILED
-                    break
-    
-            elif self._status == Diagnostics.WARNING:
-                pass
-    
+                    self.do_stop()
+
+                if _is_warning(statuses):
+                    self.do_messages()
+        
             elif self._status == Diagnostics.FAILED:
                 pass
             
@@ -186,10 +200,7 @@ class Diagnostics:
             self._r.sleep()
 
         # The run loop has exited. Stop the rover and shutdown.
-        msg = UInt8() 
-        msg.data = 1
-        self._mode_pub.publish(msg)
-        self._diags_log.publish(_err('Rover', self._rover_name, 'is shutting down!'))
+        self.do_stop()
         self._r.sleep()
         self._r.sleep()
         self._r.sleep()

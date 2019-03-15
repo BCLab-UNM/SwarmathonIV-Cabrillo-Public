@@ -10,7 +10,7 @@ import tf
 from geometry_msgs.msg import Pose2D, PoseStamped
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import swarmie
+from mobility.swarmie import swarmie, PathException
 from mobility.behavior.find_home_corner import find_home_corner
 
 
@@ -75,7 +75,11 @@ def main(**kwargs):
 
     # TODO: What should find_home_corner() do when it's called with no home tags
     #  in view? Does this happen very often?
-    find_home_corner()
+    try:
+        find_home_corner()
+    except PathException as e:
+        rospy.logwarn(e.status)
+        return -1
 
     dropoff()
 

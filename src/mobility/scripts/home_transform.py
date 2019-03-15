@@ -32,6 +32,7 @@ import traceback
 
 from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
                                PoseArray, Quaternion, TransformStamped)
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Time
 
 from mobility import sync
@@ -461,6 +462,8 @@ class HomeTransformGen:
         # Keep track of previous obstacle message so it's only published once
         # when it changes.
         self._prev_obst_status = Obstacle.PATH_IS_CLEAR
+        self._cur_odom = None  # type: Odometry
+        self._home_point = None  # type: PointStamped
 
         # Transform listener and broadcaster
         self._xform_l = tf.TransformListener(cache_time=rospy.Duration(secs=30))
@@ -474,6 +477,8 @@ class HomeTransformGen:
         self._xform_rate = rospy.get_param('~transform_publish_rate', 0.1)
         self._vote_rate = rospy.get_param('~vote_rate', 1.0)
         self._log_rate = rospy.get_param('~log_rate', 5.0)
+        self._inside_home_threshold = rospy.get_param('~inside_home_threshold',
+                                                      0.6)
 
         # TODO: calculate a good number for Phi.
         # When oriented in exactly the same direction, two rovers may have
@@ -483,14 +488,6 @@ class HomeTransformGen:
         # option to identify corners.
         # Default value of ~15 degrees, Where 15 degrees is the avg error
         self._phi = rospy.get_param('~phi', 0.25)
-
-        # Subscribers
-        self._targets_sub = rospy.Subscriber('targets',
-                                             AprilTagDetectionArray,
-                                             self._targets_cb)
-        self._xform_auth_sub = rospy.Subscriber('/home_xform_vote',
-                                                HomeTransformAuthority,
-                                                self._home_xform_vote_cb)
 
         # Publishers
         self._xform_vote_pub = rospy.Publisher('/home_xform_vote',
@@ -517,11 +514,28 @@ class HomeTransformGen:
         self._home_pose_pub = rospy.Publisher('home_pose',
                                               PoseStamped, queue_size=10)
 
+        # Subscribers
+        self._odom_sub = rospy.Subscriber('odom/filtered',
+                                          Odometry,
+                                          self._odom_cb)
+        self._targets_sub = rospy.Subscriber('targets',
+                                             AprilTagDetectionArray,
+                                             self._targets_cb)
+        self._xform_auth_sub = rospy.Subscriber('/home_xform_vote',
+                                                HomeTransformAuthority,
+                                                self._home_xform_vote_cb)
+
         # Timers
         self._xform_timer = rospy.Timer(rospy.Duration(self._xform_rate),
                                         self._send_xform)
         self._xform_vote_timer = rospy.Timer(rospy.Duration(self._vote_rate),
                                              self._send_xform_vote)
+
+    @sync(home_xform_lock)
+    def _odom_cb(self, msg):
+        # type: (Odometry) -> None
+        """Store the most recent Odometry message."""
+        self._cur_odom = msg
 
     def _log_vote(self, vote, action, reason):
         # type: (HomeTransformAuthority, str, str) -> None
@@ -951,10 +965,66 @@ class HomeTransformGen:
         self._home_xform.header.stamp = rospy.Time().now()
         self._xform_b.sendTransformMessage(self._home_xform)
 
+    @staticmethod
+    def _is_bad_orientation(tag_yaw):
+        # type: (float) -> bool
+        """Return True if the AprilTag's orientation in the base_link frame is
+        such that the rover may be inside of home.
+
+        Args:
+            tag_yaw: The tag's yaw in the base_link frame.
+        """
+        yaw_threshold = 1.3  # radians
+
+        tag_yaw -= math.pi / 2
+        tag_yaw = angles.normalize_angle(tag_yaw)
+
+        return abs(tag_yaw) < yaw_threshold
+
+    @sync(home_xform_lock)
+    def _is_rover_inside_home(self, good_yaw_count, bad_yaw_count):
+        # type: (float, float) -> bool
+        """Return True if the rover appears to be inside of home.
+
+        This method first compares the good and bad counts, and if they're
+        suspicious, compares the rover's current position with the home
+        position.
+
+        Using the home tag orientations is useful so the rover can only think
+        it's inside of home if a home tag is in view, but it tends to generate
+        false positives. Comparing the rover's and home's locations helps reduce
+        the number of false positives.
+
+        Args:
+            good_yaw_count: The count of acceptably-oriented home tags.
+            bad_yaw_count: The count of dangerously-oriented home tags.
+        """
+        if bad_yaw_count == 0 or bad_yaw_count < good_yaw_count:
+            return False
+
+        if self._cur_odom is not None and self._home_point is not None:
+            x_dist = (self._cur_odom.pose.pose.position.x
+                      - self._home_point.point.x)
+            y_dist = (self._cur_odom.pose.pose.position.y
+                      - self._home_point.point.y)
+
+            return (abs(x_dist) < self._inside_home_threshold and
+                    abs(y_dist) < self._inside_home_threshold)
+
+        return True
+
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
         next_obst_status = Obstacle.PATH_IS_CLEAR
+
+        # Counts of acceptable and not-acceptable orientations of home tags in
+        # the base_link frame. If there are more bad orientations than good
+        # ones, it's likely the rover is inside of the home ring, and we'll
+        # consider more closely using the rover's current position in the
+        # home frame.
+        good_yaw_count = 0
+        bad_yaw_count = 0
 
         detections = []  # type: List[PoseStamped]
         for detection in msg.detections:  # type: AprilTagDetection
@@ -976,6 +1046,11 @@ class HomeTransformGen:
                         # calculated very well, and its orientation has a very
                         # large roll and/or pitch component, when we know the
                         # tags are flat on the ground.
+                        if self._is_bad_orientation(y):
+                            bad_yaw_count += 1
+                        else:
+                            good_yaw_count += 1
+
                         detections.append(xpose)
 
                 except tf.Exception:
@@ -983,9 +1058,12 @@ class HomeTransformGen:
 
         # If a home tag is in view
         if len(detections) > 0:
+            if self._is_rover_inside_home(good_yaw_count, bad_yaw_count):
+                next_obst_status |= Obstacle.INSIDE_HOME
+
             corner = self._find_corner_tags(detections)
             if corner is not None:
-                next_obst_status = Obstacle.HOME_CORNER
+                next_obst_status |= Obstacle.HOME_CORNER
 
                 pose1, pose2 = corner
                 int_ = intersected(pose1, pose2)
@@ -1004,7 +1082,8 @@ class HomeTransformGen:
                     )
 
                 try:
-                    home_point, home_pose = self._home_pose(cor_type, cor_pose)
+                    self._home_point, home_pose = self._home_pose(cor_type,
+                                                                  cor_pose)
                 except tf.Exception as e:
                     rospy.logwarn(
                         ('{}: Transform exception raised by ' +
@@ -1025,8 +1104,9 @@ class HomeTransformGen:
                     self._gen_home_xform(home_pose)
                     self._home_pose_pub.publish(home_pose)
 
-                self._home_point_pub.publish(home_point)
+                self._home_point_pub.publish(self._home_point)
 
+                # Publish intermediate steps
                 self._corner_pub.publish(cor_pose)
 
                 msg = PoseArray()
@@ -1060,7 +1140,7 @@ class HomeTransformGen:
         if next_obst_status != self._prev_obst_status:
             msg = Obstacle()
             msg.msg = next_obst_status
-            msg.mask = Obstacle.HOME_CORNER
+            msg.mask = Obstacle.HOME_CORNER | Obstacle.INSIDE_HOME
             self._obstacle_pub.publish(msg)
 
         self._prev_obst_status = next_obst_status

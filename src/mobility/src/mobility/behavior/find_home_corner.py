@@ -56,6 +56,8 @@ def find_home_corner(max_fail_count=3):
     # How many times the rover has stopped with no home tags in view.
     fail_count = 0
 
+    sorted_tags = []
+
     # TODO: should sonar be ignored all the time?
     ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
               Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
@@ -67,11 +69,17 @@ def find_home_corner(max_fail_count=3):
 
     for _ in range(10):
         try:
-            # TODO: the last 1 second of buffer is probably too much. Change
-            #  the age argument to something like 0.5 if/when the API supports it.
+            prev_sorted_tags = sorted_tags
+            # TODO: Confirm 0.5 seconds of buffer works reasonably well. It will
+            #  be obvious if it doesn't because the rover will perform the
+            #  recover behavior frequently.
             sorted_tags = utils.sort_tags_left_to_right(
-                swarmie.get_targets_buffer(id=256, age=2)
+                swarmie.get_targets_buffer(id=256, age=0.5)
             )
+
+            if len(sorted_tags) == 0:
+                sorted_tags = prev_sorted_tags
+
             if len(sorted_tags) == 0:
                 fail_count += 1
                 if fail_count >= max_fail_count:
@@ -115,9 +123,9 @@ def find_home_corner(max_fail_count=3):
                 if (abs(angles.shortest_angular_distance(rover_yaw, home_yaw))
                         > math.pi / 2):
                     swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
-
-                swarmie.drive_to(tag_xformed.pose.position,
-                                 claw_offset=claw_offset, ignore=ignore)
+                else:
+                    swarmie.drive_to(tag_xformed.pose.position,
+                                     claw_offset=claw_offset, ignore=ignore)
 
         except HomeCornerException:
             # success!!

@@ -10,17 +10,21 @@ from swarmie_msgs.msg import Obstacle
 from mobility.msg import MoveResult
 from mobility.srv import QueueRemove, QueueRemoveRequest
 
-from mobility.swarmie import swarmie, Location
+from mobility.swarmie import (swarmie, Location, AbortException, DriveException,
+                              PathException)
 from mobility.behavior.find_home_corner import find_home_corner
 
 def main(**kwargs):
     remove_from_queue = rospy.ServiceProxy('start_queue/remove', QueueRemove)
 
-    # During a normal startup the rover will be facing the center and
-    # close to the nest. But there's no guarantee where we will be if 
-    # mobility crashes and is forced to restart. This checks to see 
-    # if we've set home location prviously.
-    
+    # During a normal startup the rover will be facing the center and close to
+    # the nest. But there's no guarantee where we will be if mobility crashes
+    # and is forced to restart. This checks to see if we know home's location.
+    if swarmie.has_home_odom_location():
+        rospy.logwarn("Init started, but home's location is already known. " +
+                      "Returning normally.")
+        return 0
+
     # Assume the starting position is facing the center.
     # This should be valid by contest rules. 
     #
@@ -29,12 +33,18 @@ def main(**kwargs):
         # Ignore cubes if they're put in the way. It's more important to continue
         # this behavior and find a corner of home than it is to stop for a cube.
         swarmie.drive(1, ignore=Obstacle.TAG_TARGET)
-    except: 
+    except AbortException:
+        raise
+    except DriveException:
         # This could happen if we bump into another rover. 
         # Let's just call it good. 
         pass
 
-    find_home_corner()
+    try:
+        find_home_corner()
+    except PathException as e:
+        rospy.logwarn(e.status)
+        return -1
 
     swarmie.turn(
         -2 * math.pi / 3,

@@ -15,3 +15,9 @@ uint8 queue_index
 # while putting rovers that need an IMU calibration and will spin in place for
 # 20-30 sec at the end of the queue.
 float64 priority
+
+# Whether this rover has already waited in the start queue. This is used to tell
+# a rover brought up mid-round that it doesn't need to add this rover to its
+# start queue. This is more reliable than trying to unregister a publisher on
+# the queue priorities topic once a rover has finished queueing.
+bool is_finished
