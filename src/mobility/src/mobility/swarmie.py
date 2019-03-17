@@ -954,51 +954,54 @@ class Swarmie:
 
         return nearest.pose.pose.position
 
-    def set_search_exit_poses(self):
-        '''Remember the search exit location.'''
-        odom =  self.get_odom_location().get_pose()
-    
-        rospy.set_param(
-            'search_exit_poses',
-            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},}
-        )
+    def add_search_exit_location(self):
+        '''Remember the search exit locations.'''
+        # TODO:project location to be in front of the rover & put in the homeframeid=
+        odom =  self.get_odom_location().get_pose() 
+        num_tags = len(self.get_targets_buffer(age=.5, id=0))  # resource tags seen in the last half second
+        search_exit_locations_list = rospy.get_param('search_exit_locations', [])
+        print("Called add_search_exit_location, num_tags:", num_tags, 'x:', odom.x, 'y:', odom.y)
+        search_exit_locations_list.append({'num_tags': num_tags, 'x': odom.x, 'y': odom.y})
+        rospy.set_param('search_exit_locations', search_exit_locations_list)
 
-    def get_search_exit_poses(self):
-        '''Get the odom (location and heading) where search last
-        exited (saw a tag).
+    def remove_search_exit_location(self, odom_to_remove, threshold=.3):
+        # TODO: look for a matching odom in the list to odom_to_remove within the threshold of .3 meters
+        pass  # should be called after search goes here and does not find anything
+
+
+    def get_search_exit_location(self):
+        """ Gets the ros peram search_exit_locations which contains a list of dicts that contain num_tags"""
+        return rospy.get_param('search_exit_locations', [])
+
+    def get_search_exit_location_with_most_tags(self):
+        '''Get the odom (location and heading) where search saw the most tags when exiting
 
         Returns:
-
-        * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
+        * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame #TODO: put in home frame
 
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
         Examples:
         >>> odom_pose = swarmie.get_search_exit_poses()
-        >>> swarmie.drive_to(
-        >>>     odom_pose,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
-        >>> swarmie.set_heading(
-        >>>     odom_pose.theta,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
+        >>> swarmie.drive_to(odom_pose, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle. )
         '''
-        poses = rospy.get_param(
-            'search_exit_poses',
-            {'odom': {'x': 0, 'y': 0, 'theta': 0}, }
-        )
-        return Pose2D(**poses['odom'])
+        #search_exit_locations_list = [{'num_tags': 1, 'x': 0, 'y': 0},{'num_tags': 10, 'x': 5, 'y': 4},{'num_tags': 2, 'x': 3, 'y': 3},{'num_tags': 7, 'x': 7, 'y': 7}]
+        search_exit_locations_list = rospy.get_param('search_exit_locations', [])
+        print("search_exit_locations_list:", search_exit_locations_list)
+        # Get the entry with the most tags
+        location_w_most_tags = sorted(search_exit_locations_list, key=lambda k: k['num_tags'], reverse=True)[0]
+        print('location_w_most_tags:',location_w_most_tags)
+        return Pose2D(location_w_most_tags['x'], location_w_most_tags['y'], 0)  # theta is 0
 
-    def has_search_exit_poses(self):
+    def has_search_exit_locations(self):
         '''Check to see if the search exit location parameter is set.
 
         Returns:
 
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('search_exit_poses')
+        return rospy.has_param('search_exit_locations')
         
 
 #
