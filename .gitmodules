@@ -1,0 +1,4 @@
+[submodule "src/apriltags2_ros"]
+    path = src/apriltags2_ros
+    url = git@github.com:darrenchurchill/apriltags2_ros.git
+    branch = apriltag3
