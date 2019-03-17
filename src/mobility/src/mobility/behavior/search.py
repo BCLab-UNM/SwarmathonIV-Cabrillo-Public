@@ -85,7 +85,7 @@ def reset_speeds():
 
 
 def set_search_exit_poses():
-    swarmie.set_search_exit_poses()
+    swarmie.add_search_exit_location()
 
 
 def drive_to(pose, use_waypoints):
@@ -183,15 +183,16 @@ def main(**kwargs):
     param_client.update_configuration(speeds)
 
     # Return to our last search exit pose if possible
-    if swarmie.has_search_exit_poses():
+    if swarmie.has_search_exit_locations():
         cur_pose = swarmie.get_odom_location().get_pose()
-
-        last_pose = swarmie.get_search_exit_poses()
-        dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
-                         + (last_pose.y - cur_pose.y) ** 2)
+        cube_location = swarmie.get_search_exit_location_with_most_tags()
+        dist = math.sqrt((cube_location.x - cur_pose.x) ** 2
+                         + (cube_location.y - cur_pose.y) ** 2)
 
         if dist > 1:  # only bother if it was reasonably far away
-            return_to_last_exit_position(last_pose)
+            return_to_last_exit_position(cube_location)
+            #if we are here then no cubes where found near the location
+            swarmie.remove_search_exit_location(cube_location)
 
     random_walk(num_moves=30)
 
