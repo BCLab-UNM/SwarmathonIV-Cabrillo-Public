@@ -24,11 +24,12 @@ def turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE):
 def wander():
     try:
         rospy.loginfo("Wandering...")
-        swarmie.turn(random.gauss(0, math.pi/6))
         swarmie.drive(random.gauss(2.5, 1))
+        prev_heading = swarmie.get_odom_location().get_pose().theta
 
         rospy.loginfo("Circling...")
         swarmie.circle()
+        swarmie.set_heading(prev_heading + random.gauss(0, math.pi/6))
 
     except HomeException:
         print ("I saw home!")
