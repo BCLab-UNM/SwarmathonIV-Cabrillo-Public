@@ -10,7 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   random_numbers
   tf
-  apriltags_ros
+  apriltags2to1
   rospy
   message_generation
   dynamic_reconfigure
@@ -33,11 +33,11 @@ add_service_files (
 	FILES Core.srv Queue.srv QueueRemove.srv GetRoverNames.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags_ros nav_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags2to1 nav_msgs)
 
 catkin_package(
   CATKIN_DEPENDS geometry_msgs sensor_msgs std_msgs 
-  random_numbers tf apriltags_ros rospy message_runtime 
+  random_numbers tf apriltags2to1 rospy message_runtime
   grid_map_ros grid_map_msgs dynamic_reconfigure
   nav_msgs
 )

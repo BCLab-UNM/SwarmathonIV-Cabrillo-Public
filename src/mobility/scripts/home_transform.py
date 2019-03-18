@@ -37,7 +37,7 @@ from std_msgs.msg import Time
 
 from mobility import sync
 
-from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
 from mobility.msg import HomeTransformAuthority
 from swarmie_msgs.msg import Obstacle
 
