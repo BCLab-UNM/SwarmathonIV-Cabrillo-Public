@@ -20,7 +20,7 @@
     <remap from="image_rect" to="camera/image" />
     <remap from="camera_info" to="camera/camera_info" />
     <remap from="tag_detections_image" to="targets/image" />
-    <remap from="tag_detections" to="targets" />
+    <remap from="tag_detections" to="targets/in" />
     
     <rosparam param="standalone_tags">
       [
@@ -29,6 +29,13 @@
         {id: 256, size: 0.038}
       ]
     </rosparam>
+  </node>
+
+  <node name="apriltag2to1_converter" pkg="apriltags2to1" type="apriltag_converter_node.py"
+        respawn="true">
+    <param name="camera_frame_id" value="$(arg name)/camera_link" />
+
+    <remap from="targets/out" to="targets" />
   </node>
 
 </launch>
