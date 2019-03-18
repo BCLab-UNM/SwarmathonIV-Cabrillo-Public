@@ -46,6 +46,7 @@ def setup_first_approach():
             )
 
 
+
 def approach(setup_claw=True):
     global claw_offset_distance
     print ("Attempting a pickup.")
@@ -138,6 +139,8 @@ def main(**kwargs):
         claw_offset_distance = 0.17
 
     setup_first_approach()
+    swarmie.print_infoLog('Setting resource pile location.')
+    swarmie.add_resource_pile_location()
 
     for i in range(3):
         if approach(setup_claw=bool(i > 0)):

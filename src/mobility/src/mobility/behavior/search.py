@@ -72,20 +72,12 @@ def search_exit(code):
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
-    
-    if code == 0:
-        swarmie.print_infoLog('Setting search exit poses.')
-        set_search_exit_poses()
     sys.exit(code)
 
 
 def reset_speeds():
     global initial_config, param_client
     param_client.update_configuration(initial_config)
-
-
-def set_search_exit_poses():
-    swarmie.add_search_exit_location()
 
 
 def drive_to(pose, use_waypoints):
@@ -183,16 +175,16 @@ def main(**kwargs):
     param_client.update_configuration(speeds)
 
     # Return to our last search exit pose if possible
-    if swarmie.has_search_exit_locations():
+    if swarmie.has_resource_pile_locations():
         cur_pose = swarmie.get_odom_location().get_pose()
-        cube_location = swarmie.get_search_exit_location_with_most_tags()
+        cube_location = swarmie.get_resource_pile_location_with_most_tags()
         dist = math.sqrt((cube_location.x - cur_pose.x) ** 2
                          + (cube_location.y - cur_pose.y) ** 2)
 
         if dist > 1:  # only bother if it was reasonably far away
             return_to_last_exit_position(cube_location)
             #if we are here then no cubes where found near the location
-            swarmie.remove_search_exit_location(cube_location)
+            swarmie.remove_resource_pile_location(cube_location)
 
     random_walk(num_moves=30)
 
