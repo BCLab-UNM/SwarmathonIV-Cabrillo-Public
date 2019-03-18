@@ -976,8 +976,10 @@ class Swarmie:
         resource_pile_locations_list = [x for x in resource_pile_locations_list
                                       if abs(odom_to_remove.x - x['x']) > threshold or
                                       abs(odom_to_remove.y != x['y']) > threshold]  # will omit the matching dicts
-        rospy.set_param('resource_pile_locations', resource_pile_locations_list)
-
+        if resource_pile_locations_list:
+            rospy.set_param('resource_pile_locations', resource_pile_locations_list)
+        else:
+            rospy.delete_param('resource_pile_locations')
 
     def get_resource_pile_locations(self):
         """ Gets the ros peram resource_pile_locations which contains a list of dicts that contains num_tags x & y"""
@@ -1000,6 +1002,8 @@ class Swarmie:
         resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
         print("resource_pile_locations_list:", resource_pile_locations_list)
         # Get the entry with the most tags
+        if not resource_pile_locations_list:
+            return Pose2D(0,0,0)
         location_w_most_tags = max(resource_pile_locations_list, key=lambda k: k['num_tags'])
         print('location_w_most_tags:', location_w_most_tags)
         return Pose2D(location_w_most_tags['x'], location_w_most_tags['y'], 0)  # theta is 0
