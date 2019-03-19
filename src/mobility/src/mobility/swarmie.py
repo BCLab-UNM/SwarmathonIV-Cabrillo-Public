@@ -975,7 +975,7 @@ class Swarmie:
         resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
         resource_pile_locations_list = [x for x in resource_pile_locations_list
                                       if abs(odom_to_remove.x - x['x']) > threshold or
-                                      abs(odom_to_remove.y != x['y']) > threshold]  # will omit the matching dicts
+                                      abs(odom_to_remove.y - x['y']) > threshold]  # will omit the matching dicts
         if resource_pile_locations_list:
             rospy.set_param('resource_pile_locations', resource_pile_locations_list)
         else:
