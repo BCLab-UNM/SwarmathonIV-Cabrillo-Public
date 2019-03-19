@@ -64,6 +64,7 @@ bool params_configured = false; // wait until the parameters are initialized
 
 // param group map
 double sonar_angle; // Mount angles of sonar sensors.
+double sonar_fov;  // Field of view of the sonar sensors (rad).
 double single_sensor_obst_dist; // meters a single sensor will flag an obstacle
 double double_sensor_obst_dist; //meters the two sensors will flag obstacles
 // todo: what's a good number for sonar_view_range?
@@ -1012,6 +1013,7 @@ void crashHandler(int s) {
  */
 void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_angle = cfg.groups.map.sonar_angle;
+    sonar_fov = cfg.groups.map.sonar_fov;
     single_sensor_obst_dist = cfg.groups.map.single_sensor_obstacle_dist;
     double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
     sonar_view_range = cfg.groups.map.sonar_view_range;
@@ -1030,6 +1032,7 @@ void initialconfig() {
     mapping::mappingConfig cfg;
 
     ros::param::get("~sonar_angle", cfg.sonar_angle);
+    ros::param::get("~sonar_fov", cfg.sonar_fov);
     ros::param::get("~single_sensor_obstacle_dist", cfg.single_sensor_obstacle_dist);
     ros::param::get("~double_sensor_obstacle_dist", cfg.double_sensor_obstacle_dist);
     ros::param::get("~sonar_view_range", cfg.sonar_view_range);
