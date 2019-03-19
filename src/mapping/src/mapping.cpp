@@ -1113,13 +1113,12 @@ int main(int argc, char **argv) {
     ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
     // Initialize the maps.
-    std::vector<std::string> layers({"obstacle", "target", "home"});
+    rover_map = grid_map::GridMap({"obstacle", "target", "home", "frontier"});
+    rover_map.setFrameId(map_frame);
+
     if (visualize_frontier) {
-        layers.emplace_back("frontier");
         ROS_INFO("Visualizing A* search frontier.");
     }
-    rover_map = grid_map::GridMap(layers);
-    rover_map.setFrameId(map_frame);
 
     ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
              map_size,
