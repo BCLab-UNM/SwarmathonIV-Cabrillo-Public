@@ -65,6 +65,8 @@ bool params_configured = false; // wait until the parameters are initialized
 // param group map
 double sonar_angle; // Mount angles of sonar sensors.
 double sonar_fov;  // Field of view of the sonar sensors (rad).
+double cos_fov_2;  // store the cos(sonar_fov / 2) for repeated use.
+double sin_fov_2;  // store the sin(sonar_fov / 2) for repeated use.
 double single_sensor_obst_dist; // meters a single sensor will flag an obstacle
 double double_sensor_obst_dist; //meters the two sensors will flag obstacles
 // todo: what's a good number for sonar_view_range?
@@ -471,6 +473,66 @@ double decreaseVal(double val, double rate) {
     return val;
 }
 
+/*
+ * Helper to sonarHandler()
+ * Clear the grid map area for a given sonar measurement.
+ */
+void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
+    geometry_msgs::PointStamped fov_us_l;
+    fov_us_l.header = sonar->header;
+    fov_us_l.point.x = cos_fov_2 * sonar->range;
+    fov_us_l.point.y = sin_fov_2 * sonar-> range;
+
+    geometry_msgs::PointStamped fov_us_c;
+    fov_us_c.header = sonar->header;
+    fov_us_c.point.x = sonar->range;
+
+    geometry_msgs::PointStamped fov_us_r;
+    fov_us_r.header = sonar->header;
+    fov_us_r.point.x = fov_us_l.point.x;
+    fov_us_r.point.y = -fov_us_l.point.y;
+
+    geometry_msgs::PointStamped fov_odom_l;
+    geometry_msgs::PointStamped fov_odom_c;
+    geometry_msgs::PointStamped fov_odom_r;
+
+    try {
+        tf_l->waitForTransform(map_frame,
+                               sonar->header.frame_id,
+                               sonar->header.stamp,
+                               ros::Duration(0.2));
+
+        tf_l->transformPoint(map_frame, fov_us_l, fov_odom_l);
+        tf_l->transformPoint(map_frame, fov_us_c, fov_odom_c);
+        tf_l->transformPoint(map_frame, fov_us_r, fov_odom_r);
+
+    } catch (tf::TransformException &e) {
+        ROS_ERROR("%s", e.what());
+        return;
+    }
+
+    grid_map::Polygon clear_poly;
+    clear_poly.setFrameId(rover_map.getFrameId());
+
+    clear_poly.addVertex(grid_map::Position(currentLocation.x,
+                                            currentLocation.y));
+    clear_poly.addVertex(grid_map::Position(fov_odom_l.point.x,
+                                            fov_odom_l.point.y));
+    clear_poly.addVertex(grid_map::Position(fov_odom_c.point.x,
+                                            fov_odom_c.point.y));
+    clear_poly.addVertex(grid_map::Position(fov_odom_r.point.x,
+                                            fov_odom_r.point.y));
+
+    grid_map::Matrix& obstacle_layer = rover_map["obstacle"];
+
+    for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
+         !iterator.isPastEnd(); ++iterator) {
+        const grid_map::Index index(*iterator);
+        double val = obstacle_layer(index(0), index(1));
+        obstacle_layer(index(0), index(1)) = decreaseVal(val, 0.05);
+    }
+}
+
 /* sonarHandler() - Called when there's new data from the sonar array.
  *
  * This does two things:
@@ -533,51 +595,15 @@ void sonarHandler(
     }
 
 
-    grid_map::Polygon clear_poly;
-    clear_poly.setFrameId(rover_map.getFrameId());
+    clearSonar(sonarLeft);
 
-    clear_poly.addVertex(grid_map::Position(currentLocation.x, currentLocation.y));
-
-    // Left sonar
-    clear_poly.addVertex(
-        grid_map::Position(
-            currentLocation.x
-                + sonarLeft->range * cos(currentLocation.theta + sonar_angle),
-            currentLocation.y
-                + sonarLeft->range * sin(currentLocation.theta + sonar_angle)
-        )
-    );
-
-    // Center sonar
     // Only use if its range is far enough away to definitely not be a block
     // in the claw.
     if (sonarCenter->range > MIN_CENTER_DIST) {
-        clear_poly.addVertex(
-            grid_map::Position(
-                currentLocation.x
-                    + sonarCenter->range * cos(currentLocation.theta),
-                currentLocation.y
-                    + sonarCenter->range * sin(currentLocation.theta)
-            )
-        );
+        clearSonar(sonarCenter);
     }
 
-    // Right sonar
-    clear_poly.addVertex(
-        grid_map::Position(
-            currentLocation.x
-                + sonarRight->range * cos(currentLocation.theta - sonar_angle),
-            currentLocation.y
-                + sonarRight->range * sin(currentLocation.theta - sonar_angle)
-        )
-    );
-
-    // Clear the area that's clear in sonar.
-    for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
-         !iterator.isPastEnd(); ++iterator) {
-        double val = rover_map.at("obstacle", *iterator);
-        rover_map.at("obstacle", *iterator) = decreaseVal(val, 0.05);
-      }
+    clearSonar(sonarRight);
 
     grid_map::Polygon mark_poly;
     mark_poly.setFrameId(rover_map.getFrameId());
@@ -1013,7 +1039,11 @@ void crashHandler(int s) {
  */
 void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_angle = cfg.groups.map.sonar_angle;
+
     sonar_fov = cfg.groups.map.sonar_fov;
+    cos_fov_2 = cos(sonar_fov / 2.0);
+    sin_fov_2 = sin(sonar_fov / 2.0);
+
     single_sensor_obst_dist = cfg.groups.map.single_sensor_obstacle_dist;
     double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
     sonar_view_range = cfg.groups.map.sonar_view_range;
