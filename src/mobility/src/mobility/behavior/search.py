@@ -94,7 +94,7 @@ def drive_to(pose, use_waypoints):
         swarmie.drive_to(pose, throw=False)
 
 
-def return_to_last_exit_position(last_pose):
+def return_to_last_exit_position(last_pose, skip_drive_to=False):
     global planner, found_tag
 
     print('Driving to last search exit position.')
@@ -103,7 +103,7 @@ def return_to_last_exit_position(last_pose):
     count = 0
     use_waypoints = True
 
-    while count < 2:
+    while count < 2 and not skip_drive_to:
         try:
             drive_to(last_pose, use_waypoints)
 
@@ -120,10 +120,6 @@ def return_to_last_exit_position(last_pose):
 
     try:
         swarmie.circle()
-        swarmie.set_heading(
-            last_pose.theta,
-            ignore=Obstacle.VISION_HOME
-        )
 
     except TagException:
         rospy.sleep(0.3)  # build buffer a little
@@ -186,7 +182,7 @@ def main(**kwargs):
             #if we are here then no cubes where found near the location
             swarmie.remove_resource_pile_location(cube_location)
         else: # must be right next to it
-            swarmie.circle()
+            return_to_last_exit_position(cube_location, skip_drive_to=True)
             swarmie.remove_resource_pile_location(cube_location)
 
     random_walk(num_moves=30)
