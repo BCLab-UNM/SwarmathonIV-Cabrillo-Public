@@ -954,12 +954,18 @@ class Swarmie:
 
         return nearest.pose.pose.position
 
-    def add_resource_pile_location(self, detection_time_tolerance=.4):
-        '''Remember the search exit locations.'''
+    def add_resource_pile_location(self, detection_time_tolerance=.4, override=False):
+        '''Remember the search exit locations.
+            Args:
+            * detection_time_tolerance (`double`) - the time from now 
+            * override (`bool`) - True will add to the list regarless of the number of tags in view
+        '''
         # TODO:project location to be in front of the rover & put in the homeframe
         odom =  self.get_odom_location().get_pose() 
         num_tags = len(self.get_targets_buffer(age=detection_time_tolerance, id=0)) 
-        if num_tags < 2: # if 0 or 1 tag is detected don't bother adding to the list
+        # if 0,1,2 tags are detected don't bother adding to the list unless overrideden
+        if num_tags < 3 and not override: 
+            print("I only see", num_tags, "tags, Not Adding to list")
             return
         resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
         print("Called add_resource_pile_location, num_tags:", num_tags,
