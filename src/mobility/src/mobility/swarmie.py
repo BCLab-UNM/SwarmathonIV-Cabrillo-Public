@@ -789,7 +789,9 @@ class Swarmie:
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        return self.get_home_odom_location() != Point(x=0, y=0)
+        home_odom = self.get_home_odom_location()
+
+        return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
