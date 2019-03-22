@@ -2,22 +2,40 @@
   <arg name="name"/>
   <arg name="simulation"/>
 
-  <node name="apriltag" pkg="apriltags_ros" type="apriltag_detector_node" respawn="true">
-
-    <remap from="image_rect" to="camera/image" />
-    <remap from="camera_info" to="camera/image_info" />
-    <remap from="tag_detections" to="targets" />
-    <remap from="tag_detections_image" to="targets/image" />
+  <node name="apriltag" pkg="apriltags2_ros" type="apriltags2_ros_continuous_node"
+        clear_params="true" respawn="true">
     
-    <param name="image_transport" type="str" value="theora" if="$(arg simulation)"/>
-    <param name="image_transport" type="str" value="raw" unless="$(arg simulation)"/>
-    <param name="tag_family" type="str" value="36h11" />
-    <param name="sensor_frame_id" type="str" value="$(arg name)/camera_link" />
+    <param name="camera_frame" value="$(arg name)/camera_link" />
+    <param name="publish_tag_detections_image" value="true" />
+    
+    <param name="tag_family" value="tag36h11" />
+    <param name="tag_threads" value="2" />
+    <param name="tag_decimate" value="1.0" />
+    <param name="tag_blur" value="0.0" />
+    <param name="tag_refine_edges" value="1" />
+    <param name="tag_debug" value="0" />
+    <param name="publish_tf" value="false" />
+    <param name="remove_duplicates" value="false" />
+    
+    <remap from="image_rect" to="camera/image" />
+    <remap from="camera_info" to="camera/camera_info" />
+    <remap from="tag_detections_image" to="targets/image" />
+    <remap from="tag_detections" to="targets/in" />
+    
+    <rosparam param="standalone_tags">
+      [
+        {id: 0, size: 0.038},
+        {id: 1, size: 0.038},
+        {id: 256, size: 0.038}
+      ]
+    </rosparam>
+  </node>
 
-    <rosparam param="tag_descriptions">[
-    {id: 0, size: 0.038},
-    {id: 1, size: 0.038},
-    {id: 256, size: 0.038}]</rosparam>
+  <node name="apriltag2to1_converter" pkg="apriltags2to1" type="apriltag_converter_node.py"
+        respawn="true">
+    <param name="camera_frame_id" value="$(arg name)/camera_link" />
+
+    <remap from="targets/out" to="targets" />
   </node>
 
 </launch>

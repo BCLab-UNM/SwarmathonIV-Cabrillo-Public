@@ -14,7 +14,6 @@ from Queue import Queue
 
 import tf
 from sensor_msgs.msg import Joy
-from apriltags_ros.msg import AprilTagDetectionArray 
 from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry 
 from geometry_msgs.msg import Twist, Pose2D
