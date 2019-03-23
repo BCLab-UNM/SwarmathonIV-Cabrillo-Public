@@ -519,8 +519,8 @@ class Swarmie:
         * Return `False`
         '''
         if self.simulator_running():
-            wrist_angles = (0.0,)
-            max_z_dist = (0.11,)
+            wrist_angles = (0.3, 0.0)
+            max_z_dist = (0.13, 0.12) #0.151+ is on the ground
         else:
             wrist_angles = (0.55, 0.0)
             max_z_dist = (0.18, 0.15)
