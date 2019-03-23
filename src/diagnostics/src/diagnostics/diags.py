@@ -89,6 +89,7 @@ class Diagnostics:
         self.interface = 'wlp2s0'
         self.topics = [
                 "imu",
+                "odom",
                 "odom/filtered",
                 "sonarLeft", "sonarRight", "sonarCenter",
                 "targets"
