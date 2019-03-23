@@ -533,6 +533,7 @@ class Swarmie:
             if len(blocks) > 0 :
                 nearest = blocks[0]
                 z_dist = nearest.pose.pose.position.z
+                print("z_dist:", z_dist)
                 if abs(z_dist) < max_z:
                     return True
 
