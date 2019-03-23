@@ -17,12 +17,15 @@ from std_msgs.msg import String, Float32MultiArray, UInt8
 from diagnostics.watcher import TopicWatcher
 
 def _ok(*msg):
+    rospy.loginfo(' '.join(msg))
     return _format_font('Lime', *msg)
 
 def _warn(*msg):
+    rospy.logwarn(' '.join(msg))
     return _format_font('Yellow', *msg)
 
 def _err(*msg):
+    rospy.logerr(' '.join(msg))
     return _format_font('Red', *msg)
 
 def _format_font(color, *msg):
