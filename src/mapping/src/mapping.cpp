@@ -78,6 +78,7 @@ double sonar_view_range;  // don't mark obstacles past this range
 double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
 double sonar_base_mark_rate;
 double sonar_base_clear_rate;
+double robot_radius;
 
 // param group search
 double obstacle_threshold; // min value for a cell to be considered impassable
@@ -593,7 +594,7 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
                                                 odom_pt.point.y));
     }
 
-    grid_map::Matrix& obstacle_layer = rover_map["obstacle"];
+    grid_map::Matrix& obstacle_layer = rover_map["obstacle_raw"];
 
     for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
          !iterator.isPastEnd(); ++iterator) {
@@ -628,7 +629,7 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
                                                odom_pt.point.y));
     }
 
-    grid_map::Matrix& obstacle_layer = rover_map["obstacle"];
+    grid_map::Matrix& obstacle_layer = rover_map["obstacle_raw"];
 
     for (grid_map::PolygonIterator iterator(rover_map, mark_poly);
          !iterator.isPastEnd(); ++iterator) {
@@ -833,7 +834,7 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
         rate = MOVING_CLEAR_RATE;
     }
 
-    grid_map::Matrix& home_layer = rover_map["home"];
+    grid_map::Matrix& home_layer = rover_map["home_raw"];
     grid_map::Matrix& target_layer = rover_map["target"];
 
     for (grid_map::PolygonIterator iterator(rover_map, view_poly);
@@ -883,7 +884,7 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
                     message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
                     rover_map.at("target", ind) = 1;
                 } else if (message->detections[i].id == 256) {
-                    rover_map.at("home", ind) = 1;
+                    rover_map.at("home_raw", ind) = 1;
                 }
             }
         } catch (tf::TransformException &e) {
@@ -930,6 +931,63 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 
     isMoving = (abs(message->twist.twist.linear.x) > 0.1
                 || abs(message->twist.twist.angular.z > 0.2));
+}
+
+/*
+ * Helper to inflateMap()
+ * Do inflation on a single set of raw/inflated layers.
+ */
+void inflateLayer(
+    const grid_map::Index& raw,
+    grid_map::Matrix& layer,
+    grid_map::Matrix& raw_layer) {
+
+    grid_map::Position cur_pos;
+    rover_map.getPosition(raw, cur_pos);
+
+    for (grid_map::CircleIterator c_it(rover_map, cur_pos, robot_radius);
+         !c_it.isPastEnd(); ++c_it) {
+        const grid_map::Index index(*c_it);
+
+        layer(index(0), index(1)) = increaseVal(
+            layer(index(0), index(1)),
+            inflation_pct * raw_layer(raw(0), raw(1))
+        );
+    }
+
+}
+
+/*
+ * Do inflation on obstacle and home layers.
+ *
+ * Currently, it's ok to execute this function while the sonar and target
+ * handlers are also running, because the map's position is static and the
+ * handlers are only modifying their respective layers. This function reads
+ * those raw layers and modifies its own layers.
+ */
+void inflateMap(const ros::TimerEvent& event) {
+    grid_map::Matrix& obstacle_raw = rover_map["obstacle_raw"];
+    grid_map::Matrix& obstacle = rover_map["obstacle"];
+    grid_map::Matrix& home_raw = rover_map["home_raw"];
+    grid_map::Matrix& home = rover_map["home"];
+    obstacle = obstacle_raw;
+    home = home_raw;
+
+    grid_map::Position cur_pos;
+
+    for (grid_map::GridMapIterator map_it(rover_map);
+         !map_it.isPastEnd(); ++map_it) {
+        const grid_map::Index raw(*map_it);
+        rover_map.getPosition(*map_it, cur_pos);
+
+        if (obstacle_raw(raw(0), raw(1)) > 0) {
+            inflateLayer(raw, obstacle, obstacle_raw);
+        }
+        if (home_raw(raw(0), raw(1)) > 0) {
+            inflateLayer(raw, home, home_raw);
+        }
+    }
+
 }
 
 /* Python API
@@ -1087,6 +1145,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_obst_depth = cfg.groups.map.sonar_obstacle_depth;
     sonar_base_mark_rate = cfg.groups.map.sonar_base_mark_rate;
     sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
+    robot_radius = cfg.groups.map.robot_radius;
 
     obstacle_threshold = cfg.groups.search.obstacle_threshold;
     inflation_pct = cfg.groups.search.inflation_pct;
@@ -1108,6 +1167,7 @@ void initialconfig() {
     ros::param::get("~sonar_obstacle_depth", cfg.sonar_obstacle_depth);
     ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
     ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
+    ros::param::get("~robot_radius", cfg.robot_radius);
 
     ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
     ros::param::get("~inflation_pct", cfg.inflation_pct);
@@ -1136,8 +1196,10 @@ int main(int argc, char **argv) {
 
     double map_size;
     double map_resolution;
+    double inflation_period;
     ros::param::param<double>("~map_size", map_size, 25.0);
     ros::param::param<double>("~map_resolution", map_resolution, 0.5);
+    ros::param::param<double>("~inflation_period", inflation_period, 1.0);
 
     // Setup dynamic reconfigure server, which also automatically reads any
     // initial parameters put on the parameter server at startup.
@@ -1186,8 +1248,14 @@ int main(int argc, char **argv) {
     ros::ServiceServer omap = mNH.advertiseService("map/get_map", get_map);
     ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
-    // Initialize the maps.
-    rover_map = grid_map::GridMap({"obstacle", "target", "home", "frontier"});
+    // Initialize the maps. "obstacle" and "home" layers are inflated by the
+    // rover's radius.
+    rover_map = grid_map::GridMap({"obstacle_raw",
+                                   "obstacle",
+                                   "target",
+                                   "home_raw",
+                                   "home",
+                                   "frontier"});
     rover_map.setFrameId(map_frame);
 
     ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
@@ -1196,6 +1264,11 @@ int main(int argc, char **argv) {
              map_resolution);
 
     rover_map.setGeometry(grid_map::Length(map_size, map_size), map_resolution);
+
+    // Timer to perform obstacle and home layer inflation.
+    ros::Timer inflation_timer = mNH.createTimer(
+        ros::Duration(inflation_period), inflateMap
+    );
 
     ros::spin();
     return 0;
