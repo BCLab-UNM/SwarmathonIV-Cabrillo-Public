@@ -27,6 +27,7 @@
 #include <grid_map_ros/grid_map_ros.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <grid_map_ros/GridMapRosConverter.hpp>
+#include <grid_map_cv/grid_map_cv.hpp>
 
 #include <std_msgs/UInt8.h>
 #include <sensor_msgs/Range.h>
@@ -79,6 +80,8 @@ double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
 double sonar_base_mark_rate;
 double sonar_base_clear_rate;
 double robot_radius;
+double map_size;
+double map_resolution;
 
 // param group search
 double obstacle_threshold; // min value for a cell to be considered impassable
@@ -92,6 +95,12 @@ bool visualize_frontier;
 unsigned int obstacle_status;
 
 std::string map_frame;
+std::vector<std::string> map_layers({"obstacle_raw",
+                                     "obstacle",
+                                     "target",
+                                     "home_raw",
+                                     "home",
+                                     "frontier"});
 
 /*
  * Data structures and A* Search adapted from:
@@ -956,6 +965,62 @@ void inflateMap(const ros::TimerEvent& event) {
     }
 }
 
+/*
+ * Helper to initialconfig and resizeMap()
+ * Initialize the grid map.
+ */
+void initMap() {
+    // Initialize the maps. "obstacle" and "home" layers are inflated by the
+    // rover's radius.
+    rover_map = grid_map::GridMap(map_layers);
+    rover_map.setFrameId(map_frame);
+    rover_map.setGeometry(grid_map::Length(map_size, map_size), map_resolution);
+    ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
+             map_size,
+             map_size,
+             map_resolution);
+}
+
+/*
+ * Helper to reconfigure()
+ * Change the grid map's resolution.
+ *
+ * Uses an OpenCV cubic interpolation algorithm.
+ *
+ * Some map data may be lost due to different discretizations of grid map cells
+ * between different map resolutions.
+ */
+void changeMapRes() {
+    grid_map::GridMap old_map = rover_map;
+
+    grid_map::GridMapCvProcessing::changeResolution(old_map,
+                                                    rover_map,
+                                                    map_resolution);
+    ROS_INFO("Map resolution updated.");
+}
+
+/*
+ * Helper to reconfigure()
+ * Resize the grid map dimensions. Useful for testing when trying to settle on a
+ * map size.
+ */
+void resizeMap() {
+    grid_map::GridMap old_map = rover_map;
+    initMap();
+
+    // Temporarily stop message handlers. The caller should re-enable them.
+    // We might lose a small amount of data from the last one or two
+    // updates, but it should be ok, since map resizing is generally just
+    // for testing.
+    params_configured = false;
+
+    // Copy data from the old map to the new map.
+    // Don't extend the current map, overwrite all data, and copy all layers.
+    rover_map.addDataFrom(old_map, false, true, true);
+
+    ROS_INFO("Map dimensions resized.");
+}
+
 /* Python API
  *
  * get_map() - Return a view of the rover's grid_map.
@@ -1113,6 +1178,19 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
     robot_radius = cfg.groups.map.robot_radius;
 
+    double old_size = map_size;
+    double old_resolution = map_resolution;
+    map_size = cfg.groups.map.map_size;
+    map_resolution = cfg.groups.map.map_resolution;
+
+    // only resize if necessary
+    if (abs(map_resolution - old_resolution) > 0.01) {
+        changeMapRes();
+    }
+    if (abs(map_size - old_size) > 0.01) {
+        resizeMap();
+    }
+
     obstacle_threshold = cfg.groups.search.obstacle_threshold;
     inflation_pct = cfg.groups.search.inflation_pct;
     lethal_cost = cfg.groups.search.lethal_cost;
@@ -1134,12 +1212,19 @@ void initialconfig() {
     ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
     ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
     ros::param::get("~robot_radius", cfg.robot_radius);
+    ros::param::get("~map_size", cfg.map_size);
+    ros::param::get("~map_resolution", cfg.map_resolution);
 
     ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
     ros::param::get("~inflation_pct", cfg.inflation_pct);
     ros::param::get("~lethal_cost", cfg.lethal_cost);
     ros::param::get("~neutral_cost", cfg.neutral_cost);
     ros::param::get("~visualize_frontier", cfg.visualize_frontier);
+
+    // do first-time map initialization
+    map_size = cfg.map_size;
+    map_resolution = cfg.map_resolution;
+    initMap();
 
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
 
@@ -1160,11 +1245,7 @@ int main(int argc, char **argv) {
     // Parameters
     ros::param::param<std::string>("odom_frame", map_frame, "odom");
 
-    double map_size;
-    double map_resolution;
     double inflation_period;
-    ros::param::param<double>("~map_size", map_size, 25.0);
-    ros::param::param<double>("~map_resolution", map_resolution, 0.5);
     ros::param::param<double>("~inflation_period", inflation_period, 1.0);
 
     // Setup dynamic reconfigure server, which also automatically reads any
@@ -1213,23 +1294,6 @@ int main(int argc, char **argv) {
     //
     ros::ServiceServer omap = mNH.advertiseService("map/get_map", get_map);
     ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
-
-    // Initialize the maps. "obstacle" and "home" layers are inflated by the
-    // rover's radius.
-    rover_map = grid_map::GridMap({"obstacle_raw",
-                                   "obstacle",
-                                   "target",
-                                   "home_raw",
-                                   "home",
-                                   "frontier"});
-    rover_map.setFrameId(map_frame);
-
-    ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
-             map_size,
-             map_size,
-             map_resolution);
-
-    rover_map.setGeometry(grid_map::Length(map_size, map_size), map_resolution);
 
     // Timer to perform obstacle and home layer inflation.
     ros::Timer inflation_timer = mNH.createTimer(
