@@ -156,7 +156,7 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
         return false;
     }
 
-    if (direction.x != 0 || direction.y != 0) { // it's a diagonal direction
+    if (direction.x != 0 && direction.y != 0) { // it's a diagonal direction
         grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
         grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
 
