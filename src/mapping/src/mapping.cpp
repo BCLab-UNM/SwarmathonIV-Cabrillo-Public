@@ -474,10 +474,14 @@ double decreaseVal(double val, double rate) {
 }
 
 /*
- * Helper to sonarHandler()
- * Clear the grid map area for a given sonar measurement.
+ * Helper to clearSonar()
+ * fov_pts will contain the three points in the sonar coordinate frame, to be
+ * transformed and then used in the appropriate grid map polygon iterator.
  */
-void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
+void polygonFovPts(
+    const sensor_msgs::Range::ConstPtr& sonar,
+    std::vector<geometry_msgs::PointStamped>& fov_pts) {
+
     geometry_msgs::PointStamped fov_us_l;
     fov_us_l.header = sonar->header;
     fov_us_l.point.x = cos_fov_2 * sonar->range;
@@ -492,36 +496,67 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
     fov_us_r.point.x = fov_us_l.point.x;
     fov_us_r.point.y = -fov_us_l.point.y;
 
-    geometry_msgs::PointStamped fov_odom_l;
-    geometry_msgs::PointStamped fov_odom_c;
-    geometry_msgs::PointStamped fov_odom_r;
+    fov_pts.push_back(fov_us_l);
+    fov_pts.push_back(fov_us_c);
+    fov_pts.push_back(fov_us_r);
+}
+
+/*
+ * Transform PointStamped's contained in fov_us_pts into the map_frame, adding
+ * them to fov_odom_pts.
+ *
+ * Precondition: fov_us_pts should contain at least one item.
+ *
+ * Returns true if successful, false if a tf::TransformException was raised.
+ */
+bool transformPolyPts(
+    const std::vector<geometry_msgs::PointStamped>& fov_us_pts,
+    std::vector<geometry_msgs::PointStamped>& fov_odom_pts) {
 
     try {
         tf_l->waitForTransform(map_frame,
-                               sonar->header.frame_id,
-                               sonar->header.stamp,
+                               fov_us_pts.at(0).header.frame_id,
+                               fov_us_pts.at(0).header.stamp,
                                ros::Duration(0.2));
 
-        tf_l->transformPoint(map_frame, fov_us_l, fov_odom_l);
-        tf_l->transformPoint(map_frame, fov_us_c, fov_odom_c);
-        tf_l->transformPoint(map_frame, fov_us_r, fov_odom_r);
+
+        for (const auto& us_pt : fov_us_pts) {
+            geometry_msgs::PointStamped odom_pt;
+            tf_l->transformPoint(map_frame, us_pt, odom_pt);
+            fov_odom_pts.push_back(odom_pt);
+        }
 
     } catch (tf::TransformException &e) {
         ROS_ERROR("%s", e.what());
+        return false;
+    }
+
+    return true;
+}
+
+/*
+ * Helper to sonarHandler()
+ * Clear the grid map area for a given sonar measurement.
+ */
+void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
+    std::vector<geometry_msgs::PointStamped> fov_us_pts;
+    polygonFovPts(sonar, fov_us_pts);
+
+    std::vector<geometry_msgs::PointStamped> fov_odom_pts;
+
+    if (!transformPolyPts(fov_us_pts, fov_odom_pts)) {
         return;
     }
 
     grid_map::Polygon clear_poly;
     clear_poly.setFrameId(rover_map.getFrameId());
-
     clear_poly.addVertex(grid_map::Position(currentLocation.x,
                                             currentLocation.y));
-    clear_poly.addVertex(grid_map::Position(fov_odom_l.point.x,
-                                            fov_odom_l.point.y));
-    clear_poly.addVertex(grid_map::Position(fov_odom_c.point.x,
-                                            fov_odom_c.point.y));
-    clear_poly.addVertex(grid_map::Position(fov_odom_r.point.x,
-                                            fov_odom_r.point.y));
+
+    for (const auto& odom_pt : fov_odom_pts) {
+        clear_poly.addVertex(grid_map::Position(odom_pt.point.x,
+                                                odom_pt.point.y));
+    }
 
     grid_map::Matrix& obstacle_layer = rover_map["obstacle"];
 
