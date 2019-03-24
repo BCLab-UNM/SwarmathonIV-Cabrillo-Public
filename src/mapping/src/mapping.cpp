@@ -76,6 +76,8 @@ double double_sensor_obst_dist; //meters the two sensors will flag obstacles
 double sonar_view_range;  // don't mark obstacles past this range
 // todo: what's a good number for sonar_obst_depth?
 double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
+double sonar_base_mark_rate;
+double sonar_base_clear_rate;
 
 // param group search
 double obstacle_threshold; // min value for a cell to be considered impassable
@@ -1080,6 +1082,8 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
     sonar_view_range = cfg.groups.map.sonar_view_range;
     sonar_obst_depth = cfg.groups.map.sonar_obstacle_depth;
+    sonar_base_mark_rate = cfg.groups.map.sonar_base_mark_rate;
+    sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
 
     obstacle_threshold = cfg.groups.search.obstacle_threshold;
     inflation_pct = cfg.groups.search.inflation_pct;
@@ -1098,6 +1102,8 @@ void initialconfig() {
     ros::param::get("~double_sensor_obstacle_dist", cfg.double_sensor_obstacle_dist);
     ros::param::get("~sonar_view_range", cfg.sonar_view_range);
     ros::param::get("~sonar_obstacle_depth", cfg.sonar_obstacle_depth);
+    ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
+    ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
 
     ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
     ros::param::get("~inflation_pct", cfg.inflation_pct);
