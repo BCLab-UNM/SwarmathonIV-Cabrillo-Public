@@ -59,7 +59,6 @@
     <param name="map_resolution" value="0.5"/>
     <param name="visualize_frontier" value="false"/>
 
-    <param name="sonar_angle" value="0.436332"/> <!-- 25 degrees -->
     <param name="single_sensor_obstacle_dist" value="0.35"/>
     <param name="double_sensor_obstacle_dist" value="0.6"/>
     <param name="sonar_view_range" value="1.0"/>
