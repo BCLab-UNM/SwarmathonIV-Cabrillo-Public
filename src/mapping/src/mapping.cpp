@@ -473,6 +473,20 @@ double decreaseVal(double val, double rate) {
 }
 
 /*
+ * Helper to markSonar()
+ * Returns val increased by rate, with maximum val one.
+ * Returns rate if val is not a number (isnan(val)).
+ */
+inline double increaseVal(double val, double rate) {
+    if (isnan(val))
+        val = rate;
+    val += rate;
+    if (val > 1)
+        val = 1;
+    return val;
+}
+
+/*
  * Helper to clearSonar() and markSonar()
  * fov_pts will contain the three points in the sonar coordinate frame, to be
  * transformed and then used in the appropriate grid map polygon iterator.
@@ -614,17 +628,11 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
     for (grid_map::PolygonIterator iterator(rover_map, mark_poly);
          !iterator.isPastEnd(); ++iterator) {
         const grid_map::Index index(*iterator);
-        double val = obstacle_layer(index(0), index(1));
 
-        if (isnan(val)) {
-            val = 0.1;
-        }
-        val += 0.01 * (3.0 / sonar->range); // mark nearer obstacles faster
-        if (val > 1) {
-            val = 1;
-        }
-
-        obstacle_layer(index(0), index(1)) = val;
+        obstacle_layer(index(0), index(1)) = increaseVal(
+            obstacle_layer(index(0), index(1)),
+            0.01 * (3.0 / sonar->range)
+        );
     }
 }
 
