@@ -633,7 +633,7 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = increaseVal(
             obstacle_layer(index(0), index(1)),
-            0.01 * (3.0 / sonar->range)
+            sonar_base_mark_rate * (3.0 / sonar->range)
         );
     }
 }
