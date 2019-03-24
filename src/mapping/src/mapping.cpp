@@ -1092,6 +1092,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     inflation_pct = cfg.groups.search.inflation_pct;
     lethal_cost = cfg.groups.search.lethal_cost;
     neutral_cost = cfg.groups.search.neutral_cost;
+    visualize_frontier = cfg.groups.search.visualize_frontier;
 
     params_configured = true;
     ROS_INFO_THROTTLE(1, "Reconfigured mapping parameters.");
@@ -1112,6 +1113,7 @@ void initialconfig() {
     ros::param::get("~inflation_pct", cfg.inflation_pct);
     ros::param::get("~lethal_cost", cfg.lethal_cost);
     ros::param::get("~neutral_cost", cfg.neutral_cost);
+    ros::param::get("~visualize_frontier", cfg.visualize_frontier);
 
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
 
@@ -1136,7 +1138,6 @@ int main(int argc, char **argv) {
     double map_resolution;
     ros::param::param<double>("~map_size", map_size, 25.0);
     ros::param::param<double>("~map_resolution", map_resolution, 0.5);
-    ros::param::param<bool>("~visualize_frontier", visualize_frontier, false);
 
     // Setup dynamic reconfigure server, which also automatically reads any
     // initial parameters put on the parameter server at startup.
@@ -1188,10 +1189,6 @@ int main(int argc, char **argv) {
     // Initialize the maps.
     rover_map = grid_map::GridMap({"obstacle", "target", "home", "frontier"});
     rover_map.setFrameId(map_frame);
-
-    if (visualize_frontier) {
-        ROS_INFO("Visualizing A* search frontier.");
-    }
 
     ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
              map_size,
