@@ -463,7 +463,7 @@ void publishRoverMap() {
  * Returns zero if val is not a number (isnan(val)) or if decreasing val by
  * rate would reduce val to < 0.
  */
-double decreaseVal(double val, double rate) {
+inline double decreaseVal(double val, double rate) {
     if (isnan(val))
         val = 0;
     val -= rate;
