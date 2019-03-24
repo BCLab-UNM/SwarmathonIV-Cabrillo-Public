@@ -144,7 +144,6 @@ const std::array<GridLocation, 8> DIRECTIONS =
  */
 bool passable(grid_map::GridMap& map, GridLocation location_from,
               GridLocation location_to, bool use_home_layer) {
-    // TODO: make passable() only use location_to's value, i.e. diagonal adjacents? In theory the cost() neighbor inflation should cover this case
     grid_map::Index index;
     index(0) = location_to.x;
     index(1) = location_to.y;
@@ -155,25 +154,6 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
     }
     if (use_home_layer && map.at("home", index) >= obstacle_threshold) {
         return false;
-    }
-
-    if (direction.x != 0 && direction.y != 0) { // it's a diagonal direction
-        grid_map::Index adjacent_x_axis(direction.x, direction.y & 0);
-        grid_map::Index adjacent_y_axis(direction.x & 0, direction.y);
-
-        // not passable if both adjacent neighbors of diagonal are blocked
-        if (use_home_layer) {
-            if ((map.at("obstacle", adjacent_x_axis) >= obstacle_threshold ||
-                 map.at("home", adjacent_x_axis) >= obstacle_threshold)
-                &&
-                (map.at("obstacle", adjacent_y_axis) >= obstacle_threshold ||
-                 map.at("home", adjacent_y_axis) >= obstacle_threshold)) {
-                return false;
-            }
-        } else if (map.at("obstacle", adjacent_x_axis) >= obstacle_threshold ||
-                   map.at("obstacle", adjacent_y_axis) >= obstacle_threshold) {
-            return false;
-        }
     }
 
     return true;
@@ -220,28 +200,6 @@ double cost(grid_map::GridMap& map,
     if (use_home_layer && map.isValid(index, "home")) {
         cost += lethal_cost * map.at("home", index);
     }
-
-    if (cost > lethal_cost) { // skip 2-layer neighbors check if possible
-        cost = lethal_cost;
-        return cost;
-    }
-
-    for (GridLocation direction : DIRECTIONS) {
-        GridLocation next{to_node.x + direction.x, to_node.y + direction.y};
-        index(0) = next.x;
-        index(1) = next.y;
-        if (in_bounds(map, next)) {
-            if (map.isValid(index, "obstacle")) {
-                cost += inflation_pct * lethal_cost *
-                        map.at("obstacle", index);
-            }
-            if (use_home_layer && map.isValid(index, "home")) {
-                cost += inflation_pct * lethal_cost *
-                        map.at("home", index);
-            }
-        }
-    }
-
 
     if (cost > lethal_cost) {
         cost = lethal_cost;
