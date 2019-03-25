@@ -127,7 +127,9 @@ double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
 double sonar_base_mark_rate;
 double sonar_base_clear_rate;
 double robot_radius;
-double map_size;
+double map_x;
+double map_y;
+double max_size;
 double map_resolution;
 
 // param group search
@@ -1021,10 +1023,18 @@ void initMap() {
     // rover's radius.
     rover_map = grid_map::GridMap(map_layers);
     rover_map.setFrameId(map_frame);
-    rover_map.setGeometry(grid_map::Length(map_size, map_size), map_resolution);
+    if (map_x > max_size) {
+        map_x = max_size;
+        ROS_WARN("Using %f m max_size for map_x dimension", max_size);
+    }
+    if (map_y > max_size) {
+        map_y = max_size;
+        ROS_WARN("Using %f m max_size for map_y dimension", max_size);
+    }
+    rover_map.setGeometry(grid_map::Length(map_x, map_y), map_resolution);
     ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
-             map_size,
-             map_size,
+             map_x,
+             map_y,
              map_resolution);
 }
 
@@ -1225,16 +1235,19 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
     robot_radius = cfg.groups.map.robot_radius;
 
-    double old_size = map_size;
+    double old_x = map_x;
+    double old_y = map_y;
     double old_resolution = map_resolution;
-    map_size = cfg.groups.map.map_size;
+    map_x = cfg.groups.map.map_x;
+    map_y = cfg.groups.map.map_y;
+    max_size = cfg.groups.map.max_size;
     map_resolution = cfg.groups.map.map_resolution;
 
     // only resize if necessary
     if (abs(map_resolution - old_resolution) > 0.01) {
         changeMapRes();
     }
-    if (abs(map_size - old_size) > 0.01) {
+    if (abs(map_x - old_x) > 0.01 || abs(map_y - old_y) > 0.01) {
         resizeMap();
     }
 
@@ -1259,7 +1272,9 @@ void initialconfig() {
     ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
     ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
     ros::param::get("~robot_radius", cfg.robot_radius);
-    ros::param::get("~map_size", cfg.map_size);
+    ros::param::get("~map_x", cfg.map_x);
+    ros::param::get("~map_y", cfg.map_y);
+    ros::param::get("~max_size", cfg.max_size);
     ros::param::get("~map_resolution", cfg.map_resolution);
 
     ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
@@ -1269,7 +1284,9 @@ void initialconfig() {
     ros::param::get("~visualize_frontier", cfg.visualize_frontier);
 
     // do first-time map initialization
-    map_size = cfg.map_size;
+    map_x = cfg.map_x;
+    map_y = cfg.map_y;
+    max_size = cfg.max_size;
     map_resolution = cfg.map_resolution;
     initMap();
 
