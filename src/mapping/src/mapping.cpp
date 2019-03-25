@@ -71,6 +71,7 @@ std::vector<GridLocation> reconstruct_path(GridLocation, GridLocation,
                                            std::map<GridLocation, GridLocation>);
 double poseToYaw(const geometry_msgs::Pose&);
 void publishRoverMap();
+inline int sign(double);
 inline double decreaseVal(double, double);
 inline double increaseVal(double, double);
 void polygonFovPts(const sensor_msgs::Range::ConstPtr&,
@@ -88,6 +89,7 @@ void inflateLayer(const grid_map::Index&, grid_map::Matrix&,
                   grid_map::Matrix&);
 void inflateMap(const ros::TimerEvent&);
 void initMap();
+void expandMap(const grid_map::Position&);
 void changeMapRes();
 void resizeMap();
 bool get_map(mapping::GetMap::Request&, mapping::GetMap::Response&);
@@ -98,6 +100,7 @@ void reconfigure(mapping::mappingConfig&, uint32_t);
 void initialconfig();
 
 grid_map::GridMap rover_map;
+grid_map::Position cur_map_pos;
 
 ros::Publisher obstaclePublish;
 ros::Publisher rover_map_publisher;
@@ -128,8 +131,7 @@ double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
 double sonar_base_mark_rate;
 double sonar_base_clear_rate;
 double robot_radius;
-double map_x;
-double map_y;
+grid_map::Length map_dim;
 double max_size;
 double size_scale_factor;
 double map_resolution;
@@ -476,6 +478,17 @@ void publishRoverMap() {
         grid_map::GridMapRosConverter::toMessage(rover_map, message);
         rover_map_publisher.publish(message);
     }
+}
+
+/*
+ * Return +1 if >= 0, -1 if < 0. This is slightly different from a signum
+ * function, since it doesn't ever return 0.
+ * https://en.wikipedia.org/wiki/Sign_function
+ */
+inline int sign(double val) {
+    if (val >= 0)
+        return 1;
+    return -1;
 }
 
 /*
@@ -949,6 +962,19 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 
     isMoving = (abs(message->twist.twist.linear.x) > 0.1
                 || abs(message->twist.twist.angular.z > 0.2));
+
+    grid_map::Position pos(currentLocation.x, currentLocation.y);
+    pos[0] += sign(pos[0]) * sonar_max_range;
+    pos[1] += sign(pos[1]) * sonar_max_range;
+
+    if (!rover_map.isInside(pos)) {
+        ROS_INFO("Need to expand the map. (%.3f, %.3f) is outside (%.3f, %.3f)",
+                 pos[0],
+                 pos[1],
+                 cur_map_pos[0] + sign(pos[0]) * map_dim[0] / 2,
+                 cur_map_pos[1] + sign(pos[1]) * map_dim[1] / 2);
+        expandMap(pos);
+    }
 }
 
 /*
@@ -1025,19 +1051,56 @@ void initMap() {
     // rover's radius.
     rover_map = grid_map::GridMap(map_layers);
     rover_map.setFrameId(map_frame);
-    if (map_x > max_size) {
-        map_x = max_size;
-        ROS_WARN("Using %f m max_size for map_x dimension", max_size);
+
+    for (unsigned int i = 0; i < 2; i++) {
+        if (map_dim[i] > max_size) {
+            map_dim[i] = max_size;
+            ROS_WARN("Using %f m max_size for map_%s dimension",
+                     max_size, i==0?"x":"y");
+        }
     }
-    if (map_y > max_size) {
-        map_y = max_size;
-        ROS_WARN("Using %f m max_size for map_y dimension", max_size);
+    rover_map.setGeometry(map_dim, map_resolution, cur_map_pos);
+    ROS_INFO(
+        "Initializing %.2f m x %.2f m map at (%.2f, %.2f) with res %.2f m per cell",
+        map_dim[0],
+        map_dim[1],
+        cur_map_pos[0],
+        cur_map_pos[1],
+        map_resolution
+    );
+}
+
+/*
+ * Expand the grid map so the point given is inside its bounds.
+ */
+void expandMap(const grid_map::Position& to_fit) {
+    // This is necessary to to avoid resizing the map multiple times within a
+    // short period of time.
+    bool do_resize = false;
+
+    for (unsigned int i = 0; i < 2; i++) {
+        if (abs(max_size - map_dim[i]) < 0.01) {
+            ROS_WARN_THROTTLE(
+                30.0,
+                "Unable to expand map_%s dimension. Maximum size reached.",
+                i==0?"x":"y"
+            );
+        } else if (abs(to_fit[i]) >
+                   abs(cur_map_pos[i] + sign(to_fit[i]) * map_dim[i] / 2)) {
+            double scale = map_dim[i] * size_scale_factor;
+            cur_map_pos[i] += sign(to_fit[i]) * scale / 2;
+            map_dim[i] += scale;
+
+            ROS_INFO("Expanding map_%s to %f", i==0?"x":"y", map_dim[i]);
+            do_resize = true;
+        }
     }
-    rover_map.setGeometry(grid_map::Length(map_x, map_y), map_resolution);
-    ROS_INFO("Initializing %f m x %f m map with resolution %f m per cell",
-             map_x,
-             map_y,
-             map_resolution);
+
+    if (do_resize) {
+        resizeMap();
+        params_configured = true;
+    }
+
 }
 
 /*
@@ -1059,9 +1122,10 @@ void changeMapRes() {
 }
 
 /*
- * Helper to reconfigure()
- * Resize the grid map dimensions. Useful for testing when trying to settle on a
- * map size.
+ * Helper to reconfigure() and expandMap()
+ * Resize the grid map dimensions. The map can be resized manually through a
+ * dynamic reconfigure client, but it also expands as needed when the rover
+ * gets close to its boundaries.
  */
 void resizeMap() {
     grid_map::GridMap old_map = rover_map;
@@ -1238,11 +1302,11 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
     robot_radius = cfg.groups.map.robot_radius;
 
-    double old_x = map_x;
-    double old_y = map_y;
+    double old_x = map_dim[0];
+    double old_y = map_dim[1];
     double old_resolution = map_resolution;
-    map_x = cfg.groups.map.map_x;
-    map_y = cfg.groups.map.map_y;
+    map_dim[0] = cfg.groups.map.map_x;
+    map_dim[1] = cfg.groups.map.map_y;
     max_size = cfg.groups.map.max_size;
     size_scale_factor = cfg.groups.map.size_scale_factor;
     map_resolution = cfg.groups.map.map_resolution;
@@ -1251,7 +1315,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     if (abs(map_resolution - old_resolution) > 0.01) {
         changeMapRes();
     }
-    if (abs(map_x - old_x) > 0.01 || abs(map_y - old_y) > 0.01) {
+    if (abs(map_dim[0] - old_x) > 0.01 || abs(map_dim[1] - old_y) > 0.01) {
         resizeMap();
     }
 
@@ -1290,10 +1354,10 @@ void initialconfig() {
     ros::param::get("~visualize_frontier", cfg.visualize_frontier);
 
     // do first-time map initialization
-    map_x = cfg.map_x;
-    map_y = cfg.map_y;
+    map_dim = grid_map::Length(cfg.map_x, cfg.map_y);
     max_size = cfg.max_size;
     map_resolution = cfg.map_resolution;
+    cur_map_pos = grid_map::Position(0.0, 0.0);
     initMap();
 
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
