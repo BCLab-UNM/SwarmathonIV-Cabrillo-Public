@@ -598,8 +598,11 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
     for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
          !iterator.isPastEnd(); ++iterator) {
         const grid_map::Index index(*iterator);
-        double val = obstacle_layer(index(0), index(1));
-        obstacle_layer(index(0), index(1)) = decreaseVal(val, 0.05);
+
+        obstacle_layer(index(0), index(1)) = decreaseVal(
+            obstacle_layer(index(0), index(1)),
+            sonar_base_clear_rate * (3.0 / sonar->range)
+        );
     }
 }
 
