@@ -122,6 +122,7 @@ double double_sensor_obst_dist; //meters the two sensors will flag obstacles
 // not clear_poly, so the map can still be cleared past this point.
 // todo: limit clear_poly left and right ranges using sonar_view_range?
 double sonar_view_range;  // don't mark obstacles past this range
+double sonar_max_range;  // don't mark obstacles past this range
 // todo: what's a good number for sonar_obst_depth?
 double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
 double sonar_base_mark_rate;
@@ -130,6 +131,7 @@ double robot_radius;
 double map_x;
 double map_y;
 double max_size;
+double size_scale_factor;
 double map_resolution;
 
 // param group search
@@ -1230,6 +1232,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     single_sensor_obst_dist = cfg.groups.map.single_sensor_obstacle_dist;
     double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
     sonar_view_range = cfg.groups.map.sonar_view_range;
+    sonar_max_range = cfg.groups.map.sonar_max_range;
     sonar_obst_depth = cfg.groups.map.sonar_obstacle_depth;
     sonar_base_mark_rate = cfg.groups.map.sonar_base_mark_rate;
     sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
@@ -1241,6 +1244,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     map_x = cfg.groups.map.map_x;
     map_y = cfg.groups.map.map_y;
     max_size = cfg.groups.map.max_size;
+    size_scale_factor = cfg.groups.map.size_scale_factor;
     map_resolution = cfg.groups.map.map_resolution;
 
     // only resize if necessary
@@ -1268,6 +1272,7 @@ void initialconfig() {
     ros::param::get("~single_sensor_obstacle_dist", cfg.single_sensor_obstacle_dist);
     ros::param::get("~double_sensor_obstacle_dist", cfg.double_sensor_obstacle_dist);
     ros::param::get("~sonar_view_range", cfg.sonar_view_range);
+    ros::param::get("~sonar_max_range", cfg.sonar_max_range);
     ros::param::get("~sonar_obstacle_depth", cfg.sonar_obstacle_depth);
     ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
     ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
@@ -1275,6 +1280,7 @@ void initialconfig() {
     ros::param::get("~map_x", cfg.map_x);
     ros::param::get("~map_y", cfg.map_y);
     ros::param::get("~max_size", cfg.max_size);
+    ros::param::get("~size_scale_factor", cfg.size_scale_factor);
     ros::param::get("~map_resolution", cfg.map_resolution);
 
     ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
