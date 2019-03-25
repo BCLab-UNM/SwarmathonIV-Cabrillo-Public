@@ -61,6 +61,8 @@ def drive_home(has_block, home_loc):
             else:
                 sys.exit(GOHOME_FAIL)
 
+        counter += 1
+
 
 def spiral_search(has_block):
     global planner

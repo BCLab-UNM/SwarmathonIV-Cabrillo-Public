@@ -10,7 +10,7 @@ import tf
 from geometry_msgs.msg import Pose2D, PoseStamped
 from swarmie_msgs.msg import Obstacle
 
-from mobility.swarmie import swarmie
+from mobility.swarmie import swarmie, PathException
 from mobility.behavior.find_home_corner import find_home_corner
 
 
@@ -59,10 +59,11 @@ def dropoff():
 
 
 def exit_home():
-    """Back up out of home after we drop of a cube."""
+    """After we drop of a cube, back up out of home and turn away from home."""
     # TODO: Is this simple function call reliable enough during congested rounds?
     #  it's very bad if the rover don't make it fully back out of the home ring.
     swarmie.drive(-.5, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
+    swarmie.turn(-8 * math.pi / 9, ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
 
 def main(**kwargs):
@@ -74,7 +75,11 @@ def main(**kwargs):
 
     # TODO: What should find_home_corner() do when it's called with no home tags
     #  in view? Does this happen very often?
-    find_home_corner()
+    try:
+        find_home_corner()
+    except PathException as e:
+        rospy.logwarn(e.status)
+        return -1
 
     dropoff()
 

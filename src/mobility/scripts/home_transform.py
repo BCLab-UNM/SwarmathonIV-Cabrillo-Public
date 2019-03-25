@@ -22,6 +22,7 @@ from collections import OrderedDict
 import copy
 import math
 import numpy as np
+import pprint
 import random
 import rospy
 import threading
@@ -37,7 +38,7 @@ from std_msgs.msg import Time
 
 from mobility import sync
 
-from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
 from mobility.msg import HomeTransformAuthority
 from swarmie_msgs.msg import Obstacle
 
@@ -895,8 +896,11 @@ class HomeTransformGen:
             rospy.logerr_throttle(
                 self._log_rate,
                 ("{}: Couldn't identify a Type {} corner with pose:\n{}\n" +
-                 "Current bounds are: {}").format(self.rover_name, corner_type,
-                                                  c_pose_odom, self._bounds)
+                 "Current bounds are:\n{}").format(
+                    self.rover_name, corner_type,
+                    ps_to_p2d(c_pose_odom),
+                    pprint.pformat(self._bounds, width=70)
+                )
             )
             return home_point, None
 

@@ -22,7 +22,7 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, PointStamped, PoseStamped, Twist, Pose2D
-from apriltags_ros.msg import AprilTagDetectionArray 
+from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
 
 import threading 
 
@@ -585,36 +585,32 @@ class Swarmie(object):
         
         Uses the algorithm:
 
-         * Put wrist down to a middle position. Can help avoid any sun glare or \
-          shadows seen in wrist up position.
+        * Put wrist down to a middle position. Can help avoid any sun glare or \
+          shadows seen in wrist up position (This skipped in the simulation \
+          because there is no sun glare).
         * Check if we can see a block that's close to the camera. If so, return `True`
         * Raise the wrist all the way up.
         * Check if the center sonar is blocked at a close distance. If so, return `True`
         * Check if we can see a block that's very close. If so, return `True`
         * Return `False`
         '''
+        if self.simulator_running():
+            wrist_angles = (0.0,)
+            max_z_dist = (0.11,)
+        else:
+            wrist_angles = (0.55, 0.0)
+            max_z_dist = (0.18, 0.15)
 
-        # First test: Can we see a bock that's close to the camera with the wrist middle.
-        self.set_wrist_angle(.55)
-        rospy.sleep(1)
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
-        if len(blocks) > 0:
-            nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.18:
-                return True 
-
-        # Second test: Can we see a bock that's close to the camera with the wrist up.
-        self.wrist_up()
-        rospy.sleep(1)
-        blocks = self.get_latest_targets()
-        blocks = sorted(blocks, key=lambda x : abs(x.pose.pose.position.z))
-        if len(blocks) > 0 :
-            nearest = blocks[0]
-            z_dist = nearest.pose.pose.position.z 
-            if abs(z_dist) < 0.15 :
-                return True 
+        for angle, max_z in zip(wrist_angles, max_z_dist):
+            self.set_wrist_angle(angle)
+            rospy.sleep(1)
+            blocks = self.get_latest_targets()
+            blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
+            if len(blocks) > 0 :
+                nearest = blocks[0]
+                z_dist = nearest.pose.pose.position.z
+                if abs(z_dist) < max_z:
+                    return True
 
         # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
@@ -635,7 +631,7 @@ class Swarmie(object):
         return False
 
     def get_latest_targets(self,id=-1):
-        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        """ Return the latest `apriltags2to1.msg.AprilTagDetectionArray`. (it might be out of date)
         and will be affected by twinkeling with an optional id flag"""
         # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
         if id == -1:  # all of the tags
@@ -655,7 +651,7 @@ class Swarmie(object):
 
         Returns:
 
-        * `buffer` (`list` [`apriltags_ros.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
+        * `buffer` (`list` [`apriltags_2to1.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
         '''
         buffer = sum(self.targets, [])
         if cleanup:
@@ -869,7 +865,9 @@ class Swarmie(object):
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        return self.get_home_odom_location() != Point(x=0, y=0)
+        home_odom = self.get_home_odom_location()
+
+        return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 
@@ -959,45 +957,80 @@ class Swarmie(object):
 
         return swarmie.xform.transformPose(target_frame, pose)
 
-    def get_nearest_block_location(self, use_targets_buffer=False):
-        '''Searches the lastest block detection array and returns the nearest target block. (Home blocks are ignored.)
-
-        Nearest block will be the nearest to the camera, which should almost always be good enough.
+    def get_nearest_block_location(self, targets_buffer_age=0):
+        '''Find the block closest to the rover's claw.
 
         Args:
 
-        * `use_targets_buffer` (`bool`) - whether to use the rolling buffer
-        of AprilTagDetections. Default value of False uses
-        Swarmie.get_latest_targets(), which you can rely on to return only
-        targets currently in view.
+        * `targets_buffer_age` (`float`) - how many seconds worth of the AprilTagDetections
+          buffer to use. The default value of 0 uses `Swarmie.get_latest_targets()`, which
+          you can rely on to return only targets currently in view, but may be affected by
+          tag flicker from frame to frame.
 
         Returns:
 
-        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if no blocks are seen.
+        * (`geometry_msgs/Point`) The X, Y, Z location of the nearest block, or `None` if
+          no blocks are seen or the nearest tag is a home tag.
         '''
-        # Finds all visible apriltags
-        if use_targets_buffer is True:
-            blocks = self.get_targets_buffer()
+        # Given the claw's position relative to the base_link is an x-only
+        # translation, we can use this offset to modify tag poses in the
+        # base_link frame and estimate their position relative to the claw.
+        claw_offset = 0.2  # meters
+
+        if targets_buffer_age > 0:
+            blocks = self.get_targets_buffer(age=targets_buffer_age)
         else:
             blocks = self.get_latest_targets()
-        if len(blocks) == 0 :
+
+        blocks_xformed = []
+        now = rospy.Time.now()
+
+        # Wait for a little more than a 1/10th sec for each transform, since
+        # transforms are published at approximately 10 Hz in this system.
+        timeout = 0.15
+
+        for block in blocks:  # type: AprilTagDetection
+            try:
+                # One simple method of getting a tag's current position relative
+                # to the base_link frame is using a 2-step transform: first into
+                # the fixed odom frame, and then into the base_link frame. We
+                # need to re-stamp the pose after performing the first transform
+                # in order to get the tag's current pose in the base_link frame,
+                # instead of its pose in the base_link frame when it was seen.
+                ps_odom = swarmie.transform_pose('odom', block.pose,
+                                                 timeout=timeout)
+                ps_odom.header.stamp = now
+                ps_base_link = swarmie.transform_pose('base_link', ps_odom,
+                                                      timeout=timeout)
+                ps_base_link.pose.position.x -= claw_offset
+
+                blocks_xformed.append(
+                    (AprilTagDetection(block.id, block.size, ps_odom),
+                     AprilTagDetection(block.id, block.size, ps_base_link))
+                )
+            except tf.Exception as e:
+                rospy.logwarn_throttle(
+                    1.0,
+                    ('Transform exception in' +
+                     'Swarmie.get_nearest_block_location(): {}').format(e)
+                )
+
+        if len(blocks_xformed) == 0:
             return None
 
-        # Sort blocks by their distance from the camera_link frame
-        blocks = sorted(blocks, key=lambda x :
-                        math.sqrt(x.pose.pose.position.x**2
-                                  + x.pose.pose.position.y**2
-                                  + x.pose.pose.position.z**2))
+        # Sort blocks by their distance from the base_link frame
+        blocks_xformed = sorted(blocks_xformed, key=lambda x:
+                                math.sqrt(x[1].pose.pose.position.x**2
+                                          + x[1].pose.pose.position.y**2
+                                          + x[1].pose.pose.position.z**2))
 
-        nearest = blocks[0]
+        nearest = blocks_xformed[0][0]
 
-        # checks for hometag between rover and block.
-        if nearest.id==256:
+        # Check for a home tag between the rover and the block.
+        if nearest.id == 256:
             return None
 
-        result = self.transform_pose('/odom', nearest.pose, timeout=3.0)
-
-        return result.pose.position
+        return nearest.pose.pose.position
 
     def set_search_exit_poses(self):
         '''Remember the search exit location.'''
