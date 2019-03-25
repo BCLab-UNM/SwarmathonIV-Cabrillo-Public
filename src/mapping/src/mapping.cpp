@@ -50,6 +50,53 @@
 
 using namespace std;
 
+// mapping functions
+struct GridLocation;
+bool operator == (GridLocation, GridLocation);
+bool operator != (GridLocation, GridLocation);
+bool operator < (GridLocation, GridLocation);
+bool in_bounds(grid_map::GridMap&, GridLocation);
+bool passable(grid_map::GridMap&, GridLocation, GridLocation, bool);
+double cost(grid_map::GridMap&, GridLocation, bool);
+inline double heuristic(GridLocation, GridLocation);
+inline bool at_goal(GridLocation, GridLocation, int);
+bool a_star_search(grid_map::GridMap&, GridLocation, GridLocation&, int,
+                   bool, std::map<GridLocation, GridLocation>&,
+                   std::map<GridLocation, double>&);
+bool in_line_of_sight(grid_map::GridMap&, grid_map::Index,
+                      grid_map::Index, bool);
+std::vector<GridLocation> straighten_path(grid_map::GridMap&,
+                                          std::vector<GridLocation>, bool);
+std::vector<GridLocation> reconstruct_path(GridLocation, GridLocation,
+                                           std::map<GridLocation, GridLocation>);
+double poseToYaw(const geometry_msgs::Pose&);
+void publishRoverMap();
+inline double decreaseVal(double, double);
+inline double increaseVal(double, double);
+void polygonFovPts(const sensor_msgs::Range::ConstPtr&,
+                   std::vector<geometry_msgs::PointStamped>&, bool);
+bool transformPolyPts(const std::vector<geometry_msgs::PointStamped>&,
+                      std::vector<geometry_msgs::PointStamped>&);
+void clearSonar(const sensor_msgs::Range::ConstPtr&);
+void markSonar(const sensor_msgs::Range::ConstPtr&);
+void sonarHandler(const sensor_msgs::Range::ConstPtr&,
+                  const sensor_msgs::Range::ConstPtr&,
+                  const sensor_msgs::Range::ConstPtr&);
+void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr&);
+void odometryHandler(const nav_msgs::Odometry::ConstPtr&);
+void inflateLayer(const grid_map::Index&, grid_map::Matrix&,
+                  grid_map::Matrix&);
+void inflateMap(const ros::TimerEvent&);
+void initMap();
+void changeMapRes();
+void resizeMap();
+bool get_map(mapping::GetMap::Request&, mapping::GetMap::Response&);
+bool get_plan(mapping::GetNavPlan::Request&, mapping::GetNavPlan::Response&);
+void navGoalHandler(const geometry_msgs::PoseStamped::ConstPtr&);
+void crashHandler(int);
+void reconfigure(mapping::mappingConfig&, uint32_t);
+void initialconfig();
+
 grid_map::GridMap rover_map;
 
 ros::Publisher obstaclePublish;
