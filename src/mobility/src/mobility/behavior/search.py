@@ -9,7 +9,6 @@ import tf
 import math
 import random 
 
-import dynamic_reconfigure.client
 from geometry_msgs.msg import Point
 from swarmie_msgs.msg import Obstacle
 
@@ -18,18 +17,21 @@ from mobility.swarmie import swarmie, TagException, HomeException, ObstacleExcep
 
 
 def turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_SAFE):
-    swarmie.turn(random.gauss(math.pi/2, math.pi/4), ignore=ignore)
+    swarmie.turn(random.gauss(math.pi/2, math.pi/4),
+                 ignore=ignore,
+                 **swarmie.speed_fast)
 
 
 def wander():
     try:
         rospy.loginfo("Wandering...")
-        swarmie.drive(random.gauss(2.5, 1))
+        swarmie.drive(random.gauss(2.5, 1), **swarmie.speed_fast)
         prev_heading = swarmie.get_odom_location().get_pose().theta
 
         rospy.loginfo("Circling...")
         swarmie.circle()
-        swarmie.set_heading(prev_heading + random.gauss(0, math.pi/6))
+        swarmie.set_heading(prev_heading + random.gauss(0, math.pi/6),
+                            **swarmie.speed_fast)
 
     except HomeException:
         print ("I saw home!")
@@ -67,8 +69,6 @@ def random_walk(num_moves):
 def search_exit(code):
     global planner, found_tag
     
-    reset_speeds()
-    
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
@@ -77,11 +77,6 @@ def search_exit(code):
         swarmie.print_infoLog('Setting search exit poses.')
         set_search_exit_poses()
     sys.exit(code)
-
-
-def reset_speeds():
-    global initial_config, param_client
-    param_client.update_configuration(initial_config)
 
 
 def set_search_exit_poses():
@@ -94,7 +89,8 @@ def drive_to(pose, use_waypoints):
                      tolerance_step=0.5,
                      avoid_targets=False,
                      avoid_home=True,
-                     use_waypoints=use_waypoints)
+                     use_waypoints=use_waypoints,
+                     **swarmie.speed_fast)
 
     cur_loc = swarmie.get_odom_location()
     if not cur_loc.at_goal(pose, 0.3):
@@ -152,35 +148,13 @@ def return_to_last_exit_position(last_pose):
 
 def main(**kwargs):
     global planner, found_tag
-    global initial_config, param_client
 
     found_tag = False
-    SEARCH_SPEEDS = {
-         'DRIVE_SPEED': 0.25,
-         'TURN_SPEED': 0.7
-    }
 
     planner = Planner()
 
     swarmie.fingers_open()
     swarmie.wrist_middle()
-
-    # Change drive and turn speeds for this behavior, and register shutdown
-    # hook to reset them at exit.
-    if not rospy.has_param('search/speeds'):
-        speeds = SEARCH_SPEEDS
-        rospy.set_param('search/speeds', speeds)
-    else:
-        speeds = rospy.get_param('search/speeds',
-                                 default=SEARCH_SPEEDS)
-
-    param_client = dynamic_reconfigure.client.Client('mobility')
-    config = param_client.get_configuration()
-    initial_config = {
-        'DRIVE_SPEED': config['DRIVE_SPEED'],
-        'TURN_SPEED': config['TURN_SPEED']
-    }
-    param_client.update_configuration(speeds)
 
     # Return to our last search exit pose if possible
     if swarmie.has_search_exit_poses():

@@ -229,12 +229,34 @@ class Planner:
         return sorted(detections,
                       key=lambda x: abs(x.pose.pose.position.x))
 
+    def _get_speeds(self, linear=None, angular=None):
+        """Return the speed dictionary to use."""
+        speeds = swarmie.speed_normal
+
+        if linear is not None:
+            speeds['linear'] = linear
+        if angular is not None:
+            speeds['angular'] = angular
+
+        return speeds
+
     def sweep(self, angle=math.pi/4, dist=0.3,
-              ignore=Obstacle.PATH_IS_CLEAR, throw=False):
+              ignore=Obstacle.PATH_IS_CLEAR, throw=False,
+              linear=None, angular=None):
         """Look for blocks in a sweeping right arc and a sweeping left arc.
         Other version:
         def sweep(self, time=2.5, linear=0.3, angular=0.75,
                   ignore=Obstacle.PATH_IS_CLEAR, throw=False):
+
+        Args:
+        * angle - the angle to turn
+        * dist - the distance to drive forward
+        * ignore - obstacle bits to ignore while turning and driving
+        * throw - whether to raise DriveExceptions
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - MoveResult of the last executed call of
@@ -257,17 +279,19 @@ class Planner:
         * mobility.Swarmie.ObstacleException - if sonar is blocked, throw=True,
           and sonar isn't being ignored.
         """
+        speeds = self._get_speeds(linear, angular)
+
         start_heading = swarmie.get_odom_location().get_pose().theta
         ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
 
         try:
-            swarmie.set_heading(start_heading - angle, ignore=ignore)
-            swarmie.drive(dist, ignore=ignore)
-            swarmie.drive(-dist, ignore=ignore)
-            swarmie.set_heading(start_heading + angle, ignore=ignore)
-            swarmie.drive(dist, ignore=ignore)
-            swarmie.drive(-dist, ignore=ignore)
-            swarmie.set_heading(start_heading, ignore=ignore)
+            swarmie.set_heading(start_heading - angle, ignore=ignore, **speeds)
+            swarmie.drive(dist, ignore=ignore, **speeds)
+            swarmie.drive(-dist, ignore=ignore, **speeds)
+            swarmie.set_heading(start_heading + angle, ignore=ignore, **speeds)
+            swarmie.drive(dist, ignore=ignore, **speeds)
+            swarmie.drive(-dist, ignore=ignore, **speeds)
+            swarmie.set_heading(start_heading, ignore=ignore, **speeds)
             # swarmie.timed_drive(time, linear, -angular, ignore=ignore)
             # swarmie.timed_drive(time, -linear, angular, ignore=ignore)
 
@@ -294,7 +318,7 @@ class Planner:
         return MoveResult.SUCCESS
 
     def clear(self, angle, ignore=Obstacle.IS_SONAR, reset_heading=True,
-              throw=False):
+              throw=False, angular=None):
         """Turn right, then left, then back to start heading.
         Helps to clear and mark the map if in a difficult spot.
 
@@ -303,6 +327,8 @@ class Planner:
         * reset_heading - whether the rover should return to its start heading
           after turning left and right
         * throw - whether to raise exceptions, just like Swarmie.drive()
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - MoveResult of the last executed call of
@@ -321,6 +347,8 @@ class Planner:
         * mobility.Swarmie.TagException - if targets tags aren't being
           ignored, throw=True, and a target is seen.
         """
+        speeds = self._get_speeds(angular=angular)
+
         start_heading = swarmie.get_odom_location().get_pose().theta
         ignore |= Obstacle.SONAR_BLOCK  # always ignore this one too
 
@@ -328,10 +356,10 @@ class Planner:
         # an option to return the MoveResult instead of raising an
         # exception. So catch exceptions, and return appropriate result.
         try:
-            swarmie.set_heading(start_heading - angle, ignore=ignore)
-            swarmie.set_heading(start_heading + angle, ignore=ignore)
+            swarmie.set_heading(start_heading - angle, ignore=ignore, **speeds)
+            swarmie.set_heading(start_heading + angle, ignore=ignore, **speeds)
             if reset_heading:
-                swarmie.set_heading(start_heading, ignore=ignore)
+                swarmie.set_heading(start_heading, ignore=ignore, **speeds)
         except HomeException:
             if throw:
                 raise
@@ -343,17 +371,23 @@ class Planner:
 
         return MoveResult.SUCCESS
 
-    def _go_around(self, angle, dist):
+    def _go_around(self, angle, dist, linear=None, angular=None):
         """Turn by 'angle' and then drive 'dist'.
 
         Args:
         * angle - the angle to turn first
         * dist - the distance to turn second
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * turn_result - the MoveResult of the turn
         * drive_result - the MoveResult of the drive
         """
+        speeds = self._get_speeds(linear, angular)
+
         ignore = Obstacle.IS_SONAR
         if self.avoid_targets is True:
             ignore |= Obstacle.TAG_TARGET
@@ -366,10 +400,11 @@ class Planner:
         turn_result = swarmie.set_heading(
             cur_heading + angle,
             ignore=ignore,
-            throw=False
+            throw=False,
+            **speeds
         )
-        drive_result = swarmie.drive(dist,
-                                     ignore=Obstacle.SONAR_BLOCK, throw=False)
+        drive_result = swarmie.drive(dist, ignore=Obstacle.SONAR_BLOCK,
+                                     throw=False, **speeds)
 
         return turn_result, drive_result
 
@@ -487,17 +522,24 @@ class Planner:
 
         return left_blocked, center_blocked, right_blocked
 
-    def _avoid_tag(self, id=0, ignore=Obstacle.IS_SONAR):
+    def _avoid_tag(self, id=0, ignore=Obstacle.IS_SONAR,
+                   linear=None, angular=None):
         """Helper to Planner.drive_to(). Make one attempt to get around a
         home or target tag.
 
         Args:
         * id - the id of the tag to avoid (0 - target, 256 - home)
         * ignore - the Obstacle's to ignore while clearing, if necessary.
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - MoveResult of the avoidance attempt
         """
+        speeds = self._get_speeds(linear, angular)
+
         sorted_detections = utils.sort_tags_left_to_right(
             swarmie.get_latest_targets(id=id)
         )
@@ -525,9 +567,11 @@ class Planner:
             swarmie.drive(
                 0.1,
                 ignore=Obstacle.SONAR_BLOCK,
-                throw=False
+                throw=False,
+                **speeds
             )
-            drive_result = self.clear(math.pi / 8, ignore=ignore)
+            drive_result = self.clear(math.pi / 8, ignore=ignore,
+                                      angular=speeds['angular'])
 
         else:
             left_angle, left_dist = \
@@ -579,10 +623,7 @@ class Planner:
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
 
-            _turn_result, drive_result = self._go_around(
-                angle,
-                dist
-            )
+            _turn_result, drive_result = self._go_around(angle, dist, **speeds)
 
         return drive_result
 
@@ -611,7 +652,7 @@ class Planner:
 
         return False
 
-    def _face_point(self, point, ignore=Obstacle.PATH_IS_CLEAR):
+    def _face_point(self, point, ignore=Obstacle.PATH_IS_CLEAR, angular=None):
         """Turn to face a point in the odometry frame. Rover will attempt to
         turn the shortest angle to face the point, and if it fails (sonar
         detects something in the way, or the rover saw a type of tag it wants
@@ -623,7 +664,11 @@ class Planner:
         * ignore - the Obstacle's to ignore while turning. Should only be
           either Obstacle.VISION_HOME or Obstacle.TAG_TARGET, or both. Sonar
           will not be ignored in the direction the rover is currently turning.
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
         """
+        speeds = self._get_speeds(angular=angular)
+
         print('Facing next point...')
         # Make sure all sonar sensors are never ignored together here
         if ignore & Obstacle.IS_SONAR == Obstacle.IS_SONAR:
@@ -643,7 +688,8 @@ class Planner:
         drive_result = swarmie.turn(
             turn_angle,
             ignore=cur_ignore,
-            throw=False
+            throw=False,
+            **speeds
         )
 
         # Return if successful, or if rover stopped for a cube or home tag
@@ -671,7 +717,8 @@ class Planner:
             drive_result = swarmie.turn(
                 turn_angle,
                 ignore=cur_ignore,
-                throw=False
+                throw=False,
+                **speeds
             )
 
             if drive_result != MoveResult.OBSTACLE_SONAR:
@@ -702,7 +749,7 @@ class Planner:
         if turn_angle > 0:
             cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_RIGHT
         else:
-            cur_ignore = ignore |Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT
+            cur_ignore = ignore | Obstacle.SONAR_CENTER | Obstacle.SONAR_LEFT
 
         # Split turn angle into two steps if abs val is greater than PI.
         # The driver API only makes individual turns <= PI.
@@ -719,7 +766,8 @@ class Planner:
             drive_result = swarmie.turn(
                 turn,
                 ignore=cur_ignore,
-                throw=False
+                throw=False,
+                **speeds
             )
 
             if drive_result != MoveResult.SUCCESS:
@@ -730,7 +778,7 @@ class Planner:
     def drive_to(self, goal, tolerance=0.0, tolerance_step=0.5,
                  max_attempts=10, avoid_targets=True, avoid_home=False,
                  use_waypoints=True, start_location=None,
-                 distance_threshold=None):
+                 distance_threshold=None, linear=None, angular=None):
         """Try to get the rover to goal location. Returns when at goal
         or if home target is found.
 
@@ -770,6 +818,10 @@ class Planner:
         * distance_threshold - the maximum distance the rover's current
           location can be from the start_location before a PathException is
           raised.
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - mobility.msg.MoveResult the result of the drive
@@ -788,6 +840,8 @@ class Planner:
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
         """
+        speeds = self._get_speeds(linear, angular)
+
         print('\nRequest received')
         self.fail_count = 0
         self.tolerance = tolerance
@@ -814,7 +868,6 @@ class Planner:
                                         Planner.DISTANCE_OK + self.tolerance)
                and self.fail_count < max_attempts):
 
-
             if use_waypoints is True:
                 # get new plan and try to drive to first point in it
                 point = self._get_next_waypoint(tolerance_step)
@@ -828,14 +881,16 @@ class Planner:
             # before it even starts along its new path
             self.result = self._face_point(
                 point,
-                ignore=current_ignore ^ Obstacle.IS_SONAR
+                ignore=current_ignore ^ Obstacle.IS_SONAR,
+                angular=speeds['angular']
             )
 
             if self.result == MoveResult.SUCCESS:
                 self.result = swarmie.drive_to(
                     point,
                     ignore=Obstacle.SONAR_BLOCK,
-                    throw=False
+                    throw=False,
+                    **speeds
                 )
 
             if self.result == MoveResult.SUCCESS:
@@ -867,7 +922,8 @@ class Planner:
                         return MoveResult.OBSTACLE_HOME
 
                     self.result = self._avoid_tag(id=256,
-                                                  ignore=current_ignore)
+                                                  ignore=current_ignore,
+                                                  **speeds)
 
             elif self.result == MoveResult.OBSTACLE_TAG:
                 # get around the tag obstacle
@@ -889,7 +945,8 @@ class Planner:
                     self.fail_count += 1
 
                     self.result = self._avoid_tag(id=0,
-                                                  ignore=current_ignore)
+                                                  ignore=current_ignore,
+                                                  **speeds)
 
             elif self.result == MoveResult.OBSTACLE_SONAR:
                 # Check for home and tag obstacles just to be safe, because
@@ -921,28 +978,28 @@ class Planner:
                     print('Left looks clear, turning left.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(math.pi / 4, 0.7)
+                    self._go_around(math.pi / 4, 0.7, **speeds)
                     # swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and center_blocked and not right_blocked:
                     print('Right looks clear, turning right.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
-                    self._go_around(-math.pi / 4, 0.7)
+                    self._go_around(-math.pi / 4, 0.7, **speeds)
                     # swarmie.drive_to(point, throw=False)
 
                 elif left_blocked and not center_blocked and not right_blocked:
                     print('Only left blocked, turning a little right.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_RIGHT
-                    self._go_around(-math.pi / 6, 0.6)
+                    self._go_around(-math.pi / 6, 0.6, **speeds)
                     # swarmie.drive_to(point, throw=False)
 
                 elif not left_blocked and not center_blocked and right_blocked:
                     print('Only right blocked, turning a little left.')
                     self.prev_state = self.current_state
                     self.current_state = Planner.STATE_AVOID_LEFT
-                    self._go_around(math.pi / 6, 0.6)
+                    self._go_around(math.pi / 6, 0.6, **speeds)
                     # swarmie.drive_to(point, throw=False)
 
                 else:
@@ -963,15 +1020,17 @@ class Planner:
                         self.prev_state = self.current_state
                         self.current_state = Planner.STATE_AVOID_RIGHT
                         self.clear(-math.pi / 4, ignore=current_ignore,
-                                   reset_heading=False)
-                        self._go_around(-math.pi / 4, 0.75)
+                                   reset_heading=False,
+                                   angular=speeds['angular'])
+                        self._go_around(-math.pi / 4, 0.75, **speeds)
 
                     else:
                         self.prev_state = self.current_state
                         self.current_state = Planner.STATE_AVOID_LEFT
                         self.clear(math.pi / 4, ignore=current_ignore,
-                                   reset_heading=False)
-                        self._go_around(math.pi / 4, 0.75)
+                                   reset_heading=False,
+                                   angular=speeds['angular'])
+                        self._go_around(math.pi / 4, 0.75, **speeds)
 
             elif self.result == MoveResult.INSIDE_HOME:
                 raise InsideHomeException(MoveResult.INSIDE_HOME)
@@ -1009,7 +1068,7 @@ class Planner:
 
     def drive(self, distance, tolerance=0.0, tolerance_step=0.5,
               max_attempts=10, avoid_targets=True, avoid_home=False,
-              use_waypoints=True):
+              use_waypoints=True, linear=None, angular=None):
         """Convenience wrapper to drive_to(). Drive the given distance, while
         avoiding sonar and target obstacles.
 
@@ -1029,6 +1088,10 @@ class Planner:
           driving to the goal. Can be used during a search behavior.
         * use_waypoints - whether to use waypoints from searching the map. Can
           be used from the start or as a fallback if the map search fails.
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - mobility.msg.MoveResult the result of the drive
@@ -1044,6 +1107,8 @@ class Planner:
         * rospy.ServiceException if /map/get_plan fails. See drive_to() for
           more information.
         """
+        speeds = self._get_speeds(linear, angular)
+
         self.cur_loc = swarmie.get_odom_location()
         start = self.cur_loc.get_pose()
 
@@ -1058,7 +1123,8 @@ class Planner:
             max_attempts=max_attempts,
             avoid_targets=avoid_targets,
             avoid_home=avoid_home,
-            use_waypoints=use_waypoints
+            use_waypoints=use_waypoints,
+            **speeds
         )
 
     def _get_spiral_points(self, start_distance, distance_step, num_legs=10):
@@ -1102,7 +1168,7 @@ class Planner:
     def spiral_search(self, start_distance, distance_step=0.5, num_legs=10,
                       tolerance=0.0, tolerance_step=0.5, max_attempts=5,
                       avoid_targets=True, avoid_home=False,
-                      use_waypoints=True):
+                      use_waypoints=True, linear=None, angular=None):
         """Search in a square spiral pattern. Can be used to search for tags
         or home, depending on values of avoid_targets and avoid_home.
 
@@ -1122,6 +1188,10 @@ class Planner:
           driving to the goal. Can be used during a search behavior.
         * use_waypoints - whether to use waypoints from searching the map. Can
           be used from the start or as a fallback if the map search fails.
+        * linear - the linear speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
+        * angular - the angular speed to drive at (the value currently in
+          swarmie.speed_normal will be used if this isn't specified.)
 
         Returns:
         * drive_result - mobility.msg.MoveResult the result of the drive
@@ -1142,6 +1212,8 @@ class Planner:
           attempts, beginning with initial tolerance and incrementing by
           tolerance_step on each subsequent attempt.
         """
+        speeds = self._get_speeds(linear, angular)
+
         points = self._get_spiral_points(start_distance, distance_step,
                                          num_legs=num_legs)
         MAX_CONSECUTIVE_FAILURES = 3
@@ -1166,7 +1238,8 @@ class Planner:
                     avoid_home=avoid_home,
                     use_waypoints=use_waypoints,
                     start_location=start_loc,
-                    distance_threshold=distance_threshold
+                    distance_threshold=distance_threshold,
+                    **speeds
                 )
                 if (drive_result == MoveResult.OBSTACLE_HOME
                         or drive_result == MoveResult.OBSTACLE_TAG):
