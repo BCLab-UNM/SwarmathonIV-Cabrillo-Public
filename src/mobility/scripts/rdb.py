@@ -16,7 +16,9 @@ from std_msgs.msg import String
 
 from mobility.srv import Core
 from mobility.msg import MoveResult
-from swarmie_msgs.msg import Obstacle 
+from swarmie_msgs.msg import Obstacle
+
+from mobility import behavior
 
 from mobility.swarmie import swarmie
 from ctypes import CDLL, util
