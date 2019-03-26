@@ -70,11 +70,11 @@ if __name__ == '__main__' :
     
     print("Starting the enhanced Interactive Python shell")
 
-    #Systems will have an unmet dependcy run "sudo pip install ipython"
+    #Systems will have an unmet dependency run "sudo pip install ipython"
     try :
         from IPython import embed
-        embed() # run the "enhanced" Interactive Python shell
-    except ImportError as e: #failover to Mike's line executor if missing IPython or error
+        embed(user_ns=globals())
+    except ImportError as e:
         print("Missing IPython run 'sudo pip install ipython'\n Failing over")
         try: 
             while True : 
