@@ -35,7 +35,7 @@ def logHandler(source, msg):
         print (source, msg.data)
         redraw()
         
-def handle(signum, frame):
+def toggle_output():
     global quiet 
     quiet = not quiet
     if quiet : 
@@ -63,9 +63,7 @@ if __name__ == '__main__' :
     rospy.Subscriber('state_machine', String, lambda msg : logHandler('/state_machine:', msg))
     print ("Subscribed to", rospy.resolve_name('state_machine'))
 
-    signal.signal(signal.SIGQUIT, handle)    
-
-    print ('Topic data will be displayed. Press CTRL-\ to hide output.')
+    print ('\033[31;1mTopic data will be displayed. Call toggle_output() to toggle.\033[0m')
     readline.parse_and_bind("tab: complete")
     
     print("Starting the enhanced Interactive Python shell")
