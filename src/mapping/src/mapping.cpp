@@ -22,8 +22,8 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-#include <apriltags_ros/AprilTagDetectionArray.h>
-#include <apriltags_ros/AprilTagDetection.h>
+#include <apriltags2to1/AprilTagDetectionArray.h>
+#include <apriltags2to1/AprilTagDetection.h>
 #include <grid_map_ros/grid_map_ros.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <grid_map_ros/GridMapRosConverter.hpp>
@@ -643,7 +643,7 @@ void sonarHandler(const sensor_msgs::Range::ConstPtr& sonarLeft, const sensor_ms
  * 2. Update the target maps based on current detections.
  *
  */
-void targetHandler(const apriltags_ros::AprilTagDetectionArray::ConstPtr& message) {
+void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& message) {
 	if (!params_configured) {
 		return;
 	}

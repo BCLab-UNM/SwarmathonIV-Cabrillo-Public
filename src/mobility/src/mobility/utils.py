@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-from apriltags_ros.msg import AprilTagDetection
+from apriltags2to1.msg import AprilTagDetection
 
 
 def sort_tags_left_to_right(detections):

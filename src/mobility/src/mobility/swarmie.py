@@ -9,7 +9,8 @@ import rospy
 import math 
 import random 
 import angles 
-import tf 
+import tf
+import dynamic_reconfigure.client
 
 from mobility.srv import Core
 from mapping.srv import GetNavPlan, GetNavPlanRequest
@@ -21,7 +22,7 @@ from std_msgs.msg import UInt8, String, Float32
 from nav_msgs.msg import Odometry
 from control_msgs.srv import QueryCalibrationState, QueryCalibrationStateRequest
 from geometry_msgs.msg import Point, PointStamped, PoseStamped, Twist, Pose2D
-from apriltags_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
 
 import threading 
 
@@ -115,7 +116,7 @@ class Location:
         '''
         return (self.Odometry.pose.covariance[0:15:7])
 
-class Swarmie: 
+class Swarmie(object):
     '''Class that embodies the Swarmie's API
     
     This is the Python API used to drive the rover. The API interfaces 
@@ -135,6 +136,13 @@ class Swarmie:
         self.mode_publisher = None
         self.finger_publisher = None
         self.wrist_publisher = None
+
+        self._param_client = None
+        self._drive_speeds = {
+            'slow':   (None, None),
+            'normal': (None, None),
+            'fast':   (None, None)
+        }
 
         self.control = None
         self._get_plan = None
@@ -189,6 +197,15 @@ class Swarmie:
             node_name = kwargs['node_name']
 
         rospy.init_node(node_name, anonymous=anon)
+
+        # Setup dynamic reconfigure client to get notifications of drive speed
+        # changes on the server.
+        self._param_client = dynamic_reconfigure.client.Client(
+            'mobility',
+            config_callback=self._update_params
+        )
+        config = self._param_client.get_configuration()
+        self._update_params(config)
         
         # Create publishiers.
         self.sm_publisher = rospy.Publisher('state_machine', String, queue_size=10, latch=True)
@@ -244,6 +261,15 @@ class Swarmie:
 
         print ('Welcome', self.rover_name, 'to the world of the future.')
 
+    def _update_params(self, config):
+        """Update drive parameters with the new configuration."""
+        self._drive_speeds['slow'] = (config['DRIVE_SPEED_SLOW'],
+                                      config['TURN_SPEED_SLOW'])
+        self._drive_speeds['normal'] = (config['DRIVE_SPEED'],
+                                        config['TURN_SPEED'])
+        self._drive_speeds['fast'] = (config['DRIVE_SPEED_FAST'],
+                                      config['TURN_SPEED_FAST'])
+
     @sync(swarmie_lock)
     def _odom(self, msg) : 
         self.OdomLocation.Odometry = msg
@@ -282,6 +308,12 @@ class Swarmie:
         if 'timeout' in kwargs :
             request.timeout = kwargs['timeout']
 
+        if 'linear' in kwargs:
+            request.linear = kwargs['linear']
+
+        if 'angular' in kwargs:
+            request.angular = kwargs['angular']
+            
         value = self.control([request]).result.result
 
         # Always raise AbortExceptions when the service response is USER_ABORT,
@@ -306,6 +338,34 @@ class Swarmie:
                 raise HomeCornerException(value)
         
         return value
+
+    def _get_speeds(self, speeds):
+        if speeds[0] is None or speeds[1] is None:
+            raise AttributeError(
+                'Drive speeds are not set. Have you called swarmie.start()?'
+            )
+        return {'linear': speeds[0], 'angular': speeds[1]}
+
+    @property
+    def speed_slow(self):
+        """Get the current slow speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['slow'])
+
+    @property
+    def speed_normal(self):
+        """Get the current normal/default speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['normal'])
+
+    @property
+    def speed_fast(self):
+        """Get the current fast speeds in the format:
+            {'linear': lin_speed, 'angular': ang_speed}
+        """
+        return self._get_speeds(self._drive_speeds['fast'])
         
     def stop(self):
         '''Stop the rover by placing it in manual mode.''' 
@@ -318,7 +378,7 @@ class Swarmie:
         msg = UInt8() 
         msg.data = 2
         self.mode_publisher.publish(msg)
-            
+
     def circle(self, **kwargs):
         '''Drive in a small circle
         
@@ -369,6 +429,8 @@ class Swarmie:
         * `ignore` (`int`) - Bitmask with Obstacle messages that will be ignored while driving.         
         * `throw` (`bool`) - Raise a DriveException if an obstacle is encountered (default True). 
         * `timeout` (`int`) - The command will fail after this number of seconds (defulat: 120)
+        * `linear` (`float`) - The linear velocity used to execute the command (default is set with DynParam)
+        * `angular` (`float`) - The angular velocity used to execute the command (default is set with DynParam)
 
         Returns:
             
@@ -409,6 +471,20 @@ class Swarmie:
 
             * `mobility.swarmie.HomeCornerException` - Exception caused when the rover sees a corner of \
             the home ring.
+
+        Examples:
+
+            >>> from mobility.swarmie import swarmie
+            >>> swarmie.start(node_name='swarmie')
+            >>>
+            >>> # Drive the current default speed
+            >>> swarmie.drive(1)
+            >>>
+            >>> # Drive using the current slow speed
+            >>> swarmie.drive(1, **swarmie.speed_slow)
+            >>>
+            >>> # Drive using the current fast speed
+            >>> swarmie.drive(1, **swarmie.speed_fast)
         '''
         req = MoveRequest(
             r=distance, 
@@ -555,7 +631,7 @@ class Swarmie:
         return False
 
     def get_latest_targets(self,id=-1):
-        """ Return the latest `apriltags_ros.msg.AprilTagDetectionArray`. (it might be out of date)
+        """ Return the latest `apriltags2to1.msg.AprilTagDetectionArray`. (it might be out of date)
         and will be affected by twinkeling with an optional id flag"""
         # if self._is_moving():  if not possibly call get_targets_buffer with the last second of detections
         if id == -1:  # all of the tags
@@ -575,7 +651,7 @@ class Swarmie:
 
         Returns:
 
-        * `buffer` (`list` [`apriltags_ros.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
+        * `buffer` (`list` [`apriltags_2to1.msg._AprilTagDetection.AprilTagDetection`]) - the target detections buffer
         '''
         buffer = sum(self.targets, [])
         if cleanup:
@@ -789,7 +865,9 @@ class Swarmie:
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        return self.get_home_odom_location() != Point(x=0, y=0)
+        home_odom = self.get_home_odom_location()
+
+        return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
     def drive_to(self, place, claw_offset=0, **kwargs):
         '''Drive directly to a particular point in space. The point must be in 

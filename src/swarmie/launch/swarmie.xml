@@ -33,13 +33,22 @@
   <node name="mobility" pkg="mobility" type="core.py" respawn="true">
     <param name="april_tag_resource" value="$(find mobility)/resources/atag-0.jpg"/>
     <param name="april_tag_resource_pickel" value="$(find mobility)/resources/atag-0.p"/>
-    <param name="DRIVE_SPEED" value="0.2"/>
-    <param name="REVERSE_SPEED" value="0.2"/>
-    <param name="TURN_SPEED" value="0.6"/>
+
     <param name="HEADING_RESTORE_FACTOR" value="1.0"/>
     <param name="GOAL_DISTANCE_OK" value="0.1"/>
     <param name="ROTATE_THRESHOLD" value="0.19"/>
     <param name="DRIVE_ANGLE_ABORT" value="1.5"/>
+
+    <!-- Default drive speeds. These are also used for manual driving. -->
+    <param name="DRIVE_SPEED" value="0.2"/>
+    <param name="REVERSE_SPEED" value="0.2"/>
+    <param name="TURN_SPEED" value="0.6"/>
+
+    <!-- Additional slow and fast drive speeds available through the Swarmie API -->
+    <param name="DRIVE_SPEED_SLOW" value="0.15"/>
+    <param name="TURN_SPEED_SLOW" value="0.5"/>
+    <param name="DRIVE_SPEED_FAST" value="0.25"/>
+    <param name="TURN_SPEED_FAST" value="0.7"/>
   </node>
 
   <node name="coordinate" pkg="mobility" type="coordinate.py" respawn="true"/>
