@@ -1032,24 +1032,42 @@ class Swarmie(object):
 
         return nearest.pose.pose.position
 
-    def add_resource_pile_location(self, detection_time_tolerance=.4, override=False):
+    def add_resource_pile_location(self, detection_time_tolerance=.4, override=False, ignore_claw=False):
         '''Remember the search exit locations.
             Args:
             * detection_time_tolerance (`double`) - the time from now 
             * override (`bool`) - True will add to the list regarless of the number of tags in view
+            * ignore_claw (`bool`) - True will remove all detections within the claw
         '''
         # TODO:project location to be in front of the rover & put in the homeframe
-        odom =  self.get_odom_location().get_pose() 
-        num_tags = len(self.get_targets_buffer(age=detection_time_tolerance, id=0)) 
-        # if 0,1,2 tags are detected don't bother adding to the list unless overrideden
-        if num_tags < 3 and not override: 
-            print("I only see", num_tags, "tags, Not Adding to list")
+        # TODO: Make sure the location is not inside of home
+        cubes=self.get_targets_buffer(age=detection_time_tolerance, id=0)
+        
+        if ignore_claw: #will remove cubes within the claw
+            min_z_dist = 0.18
+            if self.simulator_running():
+                min_z_dist = .11
+            cubes = [ x for x in cubes if x.pose.pose.position.z > min_z_dist ]
+        num_cubes = len(cubes)
+        # if 0,1,2 tags are detected don't bother adding to the list unless overridden
+        if num_cubes < 3 and not override: 
+            print("I only see", num_cubes, "tags, Not Adding to list")
             return
+        
+        if num_cubes == 0: 
+            location = self.get_odom_location().get_pose()
+        else:
+            location = swarmie.transform_pose('odom', cubes[0].pose, timeout=3).pose.position
+            #get the cubes location and transphorm into the homefram
         resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
-        print("Called add_resource_pile_location, num_tags:", num_tags,
-                                            'x:', odom.x, 'y:', odom.y)
-        resource_pile_locations_list.append({'num_tags': num_tags,
-                                           'x': odom.x, 'y': odom.y})
+        print("Called add_resource_pile_location, num_cubes:", num_cubes,
+                                            'x:', location.x, 'y:', location.y)
+        #if homeframe exists
+        #numpy floats are not compatible with rosparam so have to convert to float
+        resource_pile_locations_list.append({'num_cubes': num_cubes,
+                                           'x': float(location.x), 
+                                           'y': float(location.y), 
+                                           'frame':'odom'}) #,'returns':0
         rospy.set_param('resource_pile_locations', resource_pile_locations_list)
 
     def remove_resource_pile_location(self, odom_to_remove, threshold=.3):
@@ -1073,7 +1091,7 @@ class Swarmie(object):
         '''Get the odom (location and heading) where search saw the most tags when exiting
 
         Returns:
-        * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame #TODO: put in home frame
+        * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
 
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
@@ -1082,13 +1100,14 @@ class Swarmie(object):
         >>> odom_pose = swarmie.get_search_exit_poses()
         >>> swarmie.drive_to(odom_pose, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle. )
         '''
-        #resource_pile_locations_list = [{'num_tags': 1, 'x': 0, 'y': 0},{'num_tags': 10, 'x': 5, 'y': 4},{'num_tags': 2, 'x': 3, 'y': 3},{'num_tags': 7, 'x': 7, 'y': 7}]
+        #TODO: when have in terms of homeframe convert to odom
+        #for resource_pile_locations_list if l[frame] == 'home' transform to odom
         resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
         print("resource_pile_locations_list:", resource_pile_locations_list)
         # Get the entry with the most tags
         if not resource_pile_locations_list:
             return Pose2D(0,0,0)
-        location_w_most_tags = max(resource_pile_locations_list, key=lambda k: k['num_tags'])
+        location_w_most_tags = max(resource_pile_locations_list, key=lambda k: k['num_cubes'])
         print('location_w_most_tags:', location_w_most_tags)
         return Pose2D(location_w_most_tags['x'], location_w_most_tags['y'], 0)  # theta is 0
 
