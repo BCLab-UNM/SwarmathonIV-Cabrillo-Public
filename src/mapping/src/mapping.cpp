@@ -96,6 +96,7 @@ bool get_map(mapping::GetMap::Request&, mapping::GetMap::Response&);
 bool get_plan(mapping::GetNavPlan::Request&, mapping::GetNavPlan::Response&);
 void navGoalHandler(const geometry_msgs::PoseStamped::ConstPtr&);
 void crashHandler(int);
+void updateServerConfig(const ros::TimerEvent&);
 void reconfigure(mapping::mappingConfig&, uint32_t);
 void initialconfig();
 
@@ -109,6 +110,9 @@ ros::Publisher path_publisher;
 geometry_msgs::Pose2D currentLocation;
 bool isMoving = false;
 tf::TransformListener *tf_l;
+boost::recursive_mutex config_mutex;
+dynamic_reconfigure::Server<mapping::mappingConfig> *config_server;
+bool has_config_updates = false;  // Whether server needs to publish an update.
 
 // Dynamic reconfigure params
 // See mapping.cfg for parameter descriptions
@@ -1032,12 +1036,19 @@ void initMap() {
     rover_map = grid_map::GridMap(map_layers);
     rover_map.setFrameId(map_frame);
 
-    for (unsigned int i = 0; i < 2; i++) {
-        if (map_dim[i] > map_cfg.max_size) {
-            map_dim[i] = map_cfg.max_size;
-            ROS_WARN("Using %f m max_size for map_%s dimension",
-                     map_cfg.max_size, i==0?"x":"y");
-        }
+    // Impose limits on map dimensions and update the map_cfg object to be
+    // published in the timer callback.
+    if (map_dim[0] > map_cfg.max_size) {
+        map_dim[0] = map_cfg.max_size;
+        map_cfg.map_x = map_cfg.max_size;
+        has_config_updates = true;
+        ROS_WARN("Using %.3f m max_size for map_x dimension", map_cfg.max_size);
+    }
+    if (map_dim[1] > map_cfg.max_size) {
+        map_dim[1] = map_cfg.max_size;
+        map_cfg.map_y = map_cfg.max_size;
+        has_config_updates = true;
+        ROS_WARN("Using %.3f m max_size for map_y dimension", map_cfg.max_size);
     }
     rover_map.setGeometry(map_dim, map_cfg.map_resolution, cur_map_pos);
 
@@ -1079,9 +1090,11 @@ void expandMap(const grid_map::Position& to_fit) {
 
     if (do_resize) {
         resizeMap();
+        map_cfg.map_x = map_dim[0];
+        map_cfg.map_y = map_dim[1];
+        has_config_updates = true;
         params_configured = true;
     }
-
 }
 
 /*
@@ -1267,6 +1280,24 @@ void crashHandler(int s) {
 }
 
 /*
+ * Publish any updates we've made internally to clients who are listening for
+ * changes.
+ *
+ * In our case, the most notable client for this server is the rqt_reconfigure
+ * client. Publishing updates allows the client to keep its map_x and map_y
+ * dimensions in sync as they change in this node.
+ */
+void updateServerConfig(const ros::TimerEvent& event) {
+    if (!has_config_updates) {
+        return;
+    }
+    boost::recursive_mutex::scoped_lock lock(config_mutex);
+    config_server->updateConfig(map_cfg);
+    has_config_updates = false;
+    lock.unlock();
+}
+
+/*
  * Reconfigure obstacle mapping and path search parameters.
  */
 void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
@@ -1342,14 +1373,19 @@ int main(int argc, char **argv) {
     ros::param::param<std::string>("odom_frame", map_frame, "odom");
 
     double inflation_period;
+    double srv_update_period;
     ros::param::param<double>("~inflation_period", inflation_period, 1.0);
+    ros::param::param<double>("~server_update_period", srv_update_period, 0.5);
 
-    // Setup dynamic reconfigure server, which also automatically reads any
-    // initial parameters put on the parameter server at startup.
-    dynamic_reconfigure::Server<mapping::mappingConfig> config_server;
+    // Setup dynamic reconfigure server.
+    // Initializing with our own mutex allows the updateConfig() function to
+    // work properly. We use it in a timer registered below.
+    // This isn't documented well, but it works...
+    // https://answers.ros.org/question/57498/notify-changes-to-dynamic_reconfigure/
+    config_server = new dynamic_reconfigure::Server<mapping::mappingConfig>(config_mutex);
     dynamic_reconfigure::Server<mapping::mappingConfig>::CallbackType f;
     f = boost::bind(&reconfigure, _1, _2);
-    config_server.setCallback(f);
+    config_server->setCallback(f);
 
     boost::thread t(initialconfig);
 
@@ -1394,6 +1430,9 @@ int main(int argc, char **argv) {
     // Timer to perform obstacle and home layer inflation.
     ros::Timer inflation_timer = mNH.createTimer(
         ros::Duration(inflation_period), inflateMap
+    );
+    ros::Timer config_timer = mNH.createTimer(
+        ros::Duration(srv_update_period), updateServerConfig
     );
 
     ros::spin();
