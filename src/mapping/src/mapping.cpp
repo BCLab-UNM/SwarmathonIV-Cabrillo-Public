@@ -111,39 +111,20 @@ bool isMoving = false;
 tf::TransformListener *tf_l;
 
 // Dynamic reconfigure params
+// See mapping.cfg for parameter descriptions
+mapping::mappingConfig map_cfg;
 bool params_configured = false; // wait until the parameters are initialized
 
-// param group map
-double sonar_fov;  // Field of view of the sonar sensors (rad).
-double cos_fov_2;  // store the cos(sonar_fov / 2) for repeated use.
-double sin_fov_2;  // store the sin(sonar_fov / 2) for repeated use.
-double single_sensor_obst_dist; // meters a single sensor will flag an obstacle
-double double_sensor_obst_dist; //meters the two sensors will flag obstacles
+double cos_fov_2;  // store the cos(map_cfg.sonar_fov / 2) for repeated use.
+double sin_fov_2;  // store the sin(map_cfg.sonar_fov / 2) for repeated use.
+
 // todo: what's a good number for sonar_view_range?
 // sonar_view_range can help avoid marking "fake" obstacles seen due to sonar
 // noise at longer ranges. It limits the mark_poly to this range, but
 // not clear_poly, so the map can still be cleared past this point.
 // todo: limit clear_poly left and right ranges using sonar_view_range?
-double sonar_view_range;  // don't mark obstacles past this range
-double sonar_max_range;  // don't mark obstacles past this range
 // todo: what's a good number for sonar_obst_depth?
-double sonar_obst_depth; // limit mark_poly to this dist past measured ranges
-double sonar_base_mark_rate;
-double sonar_base_clear_rate;
-double robot_radius;
 grid_map::Length map_dim;
-double max_size;
-double size_scale_factor;
-double map_resolution;
-
-// param group search
-double obstacle_threshold; // min value for a cell to be considered impassable
-double inflation_pct; // Inflate cost of cells which are neighboring an obstacle
-double lethal_cost;
-// Not yet mapped obstacle layer cells will take this neutral value. This
-// helps to make the search prefer previously visited areas.
-double neutral_cost;
-bool visualize_frontier;
 
 unsigned int obstacle_status;
 
@@ -209,10 +190,10 @@ bool passable(grid_map::GridMap& map, GridLocation location_from,
     index(1) = location_to.y;
     GridLocation direction{location_to.x - location_from.x,
                            location_to.y - location_from.y};
-    if (map.at("obstacle", index) >= obstacle_threshold) {
+    if (map.at("obstacle", index) >= map_cfg.obstacle_threshold) {
         return false;
     }
-    if (use_home_layer && map.at("home", index) >= obstacle_threshold) {
+    if (use_home_layer && map.at("home", index) >= map_cfg.obstacle_threshold) {
         return false;
     }
 
@@ -253,16 +234,16 @@ double cost(grid_map::GridMap& map,
     index(1) = to_node.y;
 
     if (map.isValid(index, "obstacle")) {
-        cost += lethal_cost * map.at("obstacle", index);
+        cost += map_cfg.lethal_cost * map.at("obstacle", index);
     } else {
-        cost = neutral_cost;
+        cost = map_cfg.neutral_cost;
     }
     if (use_home_layer && map.isValid(index, "home")) {
-        cost += lethal_cost * map.at("home", index);
+        cost += map_cfg.lethal_cost * map.at("home", index);
     }
 
-    if (cost > lethal_cost) {
-        cost = lethal_cost;
+    if (cost > map_cfg.lethal_cost) {
+        cost = map_cfg.lethal_cost;
     }
 
     return cost;
@@ -386,11 +367,11 @@ bool in_line_of_sight(
     for (grid_map::LineIterator iterator(map, start, end);
          !iterator.isPastEnd(); ++iterator) {
         if (map.isValid(*iterator, "obstacle")) {
-            if (map.at("obstacle", *iterator) > obstacle_threshold) {
+            if (map.at("obstacle", *iterator) > map_cfg.obstacle_threshold) {
                 return false;
             }
             if (use_home_layer &&
-                    map.at("home", *iterator) > obstacle_threshold) {
+                    map.at("home", *iterator) > map_cfg.obstacle_threshold) {
                 return false;
             }
         }
@@ -548,13 +529,13 @@ void polygonFovPts(
     if (add_depth) {
         geometry_msgs::PointStamped fov_us_l_depth;
         fov_us_l_depth.header = sonar->header;
-        fov_us_l_depth.point.x = cos_fov_2 * (sonar->range + sonar_obst_depth);
-        fov_us_l_depth.point.y = sin_fov_2 * (sonar-> range + sonar_obst_depth);
+        fov_us_l_depth.point.x = cos_fov_2 * (sonar->range + map_cfg.sonar_obstacle_depth);
+        fov_us_l_depth.point.y = sin_fov_2 * (sonar-> range + map_cfg.sonar_obstacle_depth);
         fov_pts.push_back(fov_us_l_depth);
 
         geometry_msgs::PointStamped fov_us_c_depth;
         fov_us_c_depth.header = sonar->header;
-        fov_us_c_depth.point.x = sonar->range + sonar_obst_depth;
+        fov_us_c_depth.point.x = sonar->range + map_cfg.sonar_obstacle_depth;
         fov_pts.push_back(fov_us_c_depth);
 
         geometry_msgs::PointStamped fov_us_r_depth;
@@ -631,7 +612,7 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = decreaseVal(
             obstacle_layer(index(0), index(1)),
-            sonar_base_clear_rate * (3.0 / sonar->range)
+            map_cfg.sonar_base_clear_rate * (3.0 / sonar->range)
         );
     }
 }
@@ -666,7 +647,7 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = increaseVal(
             obstacle_layer(index(0), index(1)),
-            sonar_base_mark_rate * (3.0 / sonar->range)
+            map_cfg.sonar_base_mark_rate * (3.0 / sonar->range)
         );
     }
 }
@@ -703,26 +684,26 @@ void sonarHandler(
     // Calculate the obstacle status.
     // Single sensor ranges below single sensor threshold can trigger an
     // obstacle message.
-    if (sonarLeft->range < single_sensor_obst_dist) {
+    if (sonarLeft->range < map_cfg.single_sensor_obstacle_dist) {
         next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
     }
-    if (sonarCenter->range < single_sensor_obst_dist &&
+    if (sonarCenter->range < map_cfg.single_sensor_obstacle_dist &&
         sonarCenter->range > 0.12) {
         next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
     }
-    if (sonarRight->range < single_sensor_obst_dist) {
+    if (sonarRight->range < map_cfg.single_sensor_obstacle_dist) {
         next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
     }
 
     // Two adjacent sensors both below double sensor threshold can also trigger
     // an obstacle message.
-    if (sonarLeft->range < double_sensor_obst_dist &&
-        sonarCenter->range < double_sensor_obst_dist) {
+    if (sonarLeft->range < map_cfg.double_sensor_obstacle_dist &&
+        sonarCenter->range < map_cfg.double_sensor_obstacle_dist) {
         next_status |= swarmie_msgs::Obstacle::SONAR_LEFT;
         next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
     }
-    if (sonarRight->range < double_sensor_obst_dist &&
-        sonarCenter->range < double_sensor_obst_dist) {
+    if (sonarRight->range < map_cfg.double_sensor_obstacle_dist &&
+        sonarCenter->range < map_cfg.double_sensor_obstacle_dist) {
         next_status |= swarmie_msgs::Obstacle::SONAR_RIGHT;
         next_status |= swarmie_msgs::Obstacle::SONAR_CENTER;
     }
@@ -743,15 +724,16 @@ void sonarHandler(
 
     clearSonar(sonarRight);
 
-    if (sonarLeft->range < sonar_view_range) {
+    if (sonarLeft->range < map_cfg.sonar_view_range) {
         markSonar(sonarLeft);
     }
 
-    if (sonarCenter->range > MIN_CENTER_DIST && sonarCenter->range < sonar_view_range) {
+    if (sonarCenter->range > MIN_CENTER_DIST &&
+            sonarCenter->range < map_cfg.sonar_view_range) {
         markSonar(sonarCenter);
     }
 
-    if (sonarRight->range < sonar_view_range) {
+    if (sonarRight->range < map_cfg.sonar_view_range) {
         markSonar(sonarRight);
     }
 
@@ -962,8 +944,8 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
                 || abs(message->twist.twist.angular.z) > 0.2);
 
     grid_map::Position pos(currentLocation.x, currentLocation.y);
-    pos[0] += sign(pos[0]) * sonar_max_range;
-    pos[1] += sign(pos[1]) * sonar_max_range;
+    pos[0] += sign(pos[0]) * map_cfg.sonar_max_range;
+    pos[1] += sign(pos[1]) * map_cfg.sonar_max_range;
 
     if (!rover_map.isInside(pos)) {
         ROS_INFO("Need to expand the map. (%.3f, %.3f) is outside (%.3f, %.3f)",
@@ -987,13 +969,13 @@ void inflateLayer(
     grid_map::Position cur_pos;
     rover_map.getPosition(raw, cur_pos);
 
-    for (grid_map::CircleIterator c_it(rover_map, cur_pos, robot_radius);
+    for (grid_map::CircleIterator c_it(rover_map, cur_pos, map_cfg.robot_radius);
          !c_it.isPastEnd(); ++c_it) {
         const grid_map::Index index(*c_it);
 
         layer(index(0), index(1)) = increaseVal(
             layer(index(0), index(1)),
-            inflation_pct * raw_layer(raw(0), raw(1))
+            map_cfg.inflation_pct * raw_layer(raw(0), raw(1))
         );
     }
 
@@ -1033,7 +1015,7 @@ void inflateMap(const ros::TimerEvent& event) {
     for (grid_map::CircleIterator c_it(rover_map,
                                        grid_map::Position(currentLocation.x,
                                                           currentLocation.y),
-                                       robot_radius);
+                                       map_cfg.robot_radius);
         !c_it.isPastEnd(); ++c_it) {
         const grid_map::Index index(*c_it);
         obstacle(index(0), index(1)) = 0.0;
@@ -1051,20 +1033,21 @@ void initMap() {
     rover_map.setFrameId(map_frame);
 
     for (unsigned int i = 0; i < 2; i++) {
-        if (map_dim[i] > max_size) {
-            map_dim[i] = max_size;
+        if (map_dim[i] > map_cfg.max_size) {
+            map_dim[i] = map_cfg.max_size;
             ROS_WARN("Using %f m max_size for map_%s dimension",
-                     max_size, i==0?"x":"y");
+                     map_cfg.max_size, i==0?"x":"y");
         }
     }
-    rover_map.setGeometry(map_dim, map_resolution, cur_map_pos);
+    rover_map.setGeometry(map_dim, map_cfg.map_resolution, cur_map_pos);
+
     ROS_INFO(
         "Initializing %.2f m x %.2f m map at (%.2f, %.2f) with res %.2f m per cell",
         map_dim[0],
         map_dim[1],
         cur_map_pos[0],
         cur_map_pos[1],
-        map_resolution
+        map_cfg.map_resolution
     );
 }
 
@@ -1077,7 +1060,7 @@ void expandMap(const grid_map::Position& to_fit) {
     bool do_resize = false;
 
     for (unsigned int i = 0; i < 2; i++) {
-        if (abs(max_size - map_dim[i]) < 0.01) {
+        if (abs(map_cfg.max_size - map_dim[i]) < 0.01) {
             ROS_WARN_THROTTLE(
                 30.0,
                 "Unable to expand map_%s dimension. Maximum size reached.",
@@ -1085,7 +1068,7 @@ void expandMap(const grid_map::Position& to_fit) {
             );
         } else if (abs(to_fit[i]) >
                    abs(cur_map_pos[i] + sign(to_fit[i]) * map_dim[i] / 2)) {
-            double scale = map_dim[i] * size_scale_factor;
+            double scale = map_dim[i] * map_cfg.size_scale_factor;
             cur_map_pos[i] += sign(to_fit[i]) * scale / 2;
             map_dim[i] += scale;
 
@@ -1115,7 +1098,7 @@ void changeMapRes() {
 
     grid_map::GridMapCvProcessing::changeResolution(old_map,
                                                     rover_map,
-                                                    map_resolution);
+                                                    map_cfg.map_resolution);
     ROS_INFO("Map resolution updated.");
 }
 
@@ -1200,7 +1183,7 @@ bool get_plan(mapping::GetNavPlan::Request &req,
     bool success = a_star_search(rover_map, start, goal, tolerance,
                                  use_home_layer, came_from, cost_so_far);
 
-    if (visualize_frontier) {
+    if (map_cfg.visualize_frontier) {
         rover_map.clear("frontier");
         grid_map::Index frontier_index;
 
@@ -1287,80 +1270,60 @@ void crashHandler(int s) {
  * Reconfigure obstacle mapping and path search parameters.
  */
 void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
-    sonar_fov = cfg.groups.map.sonar_fov;
-    cos_fov_2 = cos(sonar_fov / 2.0);
-    sin_fov_2 = sin(sonar_fov / 2.0);
-
-    single_sensor_obst_dist = cfg.groups.map.single_sensor_obstacle_dist;
-    double_sensor_obst_dist = cfg.groups.map.double_sensor_obstacle_dist;
-    sonar_view_range = cfg.groups.map.sonar_view_range;
-    sonar_max_range = cfg.groups.map.sonar_max_range;
-    sonar_obst_depth = cfg.groups.map.sonar_obstacle_depth;
-    sonar_base_mark_rate = cfg.groups.map.sonar_base_mark_rate;
-    sonar_base_clear_rate = cfg.groups.map.sonar_base_clear_rate;
-    robot_radius = cfg.groups.map.robot_radius;
-
     double old_x = map_dim[0];
     double old_y = map_dim[1];
-    double old_resolution = map_resolution;
-    map_dim[0] = cfg.groups.map.map_x;
-    map_dim[1] = cfg.groups.map.map_y;
-    max_size = cfg.groups.map.max_size;
-    size_scale_factor = cfg.groups.map.size_scale_factor;
-    map_resolution = cfg.groups.map.map_resolution;
+    double old_resolution = map_cfg.map_resolution;
+
+    map_cfg = cfg;
+
+    cos_fov_2 = cos(map_cfg.sonar_fov / 2.0);
+    sin_fov_2 = sin(map_cfg.sonar_fov / 2.0);
+
+    map_dim[0] = map_cfg.map_x;
+    map_dim[1] = map_cfg.map_y;
 
     // only resize if necessary
-    if (abs(map_resolution - old_resolution) > 0.01) {
+    if (abs(map_cfg.map_resolution - old_resolution) > 0.01) {
         changeMapRes();
     }
     if (abs(map_dim[0] - old_x) > 0.01 || abs(map_dim[1] - old_y) > 0.01) {
         resizeMap();
     }
 
-    obstacle_threshold = cfg.groups.search.obstacle_threshold;
-    inflation_pct = cfg.groups.search.inflation_pct;
-    lethal_cost = cfg.groups.search.lethal_cost;
-    neutral_cost = cfg.groups.search.neutral_cost;
-    visualize_frontier = cfg.groups.search.visualize_frontier;
-
     params_configured = true;
     ROS_INFO_THROTTLE(1, "Reconfigured mapping parameters.");
 }
 
 void initialconfig() {
-    mapping::mappingConfig cfg;
+    ros::param::get("~sonar_fov", map_cfg.sonar_fov);
+    ros::param::get("~single_sensor_obstacle_dist", map_cfg.single_sensor_obstacle_dist);
+    ros::param::get("~double_sensor_obstacle_dist", map_cfg.double_sensor_obstacle_dist);
+    ros::param::get("~sonar_view_range", map_cfg.sonar_view_range);
+    ros::param::get("~sonar_max_range", map_cfg.sonar_max_range);
+    ros::param::get("~sonar_obstacle_depth", map_cfg.sonar_obstacle_depth);
+    ros::param::get("~sonar_base_mark_rate", map_cfg.sonar_base_mark_rate);
+    ros::param::get("~sonar_base_clear_rate", map_cfg.sonar_base_clear_rate);
+    ros::param::get("~robot_radius", map_cfg.robot_radius);
+    ros::param::get("~map_x", map_cfg.map_x);
+    ros::param::get("~map_y", map_cfg.map_y);
+    ros::param::get("~max_size", map_cfg.max_size);
+    ros::param::get("~size_scale_factor", map_cfg.size_scale_factor);
+    ros::param::get("~map_resolution", map_cfg.map_resolution);
 
-    ros::param::get("~sonar_fov", cfg.sonar_fov);
-    ros::param::get("~single_sensor_obstacle_dist", cfg.single_sensor_obstacle_dist);
-    ros::param::get("~double_sensor_obstacle_dist", cfg.double_sensor_obstacle_dist);
-    ros::param::get("~sonar_view_range", cfg.sonar_view_range);
-    ros::param::get("~sonar_max_range", cfg.sonar_max_range);
-    ros::param::get("~sonar_obstacle_depth", cfg.sonar_obstacle_depth);
-    ros::param::get("~sonar_base_mark_rate", cfg.sonar_base_mark_rate);
-    ros::param::get("~sonar_base_clear_rate", cfg.sonar_base_clear_rate);
-    ros::param::get("~robot_radius", cfg.robot_radius);
-    ros::param::get("~map_x", cfg.map_x);
-    ros::param::get("~map_y", cfg.map_y);
-    ros::param::get("~max_size", cfg.max_size);
-    ros::param::get("~size_scale_factor", cfg.size_scale_factor);
-    ros::param::get("~map_resolution", cfg.map_resolution);
-
-    ros::param::get("~obstacle_threshold", cfg.obstacle_threshold);
-    ros::param::get("~inflation_pct", cfg.inflation_pct);
-    ros::param::get("~lethal_cost", cfg.lethal_cost);
-    ros::param::get("~neutral_cost", cfg.neutral_cost);
-    ros::param::get("~visualize_frontier", cfg.visualize_frontier);
+    ros::param::get("~obstacle_threshold", map_cfg.obstacle_threshold);
+    ros::param::get("~inflation_pct", map_cfg.inflation_pct);
+    ros::param::get("~lethal_cost", map_cfg.lethal_cost);
+    ros::param::get("~neutral_cost", map_cfg.neutral_cost);
+    ros::param::get("~visualize_frontier", map_cfg.visualize_frontier);
 
     // do first-time map initialization
-    map_dim = grid_map::Length(cfg.map_x, cfg.map_y);
-    max_size = cfg.max_size;
-    map_resolution = cfg.map_resolution;
+    map_dim = grid_map::Length(map_cfg.map_x, map_cfg.map_y);
     cur_map_pos = grid_map::Position(0.0, 0.0);
     initMap();
 
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
 
-    if (client.setConfiguration(cfg)){
+    if (client.setConfiguration(map_cfg)){
         ROS_INFO("Sent initial mapping config.");
     }
 }
