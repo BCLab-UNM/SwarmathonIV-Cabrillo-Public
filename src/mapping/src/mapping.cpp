@@ -1286,7 +1286,8 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     if (abs(map_cfg.map_resolution - old_resolution) > 0.01) {
         changeMapRes();
     }
-    if (abs(map_dim[0] - old_x) > 0.01 || abs(map_dim[1] - old_y) > 0.01) {
+    if (abs(map_dim[0] - old_x) > 0.01 || abs(map_dim[1] - old_y) > 0.01 ||
+        map_dim[0] > map_cfg.max_size || map_dim[1] > map_cfg.max_size) {
         resizeMap();
     }
 
