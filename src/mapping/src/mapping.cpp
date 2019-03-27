@@ -959,7 +959,7 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
     currentLocation.theta = poseToYaw(message->pose.pose);
 
     isMoving = (abs(message->twist.twist.linear.x) > 0.1
-                || abs(message->twist.twist.angular.z > 0.2));
+                || abs(message->twist.twist.angular.z) > 0.2);
 
     grid_map::Position pos(currentLocation.x, currentLocation.y);
     pos[0] += sign(pos[0]) * sonar_max_range;
