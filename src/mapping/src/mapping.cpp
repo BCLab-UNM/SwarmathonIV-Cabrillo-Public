@@ -1330,6 +1330,18 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     cos_fov_2 = cos(map_cfg.sonar_fov / 2.0);
     sin_fov_2 = sin(map_cfg.sonar_fov / 2.0);
 
+    if (map_cfg.sonar_no_reflection_min_dist
+            > map_cfg.sonar_no_reflection_max_dist) {
+        map_cfg.sonar_no_reflection_min_dist =
+            map_cfg.sonar_no_reflection_max_dist;
+        has_config_updates = true;
+        ROS_WARN_STREAM(
+            "Invalid configuration: " <<
+            "sonar_no_reflection_min_dist > sonar_no_reflection_max_dist. " <<
+            "Setting min_dist = max_dist."
+        );
+    }
+
     map_dim[0] = map_cfg.map_x;
     map_dim[1] = map_cfg.map_y;
 
