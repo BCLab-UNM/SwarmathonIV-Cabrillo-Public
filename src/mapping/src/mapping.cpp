@@ -78,6 +78,7 @@ void polygonFovPts(const sensor_msgs::Range::ConstPtr&,
                    std::vector<geometry_msgs::PointStamped>&, bool);
 bool transformPolyPts(const std::vector<geometry_msgs::PointStamped>&,
                       std::vector<geometry_msgs::PointStamped>&);
+inline double hyperbolicRate(double);
 void clearSonar(const sensor_msgs::Range::ConstPtr&);
 void markSonar(const sensor_msgs::Range::ConstPtr&);
 void sonarHandler(const sensor_msgs::Range::ConstPtr&,
@@ -585,6 +586,20 @@ bool transformPolyPts(
 }
 
 /*
+ * Helper to clearSonar() and markSonar()
+ * Hyperbolic function with x-intercept at map_cfg.sonar_max_range.
+ * For 0 < range < map_cfg.sonar_max_range, returns values between 0 and +inf,
+ * increasing exponentially as range -> 0.
+ */
+inline double hyperbolicRate(double range) {
+    if (range <= 0)
+        return 0;
+    if (range > map_cfg.sonar_max_range)
+        return 0;
+    return map_cfg.sonar_max_range / range - 1.0;
+}
+
+/*
  * Helper to sonarHandler()
  * Clear the grid map area for a given sonar measurement.
  */
@@ -616,8 +631,7 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = decreaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_clear_rate
-                * (map_cfg.sonar_max_range / sonar->range)
+            map_cfg.sonar_base_clear_rate * hyperbolicRate(sonar->range)
         );
     }
 }
@@ -652,8 +666,7 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = increaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_mark_rate
-                * (map_cfg.sonar_max_range / sonar->range)
+            map_cfg.sonar_base_mark_rate * hyperbolicRate(sonar->range)
         );
     }
 }
