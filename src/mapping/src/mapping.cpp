@@ -616,7 +616,8 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = decreaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_clear_rate * (3.0 / sonar->range)
+            map_cfg.sonar_base_clear_rate
+                * (map_cfg.sonar_max_range / sonar->range)
         );
     }
 }
@@ -651,7 +652,8 @@ void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
         obstacle_layer(index(0), index(1)) = increaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_mark_rate * (3.0 / sonar->range)
+            map_cfg.sonar_base_mark_rate
+                * (map_cfg.sonar_max_range / sonar->range)
         );
     }
 }
