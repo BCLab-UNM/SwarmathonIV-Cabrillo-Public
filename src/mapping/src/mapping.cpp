@@ -625,13 +625,22 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
 
     grid_map::Matrix& obstacle_layer = rover_map["obstacle_raw"];
 
+    double effective_range = sonar->range;
+    if (effective_range > map_cfg.sonar_no_reflection_min_dist &&
+            effective_range < map_cfg.sonar_no_reflection_max_dist) {
+        // Using this effective range, slightly smaller than max range, will
+        // clear the map very slowly (max range measurements don't clear
+        // at all).
+        effective_range = map_cfg.sonar_max_range - 0.01;
+    }
+
     for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
          !iterator.isPastEnd(); ++iterator) {
         const grid_map::Index index(*iterator);
 
         obstacle_layer(index(0), index(1)) = decreaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_clear_rate * hyperbolicRate(sonar->range)
+            map_cfg.sonar_base_clear_rate * hyperbolicRate(effective_range)
         );
     }
 }
