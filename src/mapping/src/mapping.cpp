@@ -718,15 +718,20 @@ void sonarHandler(
     }
 
 
-    clearSonar(sonarLeft);
+    if (sonarLeft->range < map_cfg.sonar_max_range) {
+        clearSonar(sonarLeft);
+    }
 
     // Only use if its range is far enough away to definitely not be a block
     // in the claw.
-    if (sonarCenter->range > MIN_CENTER_DIST) {
+    if (sonarCenter->range > MIN_CENTER_DIST &&
+            sonarCenter->range < map_cfg.sonar_max_range) {
         clearSonar(sonarCenter);
     }
 
-    clearSonar(sonarRight);
+    if (sonarRight->range < map_cfg.sonar_max_range) {
+        clearSonar(sonarRight);
+    }
 
     if (sonarLeft->range < map_cfg.sonar_view_range) {
         markSonar(sonarLeft);
