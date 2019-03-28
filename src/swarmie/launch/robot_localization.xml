@@ -14,6 +14,8 @@
     <param name="frequency" value="10" />
   
     <param name="print_diagnostics" value="false"/>
+    <param name="debug" value="true"/>
+    <param name="debug_out_file" value="$(env HOME)/.ros/log/latest/$(arg name)_r_l_debug.txt"/>
 
     <rosparam param="odom0_config">[false, false, false,
                                     false, false, false,
