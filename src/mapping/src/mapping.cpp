@@ -1362,6 +1362,10 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
 
     map_cfg = cfg;
 
+    if (!map_cfg.visualize_frontier) {
+        rover_map.clear("frontier");
+    }
+
     cos_fov_2 = cos(map_cfg.sonar_fov / 2.0);
     sin_fov_2 = sin(map_cfg.sonar_fov / 2.0);
 
