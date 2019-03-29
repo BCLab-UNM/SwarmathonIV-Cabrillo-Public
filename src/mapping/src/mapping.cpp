@@ -375,11 +375,11 @@ bool in_line_of_sight(
     for (grid_map::LineIterator iterator(map, start, end);
          !iterator.isPastEnd(); ++iterator) {
         if (map.isValid(*iterator, "obstacle")) {
-            if (map.at("obstacle", *iterator) > map_cfg.obstacle_threshold) {
+            if (map.at("obstacle", *iterator) > map_cfg.line_of_sight_threshold) {
                 return false;
             }
             if (use_home_layer &&
-                    map.at("home", *iterator) > map_cfg.obstacle_threshold) {
+                    map.at("home", *iterator) > map_cfg.line_of_sight_threshold) {
                 return false;
             }
         }
@@ -1424,6 +1424,7 @@ void initialconfig() {
     ros::param::get("~map_resolution", map_cfg.map_resolution);
 
     ros::param::get("~obstacle_threshold", map_cfg.obstacle_threshold);
+    ros::param::get("~line_of_sight_threshold", map_cfg.line_of_sight_threshold);
     ros::param::get("~inflation_pct", map_cfg.inflation_pct);
     ros::param::get("~lethal_cost", map_cfg.lethal_cost);
     ros::param::get("~neutral_cost", map_cfg.neutral_cost);
