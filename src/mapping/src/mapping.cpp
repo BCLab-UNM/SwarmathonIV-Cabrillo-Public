@@ -186,10 +186,8 @@ bool operator < (GridLocation a, GridLocation b) {
 }
 
 bool in_bounds(grid_map::GridMap& map, GridLocation location) {
-    int width = map.getSize()(1);
-    int height = map.getSize()(0);
-    return 0 <= location.x && location.x < width
-        && 0 <= location.y && location.y < height;
+    grid_map::Position _pos;
+    return map.getPosition(grid_map::Index(location.x, location.y), _pos);
 }
 
 // Neighbors for 8-connected grid
