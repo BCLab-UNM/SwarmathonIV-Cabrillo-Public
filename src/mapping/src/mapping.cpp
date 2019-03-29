@@ -121,6 +121,7 @@ bool has_config_updates = false;  // Whether server needs to publish an update.
 // See mapping.cfg for parameter descriptions
 mapping::mappingConfig map_cfg;
 bool params_configured = false; // wait until the parameters are initialized
+bool is_initialized = false;
 
 double cos_fov_2;  // store the cos(map_cfg.sonar_fov / 2) for repeated use.
 double sin_fov_2;  // store the sin(map_cfg.sonar_fov / 2) for repeated use.
@@ -1356,6 +1357,15 @@ void updateServerConfig(const ros::TimerEvent& event) {
  * Reconfigure obstacle mapping and path search parameters.
  */
 void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
+    // We have to register the server's callback before getting the chance to
+    // initialize parameters and the rover map in initialconfig(), meaning this
+    // function will be called at least once before initialconfig() can execute.
+    // This test prevents reconfigure() from running before initialconfig()
+    // gets setup.
+    if (!is_initialized) {
+        return;
+    }
+
     double old_x = map_dim[0];
     double old_y = map_dim[1];
     double old_resolution = map_cfg.map_resolution;
@@ -1424,6 +1434,7 @@ void initialconfig() {
     cur_map_pos = grid_map::Position(0.0, 0.0);
     initMap();
 
+    is_initialized = true;
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
 
     if (client.setConfiguration(map_cfg)){
