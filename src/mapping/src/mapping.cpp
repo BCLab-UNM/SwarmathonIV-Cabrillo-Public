@@ -88,7 +88,7 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr&);
 void odometryHandler(const nav_msgs::Odometry::ConstPtr&);
 void inflateLayer(const grid_map::Index&, grid_map::Matrix&,
                   grid_map::Matrix&);
-void inflateMap(const ros::TimerEvent&);
+void updateMap(const ros::TimerEvent&);
 void initMap();
 void expandMap(const grid_map::Position&);
 void changeMapRes();
@@ -116,6 +116,9 @@ tf::TransformListener *tf_l;
 boost::recursive_mutex config_mutex;
 dynamic_reconfigure::Server<mapping::mappingConfig> *config_server;
 bool has_config_updates = false;  // Whether server needs to publish an update.
+
+ros::Timer map_publish_timer;
+ros::Timer map_config_timer;
 
 // Dynamic reconfigure params
 // See mapping.cfg for parameter descriptions
@@ -782,8 +785,6 @@ void sonarHandler(
     }
 
     prev_status = next_status;
-
-    publishRoverMap();
 }
 
 
@@ -959,8 +960,6 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
     }
 
     prev_status = next_status;
-
-    publishRoverMap();
 }
 
 /* odometryHandler() - Called when new odometry data is available.
@@ -994,7 +993,7 @@ void odometryHandler(const nav_msgs::Odometry::ConstPtr& message) {
 }
 
 /*
- * Helper to inflateMap()
+ * Helper to updateMap()
  * Do inflation on a single set of raw/inflated layers.
  */
 void inflateLayer(
@@ -1018,14 +1017,14 @@ void inflateLayer(
 }
 
 /*
- * Do inflation on obstacle and home layers.
+ * Do inflation on obstacle and home layers and publish the current map.
  *
  * Currently, it's ok to execute this function while the sonar and target
  * handlers are also running, because the map's position is static and the
  * handlers are only modifying their respective layers. This function reads
  * those raw layers and modifies its own layers.
  */
-void inflateMap(const ros::TimerEvent& event) {
+void updateMap(const ros::TimerEvent& event) {
     grid_map::Matrix& obstacle_raw = rover_map["obstacle_raw"];
     grid_map::Matrix& obstacle = rover_map["obstacle"];
     grid_map::Matrix& home_raw = rover_map["home_raw"];
@@ -1056,6 +1055,8 @@ void inflateMap(const ros::TimerEvent& event) {
         const grid_map::Index index(*c_it);
         obstacle(index(0), index(1)) = 0.0;
     }
+
+    publishRoverMap();
 }
 
 /*
@@ -1376,6 +1377,9 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
         rover_map.clear("frontier");
     }
 
+    map_publish_timer.setPeriod(ros::Duration(map_cfg.map_publish_period));
+    map_config_timer.setPeriod(ros::Duration(map_cfg.server_update_period));
+
     cos_fov_2 = cos(map_cfg.sonar_fov / 2.0);
     sin_fov_2 = sin(map_cfg.sonar_fov / 2.0);
 
@@ -1422,6 +1426,8 @@ void initialconfig() {
     ros::param::get("~max_size", map_cfg.max_size);
     ros::param::get("~size_scale_factor", map_cfg.size_scale_factor);
     ros::param::get("~map_resolution", map_cfg.map_resolution);
+    ros::param::get("~server_update_period", map_cfg.server_update_period);
+    ros::param::get("~map_publish_period", map_cfg.map_publish_period);
 
     ros::param::get("~obstacle_threshold", map_cfg.obstacle_threshold);
     ros::param::get("~line_of_sight_threshold", map_cfg.line_of_sight_threshold);
@@ -1435,7 +1441,17 @@ void initialconfig() {
     cur_map_pos = grid_map::Position(0.0, 0.0);
     initMap();
 
+    // Timer to perform obstacle and home layer inflation.
+    ros::NodeHandle nh;
+    map_publish_timer = nh.createTimer(
+        ros::Duration(map_cfg.map_publish_period), updateMap
+    );
+    map_config_timer = nh.createTimer(
+        ros::Duration(map_cfg.server_update_period), updateServerConfig
+    );
+
     is_initialized = true;
+
     dynamic_reconfigure::Client<mapping::mappingConfig> client("mapping");
 
     if (client.setConfiguration(map_cfg)){
@@ -1454,11 +1470,6 @@ int main(int argc, char **argv) {
 
     // Parameters
     ros::param::param<std::string>("odom_frame", map_frame, "odom");
-
-    double inflation_period;
-    double srv_update_period;
-    ros::param::param<double>("~inflation_period", inflation_period, 1.0);
-    ros::param::param<double>("~server_update_period", srv_update_period, 0.5);
 
     // Setup dynamic reconfigure server.
     // Initializing with our own mutex allows the updateConfig() function to
@@ -1509,14 +1520,6 @@ int main(int argc, char **argv) {
     //
     ros::ServiceServer omap = mNH.advertiseService("map/get_map", get_map);
     ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
-
-    // Timer to perform obstacle and home layer inflation.
-    ros::Timer inflation_timer = mNH.createTimer(
-        ros::Duration(inflation_period), inflateMap
-    );
-    ros::Timer config_timer = mNH.createTimer(
-        ros::Duration(srv_update_period), updateServerConfig
-    );
 
     ros::spin();
     return 0;
