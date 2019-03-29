@@ -94,6 +94,8 @@ void expandMap(const grid_map::Position&);
 void changeMapRes();
 void resizeMap();
 bool get_map(mapping::GetMap::Request&, mapping::GetMap::Response&);
+bool nearest_valid_index(const geometry_msgs::Point&,
+                         const geometry_msgs::Point&, grid_map::Index&);
 bool get_plan(mapping::GetNavPlan::Request&, mapping::GetNavPlan::Response&);
 void navGoalHandler(const geometry_msgs::PoseStamped::ConstPtr&);
 void crashHandler(int);
@@ -1181,6 +1183,30 @@ bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
 }
 
 /*
+ * Helper to get_plan()
+ * Used when goal location is outside the current map bounds.
+ *
+ * Given a start point and a goal point, return the valid rover map index
+ * nearest the goal point on the line from goal->start.
+ */
+bool nearest_valid_index(const geometry_msgs::Point& start,
+                         const geometry_msgs::Point& goal,
+                         grid_map::Index& index) {
+    double cur_dist = hypot(goal.x - start.x, goal.y - start.y);
+    grid_map::Position cur_pos(goal.x, goal.y);
+    double cos_theta = (goal.x - start.x) / cur_dist;
+    double sin_theta = (goal.y - start.y) / cur_dist;
+
+    while (!rover_map.isInside(cur_pos)) {
+        cur_dist -= map_cfg.map_resolution;
+        cur_pos[0] = start.x + cur_dist * cos_theta;
+        cur_pos[1] = start.y + cur_dist * sin_theta;
+    }
+
+    return rover_map.getIndex(cur_pos, index);
+}
+
+/*
  * Python API
  *
  * get_plan() - get global plan from a start pose to a goal pose
@@ -1195,19 +1221,19 @@ bool get_plan(mapping::GetNavPlan::Request &req,
     // whether to use "home" layer in path search
     bool use_home_layer = req.use_home_layer.data;
 
-    // Return service error (false) if start or goal outside map boundaries.
-    if (!rover_map.getIndex(
-            grid_map::Position(req.start.pose.position.x,
-                               req.start.pose.position.y),
-            start_index
-    )) {
+    // Return service error (false) if start outside map boundaries.
+    if (!rover_map.getIndex(grid_map::Position(req.start.pose.position.x,
+                                               req.start.pose.position.y),
+                            start_index)) {
         return false;
     }
-    if (!rover_map.getIndex(
-            grid_map::Position(req.goal.pose.position.x,
-                               req.goal.pose.position.y),
-            goal_index
-    )) {
+    // Return service error (false) if goal outside map boundaries and we can't
+    // interpolate the nearest in-bounds position for some reason.
+    if (!rover_map.getIndex(grid_map::Position(req.goal.pose.position.x,
+                                               req.goal.pose.position.y),
+                            goal_index)
+        && !nearest_valid_index(req.start.pose.position, req.goal.pose.position,
+                                goal_index)) {
         return false;
     }
 
