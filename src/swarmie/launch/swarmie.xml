@@ -69,7 +69,14 @@
     <param name="lethal_cost" value="255"/>
     <param name="neutral_cost" value="50"/>
   </node>
-    
+
+  <node pkg="grid_map_visualization" type="grid_map_visualization"
+        name="grid_map_viz" respawn="true">
+    <rosparam command="load" subst_value="true"
+              file="$(find swarmie)/launch/grid_map_visualization.yaml" />
+
+  </node>
+
   <group if="$(arg simulation)">
     <node name="sbridge" pkg="bridge" type="sbridge" respawn="true">
     </node>
