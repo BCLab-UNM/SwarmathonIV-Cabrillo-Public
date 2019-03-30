@@ -129,13 +129,6 @@ bool is_initialized = false;
 
 double cos_fov_2;  // store the cos(map_cfg.sonar_fov / 2) for repeated use.
 double sin_fov_2;  // store the sin(map_cfg.sonar_fov / 2) for repeated use.
-
-// todo: what's a good number for sonar_obstacle_range?
-// sonar_obstacle_range can help avoid marking "fake" obstacles seen due to sonar
-// noise at longer ranges. It limits the mark_poly to this range, but
-// not clear_poly, so the map can still be cleared past this point.
-// todo: limit clear_poly left and right ranges using sonar_obstacle_range?
-// todo: what's a good number for sonar_obst_depth?
 grid_map::Length map_dim;
 
 unsigned int obstacle_status;
@@ -1211,9 +1204,7 @@ bool nearest_valid_index(const geometry_msgs::Point& start,
 
 /*
  * Python API
- *
  * get_plan() - get global plan from a start pose to a goal pose
- * todo: Confirm on physical rover that 8-connected passable() neighbors check is fast enough
  */
 bool get_plan(mapping::GetNavPlan::Request &req,
               mapping::GetNavPlan::Response &rsp) {
