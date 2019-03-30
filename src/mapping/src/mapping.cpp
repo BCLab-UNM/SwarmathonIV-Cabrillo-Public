@@ -75,7 +75,7 @@ inline int sign(double);
 inline double decreaseVal(double, double);
 inline double increaseVal(double, double);
 void polygonFovPts(const sensor_msgs::Range::ConstPtr&,
-                   std::vector<geometry_msgs::PointStamped>&, bool);
+                   std::vector<geometry_msgs::PointStamped>&, bool, bool);
 bool transformPolyPts(const std::vector<geometry_msgs::PointStamped>&,
                       std::vector<geometry_msgs::PointStamped>&);
 inline double hyperbolicRate(double);
@@ -523,17 +523,23 @@ inline double increaseVal(double val, double rate) {
 void polygonFovPts(
     const sensor_msgs::Range::ConstPtr& sonar,
     std::vector<geometry_msgs::PointStamped>& fov_pts,
+    bool limit_max_range=false,
     bool add_depth=false) {
+
+    double range = sonar->range;
+    if (limit_max_range && range > map_cfg.sonar_max_range) {
+        range = map_cfg.sonar_max_range;
+    }
 
     geometry_msgs::PointStamped fov_us_l;
     fov_us_l.header = sonar->header;
-    fov_us_l.point.x = cos_fov_2 * sonar->range;
-    fov_us_l.point.y = sin_fov_2 * sonar-> range;
+    fov_us_l.point.x = cos_fov_2 * range;
+    fov_us_l.point.y = sin_fov_2 * range;
     fov_pts.push_back(fov_us_l);
 
     geometry_msgs::PointStamped fov_us_c;
     fov_us_c.header = sonar->header;
-    fov_us_c.point.x = sonar->range;
+    fov_us_c.point.x = range;
     fov_pts.push_back(fov_us_c);
 
     geometry_msgs::PointStamped fov_us_r;
@@ -545,13 +551,13 @@ void polygonFovPts(
     if (add_depth) {
         geometry_msgs::PointStamped fov_us_l_depth;
         fov_us_l_depth.header = sonar->header;
-        fov_us_l_depth.point.x = cos_fov_2 * (sonar->range + map_cfg.sonar_obstacle_depth);
-        fov_us_l_depth.point.y = sin_fov_2 * (sonar-> range + map_cfg.sonar_obstacle_depth);
+        fov_us_l_depth.point.x = cos_fov_2 * (range + map_cfg.sonar_obstacle_depth);
+        fov_us_l_depth.point.y = sin_fov_2 * (range + map_cfg.sonar_obstacle_depth);
         fov_pts.push_back(fov_us_l_depth);
 
         geometry_msgs::PointStamped fov_us_c_depth;
         fov_us_c_depth.header = sonar->header;
-        fov_us_c_depth.point.x = sonar->range + map_cfg.sonar_obstacle_depth;
+        fov_us_c_depth.point.x = range + map_cfg.sonar_obstacle_depth;
         fov_pts.push_back(fov_us_c_depth);
 
         geometry_msgs::PointStamped fov_us_r_depth;
@@ -616,7 +622,7 @@ inline double hyperbolicRate(double range) {
  */
 void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
     std::vector<geometry_msgs::PointStamped> fov_us_pts;
-    polygonFovPts(sonar, fov_us_pts);
+    polygonFovPts(sonar, fov_us_pts, true);
 
     std::vector<geometry_msgs::PointStamped> fov_odom_pts;
 
@@ -662,7 +668,7 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
  */
 void markSonar(const sensor_msgs::Range::ConstPtr& sonar) {
     std::vector<geometry_msgs::PointStamped> fov_us_pts;
-    polygonFovPts(sonar, fov_us_pts, true);
+    polygonFovPts(sonar, fov_us_pts, false, true);
 
     std::vector<geometry_msgs::PointStamped> fov_odom_pts;
 
@@ -752,21 +758,15 @@ void sonarHandler(
         next_status |= swarmie_msgs::Obstacle::SONAR_BLOCK;
     }
 
-
-    if (sonarLeft->range < map_cfg.sonar_max_range) {
-        clearSonar(sonarLeft);
-    }
+    clearSonar(sonarLeft);
 
     // Only use if its range is far enough away to definitely not be a block
     // in the claw.
-    if (sonarCenter->range > MIN_CENTER_DIST &&
-            sonarCenter->range < map_cfg.sonar_max_range) {
+    if (sonarCenter->range > MIN_CENTER_DIST) {
         clearSonar(sonarCenter);
     }
 
-    if (sonarRight->range < map_cfg.sonar_max_range) {
-        clearSonar(sonarRight);
-    }
+    clearSonar(sonarRight);
 
     if (sonarLeft->range < map_cfg.sonar_view_range) {
         markSonar(sonarLeft);
