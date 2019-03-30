@@ -651,13 +651,20 @@ void clearSonar(const sensor_msgs::Range::ConstPtr& sonar) {
         effective_range = map_cfg.sonar_max_range - 0.01;
     }
 
+    grid_map::Position pos;
+    double cur_range;
+
     for (grid_map::PolygonIterator iterator(rover_map, clear_poly);
          !iterator.isPastEnd(); ++iterator) {
         const grid_map::Index index(*iterator);
 
+        rover_map.getPosition(*iterator, pos);
+        cur_range = hypot(pos.x() - currentLocation.x,
+                          pos.y() - currentLocation.y);
+
         obstacle_layer(index(0), index(1)) = decreaseVal(
             obstacle_layer(index(0), index(1)),
-            map_cfg.sonar_base_clear_rate * hyperbolicRate(effective_range)
+            map_cfg.sonar_base_clear_rate * hyperbolicRate(cur_range)
         );
     }
 }
