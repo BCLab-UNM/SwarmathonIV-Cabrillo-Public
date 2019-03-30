@@ -70,7 +70,7 @@ std::vector<GridLocation> straighten_path(grid_map::GridMap&,
 std::vector<GridLocation> reconstruct_path(GridLocation, GridLocation,
                                            std::map<GridLocation, GridLocation>);
 double poseToYaw(const geometry_msgs::Pose&);
-void publishRoverMap();
+void publishRoverMap(const ros::TimerEvent&);
 inline int sign(double);
 inline double decreaseVal(double, double);
 inline double increaseVal(double, double);
@@ -88,7 +88,7 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr&);
 void odometryHandler(const nav_msgs::Odometry::ConstPtr&);
 void inflateLayer(const grid_map::Index&, grid_map::Matrix&,
                   grid_map::Matrix&);
-void updateMap(const ros::TimerEvent&);
+void inflateMap(const ros::TimerEvent&);
 void initMap();
 void expandMap(const grid_map::Position&);
 void changeMapRes();
@@ -118,6 +118,7 @@ dynamic_reconfigure::Server<mapping::mappingConfig> *config_server;
 bool has_config_updates = false;  // Whether server needs to publish an update.
 
 ros::Timer map_publish_timer;
+ros::Timer map_inflation_timer;
 ros::Timer map_config_timer;
 
 // Dynamic reconfigure params
@@ -460,7 +461,11 @@ double poseToYaw(const geometry_msgs::Pose &pose) {
     return yaw;
 }
 
-void publishRoverMap() {
+/*
+ * Publish the current rover map if there are any subscribers. This is done on
+ * a timer.
+ */
+void publishRoverMap(const ros::TimerEvent& event) {
     if (rover_map_publisher.getNumSubscribers() > 0) {
         ros::Time time = ros::Time::now();
         grid_map_msgs::GridMap message;
@@ -1017,14 +1022,14 @@ void inflateLayer(
 }
 
 /*
- * Do inflation on obstacle and home layers and publish the current map.
+ * Do inflation on obstacle and home layers.
  *
  * Currently, it's ok to execute this function while the sonar and target
  * handlers are also running, because the map's position is static and the
  * handlers are only modifying their respective layers. This function reads
  * those raw layers and modifies its own layers.
  */
-void updateMap(const ros::TimerEvent& event) {
+void inflateMap(const ros::TimerEvent& event) {
     grid_map::Matrix& obstacle_raw = rover_map["obstacle_raw"];
     grid_map::Matrix& obstacle = rover_map["obstacle"];
     grid_map::Matrix& home_raw = rover_map["home_raw"];
@@ -1055,8 +1060,6 @@ void updateMap(const ros::TimerEvent& event) {
         const grid_map::Index index(*c_it);
         obstacle(index(0), index(1)) = 0.0;
     }
-
-    publishRoverMap();
 }
 
 /*
@@ -1378,6 +1381,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
     }
 
     map_publish_timer.setPeriod(ros::Duration(map_cfg.map_publish_period));
+    map_inflation_timer.setPeriod(ros::Duration(map_cfg.map_inflation_period));
     map_config_timer.setPeriod(ros::Duration(map_cfg.server_update_period));
 
     cos_fov_2 = cos(map_cfg.sonar_fov / 2.0);
@@ -1427,6 +1431,7 @@ void initialconfig() {
     ros::param::get("~size_scale_factor", map_cfg.size_scale_factor);
     ros::param::get("~map_resolution", map_cfg.map_resolution);
     ros::param::get("~server_update_period", map_cfg.server_update_period);
+    ros::param::get("~map_inflation_period", map_cfg.map_inflation_period);
     ros::param::get("~map_publish_period", map_cfg.map_publish_period);
 
     ros::param::get("~obstacle_threshold", map_cfg.obstacle_threshold);
@@ -1444,7 +1449,10 @@ void initialconfig() {
     // Timer to perform obstacle and home layer inflation.
     ros::NodeHandle nh;
     map_publish_timer = nh.createTimer(
-        ros::Duration(map_cfg.map_publish_period), updateMap
+        ros::Duration(map_cfg.map_publish_period), publishRoverMap
+    );
+    map_inflation_timer = nh.createTimer(
+        ros::Duration(map_cfg.map_inflation_period), inflateMap
     );
     map_config_timer = nh.createTimer(
         ros::Duration(map_cfg.server_update_period), updateServerConfig
