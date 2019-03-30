@@ -40,8 +40,6 @@
 #include <sensor_msgs/Image.h>
 
 #include <swarmie_msgs/Obstacle.h>
-#include <mapping/FindTarget.h>
-#include <mapping/GetMap.h>
 #include <mapping/GetNavPlan.h>
 #include <mapping/mappingConfig.h>
 
@@ -93,7 +91,6 @@ void initMap();
 void expandMap(const grid_map::Position&);
 void changeMapRes();
 void resizeMap();
-bool get_map(mapping::GetMap::Request&, mapping::GetMap::Response&);
 bool nearest_valid_index(const geometry_msgs::Point&,
                          const geometry_msgs::Point&, grid_map::Index&);
 bool get_plan(mapping::GetNavPlan::Request&, mapping::GetNavPlan::Response&);
@@ -1165,19 +1162,6 @@ void resizeMap() {
     ROS_INFO("Map dimensions resized.");
 }
 
-/* Python API
- *
- * get_map() - Return a view of the rover's grid_map.
- *
- * The service definition is in:
- * 	srv/GetMap.srv
- *
- */
-bool get_map(mapping::GetMap::Request &req, mapping::GetMap::Response &rsp) {
-    grid_map::GridMapRosConverter::toMessage(rover_map, rsp.map);
-    return true;
-}
-
 /*
  * Helper to get_plan()
  * Used when goal location is outside the current map bounds.
@@ -1503,7 +1487,6 @@ int main(int argc, char **argv) {
     //
     // This is the API into the Python control code
     //
-    ros::ServiceServer omap = mNH.advertiseService("map/get_map", get_map);
     ros::ServiceServer plan = mNH.advertiseService("map/get_plan", get_plan);
 
     ros::spin();
