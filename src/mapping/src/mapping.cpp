@@ -988,6 +988,14 @@ void inflateMap(const ros::TimerEvent& event) {
         }
     }
 
+    for (grid_map::CircleIterator c_it(rover_map,
+                                       grid_map::Position(currentLocation.x,
+                                                          currentLocation.y),
+                                       robot_radius);
+        !c_it.isPastEnd(); ++c_it) {
+        const grid_map::Index index(*c_it);
+        obstacle(index(0), index(1)) = 0.0;
+    }
 }
 
 /* Python API
