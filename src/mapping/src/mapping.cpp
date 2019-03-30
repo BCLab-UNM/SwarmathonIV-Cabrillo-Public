@@ -130,11 +130,11 @@ bool is_initialized = false;
 double cos_fov_2;  // store the cos(map_cfg.sonar_fov / 2) for repeated use.
 double sin_fov_2;  // store the sin(map_cfg.sonar_fov / 2) for repeated use.
 
-// todo: what's a good number for sonar_view_range?
-// sonar_view_range can help avoid marking "fake" obstacles seen due to sonar
+// todo: what's a good number for sonar_obstacle_range?
+// sonar_obstacle_range can help avoid marking "fake" obstacles seen due to sonar
 // noise at longer ranges. It limits the mark_poly to this range, but
 // not clear_poly, so the map can still be cleared past this point.
-// todo: limit clear_poly left and right ranges using sonar_view_range?
+// todo: limit clear_poly left and right ranges using sonar_obstacle_range?
 // todo: what's a good number for sonar_obst_depth?
 grid_map::Length map_dim;
 
@@ -766,16 +766,16 @@ void sonarHandler(
 
     clearSonar(sonarRight);
 
-    if (sonarLeft->range < map_cfg.sonar_view_range) {
+    if (sonarLeft->range < map_cfg.sonar_obstacle_range) {
         markSonar(sonarLeft);
     }
 
     if (sonarCenter->range > MIN_CENTER_DIST &&
-            sonarCenter->range < map_cfg.sonar_view_range) {
+            sonarCenter->range < map_cfg.sonar_obstacle_range) {
         markSonar(sonarCenter);
     }
 
-    if (sonarRight->range < map_cfg.sonar_view_range) {
+    if (sonarRight->range < map_cfg.sonar_obstacle_range) {
         markSonar(sonarRight);
     }
 
@@ -1405,7 +1405,7 @@ void initialconfig() {
     ros::param::get("~sonar_fov", map_cfg.sonar_fov);
     ros::param::get("~single_sensor_obstacle_dist", map_cfg.single_sensor_obstacle_dist);
     ros::param::get("~double_sensor_obstacle_dist", map_cfg.double_sensor_obstacle_dist);
-    ros::param::get("~sonar_view_range", map_cfg.sonar_view_range);
+    ros::param::get("~sonar_obstacle_range", map_cfg.sonar_obstacle_range);
     ros::param::get("~sonar_max_range", map_cfg.sonar_max_range);
     ros::param::get("~sonar_obstacle_depth", map_cfg.sonar_obstacle_depth);
     ros::param::get("~sonar_base_mark_rate", map_cfg.sonar_base_mark_rate);
