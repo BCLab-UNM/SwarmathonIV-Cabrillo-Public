@@ -55,19 +55,31 @@
   </node>
 
   <node name="mapping" pkg="mapping" type="mapping" args="$(arg name)" respawn="true">
-    <param name="map_size" value="25.0"/>
-    <param name="map_resolution" value="0.5"/>
-    <param name="visualize_frontier" value="false"/>
+    <param name="map_x" value="25.0"/>
+    <param name="map_y" value="25.0"/>
+    <param name="max_size" value="50.0"/>
+    <param name="map_resolution" value="0.15"/>
+    <param name="size_scale_factor" value="0.1"/>
+    <param name="server_update_period" value="0.5"/>
+    <param name="map_inflation_period" value="1.0"/>
+    <param name="map_publish_period" value="1.0"/>
 
-    <param name="single_sensor_obstacle_dist" value="0.35"/>
-    <param name="double_sensor_obstacle_dist" value="0.6"/>
-    <param name="sonar_view_range" value="1.0"/>
-    <param name="sonar_obstacle_depth" value="0.75"/>
+    <param name="sonar_fov" value="0.2"/>
+    <param name="single_sensor_obstacle_dist" value="0.25"/>
+    <param name="double_sensor_obstacle_dist" value="0.5"/>
+    <param name="sonar_obstacle_range" value="1.0"/>
+    <param name="sonar_max_range" value="2.0"/>
+    <param name="sonar_obstacle_depth" value="0.25"/>
+    <param name="sonar_base_mark_rate" value="0.015"/>
+    <param name="sonar_base_clear_rate" value="0.15"/>
+    <param name="robot_radius" value="0.3"/>
 
-    <param name="obstacle_threshold" value="0.1"/>
+    <param name="obstacle_threshold" value="0.6"/>
+    <param name="line_of_sight_threshold" value="0.04"/>
     <param name="inflation_pct" value="0.7"/>
     <param name="lethal_cost" value="255"/>
-    <param name="neutral_cost" value="50"/>
+    <param name="neutral_cost" value="2.0"/>
+    <param name="visualize_frontier" value="false"/>
   </node>
 
   <node pkg="grid_map_visualization" type="grid_map_visualization"
