@@ -56,13 +56,20 @@ class Planner:
     # as a part of its avoidance behavior. It seems to work for the most part.
     # FAIL_COUNT_LIMIT = 10
 
-    def __init__(self, use_rviz_nav_goal=False):
+    def __init__(self, use_rviz_nav_goal=False,
+                 avoid_targets=False, avoid_home=False):
         """Create a new Planner.
         Args:
         * swarmie - the Swarmie object you've already instantiated
         * use_rviz_nav_goal - for testing/debugging. Subscribes to RViz
           nav_goals published on the topic /rovername/goal, and navigates to
           those goals using Planner.drive_to()
+        * avoid_targets - for testing/debugging. Whether the rover should avoid
+          targets in the RViz nav_goal callback. Not used unless
+          use_rviz_nav_goal == True
+        * avoid_home - for testing/debugging. Whether the rover should avoid
+          home in the RViz nav_goal callback. Not used unless
+          use_rviz_nav_goal == True
         """
         self.rovername = swarmie.rover_name
         self.current_state = Planner.STATE_IDLE
@@ -80,10 +87,15 @@ class Planner:
         # Subscribers
         if use_rviz_nav_goal:
             print('Using RViz 2D Nav Goals')
+            if avoid_home:
+                print('Avoiding home during this run.')
+            if avoid_targets:
+                print('Avoiding targets during this run.')
             self._nav_goal_sub = rospy.Subscriber(
                 'goal',
                 PoseStamped,
                 self._rviz_nav_goal_cb,
+                callback_args=(avoid_targets, avoid_home),
                 queue_size=1
             )
 
@@ -440,14 +452,17 @@ class Planner:
 
         return Point(x=pose.pose.position.x, y=pose.pose.position.y)
 
-    def _rviz_nav_goal_cb(self, msg):
+    def _rviz_nav_goal_cb(self, msg, args):
         """Subscriber to help with testing. Responds to RViz nav_goals
         published with a mouse click.
         """
+        avoid_targets = args[0]
+        avoid_home = args[1]
         goal = Pose2D(x=msg.pose.position.x, y=msg.pose.position.y)
         tolerance = 0.0
 
-        self.drive_to(goal, tolerance, avoid_targets=True, avoid_home=False)
+        self.drive_to(goal, tolerance,
+                      avoid_targets=avoid_targets, avoid_home=avoid_home)
 
     def _check_sonar_obstacles(self):
         """Check sonar obstacles over a short period of time, hopefully to
@@ -1181,9 +1196,26 @@ class Planner:
 
 def main():
     """For testing Planner class using RViz nav goals."""
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--avoid-home',
+        action='store_true',
+        help='whether the rover should avoid home during this run'
+    )
+    group.add_argument(
+        '--avoid-targets',
+        action='store_true',
+        help='whether the rover should avoid targets during this run'
+    )
+    args = parser.parse_args()
     swarmie.start(node_name='planner')
 
-    planner = Planner(use_rviz_nav_goal=True)
+    planner = Planner(use_rviz_nav_goal=True,
+                      avoid_home=args.avoid_home,
+                      avoid_targets=args.avoid_targets)
     rospy.spin()
 
 
