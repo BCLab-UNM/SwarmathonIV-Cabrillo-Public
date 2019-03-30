@@ -81,7 +81,7 @@ class Planner:
         if use_rviz_nav_goal:
             print('Using RViz 2D Nav Goals')
             self._nav_goal_sub = rospy.Subscriber(
-                self.rovername + '/goal',
+                'goal',
                 PoseStamped,
                 self._rviz_nav_goal_cb,
                 queue_size=1
@@ -1181,21 +1181,7 @@ class Planner:
 
 def main():
     """For testing Planner class using RViz nav goals."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'rovername',
-        help='required, name of the rover to connect to',
-        nargs='?',
-        default=None
-    )
-    args = parser.parse_args()
-
-    if args.rovername is None:
-        print('usage:', sys.argv[0], '<rovername>')
-        exit(-1)
-
-    rovername = args.rovername
-    swarmie.start(tf_rover_name=rovername)
+    swarmie.start(node_name='planner')
 
     planner = Planner(use_rviz_nav_goal=True)
     rospy.spin()
