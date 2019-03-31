@@ -135,11 +135,11 @@ def find_home_corner(max_fail_count=3):
 
 
 def main():
-    swarmie.start(node_name='find_corner')
     if find_home_corner():
         print('Success!! We found a corner of home!!!')
 
 
 if __name__ == '__main__':
     # For testing this as a standalone script.
+    swarmie.start(node_name='find_corner')
     main()
