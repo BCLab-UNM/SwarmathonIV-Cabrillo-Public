@@ -24,7 +24,8 @@ import math
 import rospy
 import tf.transformations
 
-from mobility.swarmie import swarmie, HomeCornerException, PathException
+from mobility.swarmie import (swarmie, HomeCornerException, InsideHomeException,
+                              PathException)
 from mobility import utils
 
 from geometry_msgs.msg import PoseStamped
@@ -32,15 +33,28 @@ from geometry_msgs.msg import PoseStamped
 from swarmie_msgs.msg import Obstacle
 
 
+def check_inside_home():
+    """Raise an exception if we're inside home."""
+    if swarmie.get_obstacle_condition() & Obstacle.INSIDE_HOME:
+        raise InsideHomeException(
+            "Stuck inside home while finding a home corner"
+        )
+
+
 def recover():
     """Recover from difficult situations:
         - No home tags are in view anymore
         - The tag to drive to is too close (we might be inside of home)
+
+    Raises:
+        InsideHomeException: if we're stuck inside of home.
     """
     # TODO: should sonar be ignored when recovering?
     # TODO: is simply backing up a little bit a reliable recovery move?
     ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
               Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
+
+    check_inside_home()
 
     if swarmie.has_home_odom_location():
         home_odom = swarmie.get_home_odom_location()
@@ -128,7 +142,10 @@ def find_home_corner(max_fail_count=3):
 
     Raises:
         PathException: If the fails to find a home tag max_fail_count times.
+        InsideHomeException: If the rover gets stuck inside of home.
     """
+    check_inside_home()
+
     # The rover drives repeatedly to the rightmost home tag in view. However,
     # swarmie.drive_to() drives to a point such that the rover is on top of that
     # point. If the rover did this here, it's likely no home tags would be in
@@ -203,7 +220,8 @@ def find_home_corner(max_fail_count=3):
                 if abs(dist - claw_offset) < 0.07:
                     # If dist - claw_offset is small, drive_to() is unlikely to
                     # make the rover move at all. In this case it's worth
-                    # recovering.
+                    # recovering or raising an InsideHomeException
+                    # from recover()
                     recover()
                     continue
 
@@ -214,6 +232,7 @@ def find_home_corner(max_fail_count=3):
             # success!!
             return True
 
+    check_inside_home()
     raise PathException('Unable to find a home corner, I gave up.')
 
 
