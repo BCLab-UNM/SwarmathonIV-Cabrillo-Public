@@ -33,11 +33,26 @@ from swarmie_msgs.msg import Obstacle
 
 
 def recover():
-    """Recover from the scenario where no home tags are in view anymore."""
+    """Recover from difficult situations:
+        - No home tags are in view anymore
+        - The tag to drive to is too close (we might be inside of home)
+    """
     # TODO: should sonar be ignored when recovering?
     # TODO: is simply backing up a little bit a reliable recovery move?
     ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
               Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
+
+    if swarmie.has_home_odom_location():
+        home_odom = swarmie.get_home_odom_location()
+        loc = swarmie.get_odom_location().get_pose()
+        angle = angles.shortest_angular_distance(loc.theta,
+                                                 math.atan2(home_odom.y - loc.y,
+                                                            home_odom.x - loc.x))
+        # If the rover is facing away from home's center, turn toward it
+        if abs(angle) > math.pi / 3:
+            swarmie.turn(angle, ignore=ignore)
+            return
+
     swarmie.drive(-.1, ignore=ignore)
 
 
@@ -175,12 +190,23 @@ def find_home_corner(max_fail_count=3):
             #  oriented directly at one of the corners. It just needs to
             #  drive a little bit forward in that case and it would see the
             #  corner and get the corner exception.
-            rover_yaw = swarmie.get_odom_location().get_pose().theta
+            cur_loc = swarmie.get_odom_location().get_pose()
+            rover_yaw = cur_loc.theta
 
             if (abs(angles.shortest_angular_distance(rover_yaw, home_yaw))
                     > math.pi / 2):
                 swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
             else:
+                dist = math.hypot(cur_loc.x - rightmost_tag.pose.position.x,
+                                  cur_loc.y - rightmost_tag.pose.position.y)
+
+                if abs(dist - claw_offset) < 0.07:
+                    # If dist - claw_offset is small, drive_to() is unlikely to
+                    # make the rover move at all. In this case it's worth
+                    # recovering.
+                    recover()
+                    continue
+
                 swarmie.drive_to(rightmost_tag.pose.position,
                                  claw_offset=claw_offset, ignore=ignore)
 
