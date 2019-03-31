@@ -43,7 +43,7 @@ usage() {
 startGazeboServer() {
 	local world_file_path=$1
 	local random_seed=$2
-	rosparam set /use_sim_time true
+	rosparam set /use_sim_time true >~/.ros/log/latest/rosparam_set_sim_time.txt
 	rosrun gazebo_ros gzserver $world_file_path --seed $random_seed --verbose &
 	echo -e "$cyan Attempted to start Gazebo server with world file: $world_file_path and random seed $random_seed $reset"
 } #end startGazeboServer
