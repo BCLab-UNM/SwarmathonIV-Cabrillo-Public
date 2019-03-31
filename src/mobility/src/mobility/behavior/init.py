@@ -43,8 +43,9 @@ def main(**kwargs):
     try:
         find_home_corner()
     except PathException as e:
+        # It isn't ideal if we can't find a home corner, but it's worth
+        # continuing to turn around and let the rover begin searching.
         rospy.logwarn(e.status)
-        return -1
 
     swarmie.turn(
         -2 * math.pi / 3,
