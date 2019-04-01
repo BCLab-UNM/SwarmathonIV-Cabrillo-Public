@@ -41,6 +41,25 @@ def check_inside_home():
         )
 
 
+def loc_in_home_frame(transform_timeout=1.0):
+    # type: (float) -> PoseStamped
+    """Return the rover's current location in the home coordinate frame."""
+    cur_odom = swarmie.get_odom_location().Odometry
+
+    cur_loc = PoseStamped()
+    cur_loc.header = cur_odom.header
+    cur_loc.pose = cur_odom.pose.pose
+
+    swarmie.xform.waitForTransform(
+        'home',
+        cur_loc.header.frame_id,
+        cur_loc.header.stamp,
+        rospy.Duration(transform_timeout)
+    )
+
+    return swarmie.xform.transformPose('home', cur_loc)
+
+
 def recover():
     """Recover from difficult situations:
         - No home tags are in view anymore
@@ -129,6 +148,32 @@ def find_rightmost_home_tag(transform_timeout=0.15):
 
     return None
 
+
+def should_sweep(home_tag_yaw):
+    """Given a rightmost home tag's orientation in the odometry frame, decide
+    whether the rover should turn right to sweep for more tags.
+    """
+    rover_yaw = swarmie.get_odom_location().get_pose().theta
+
+    if swarmie.has_home_odom_location():
+        try:
+            loc_home = loc_in_home_frame()
+        except tf.Exception as e:
+            rospy.logwarn('Transform exception in should_sweep(): {}'.format(e))
+            loc_home = PoseStamped()
+            loc_home.pose.position.x = 0.0
+            loc_home.pose.position.y = 0.0
+    else:
+        loc_home = PoseStamped()
+        loc_home.pose.position.x = 0.0
+        loc_home.pose.position.y = 0.0
+
+    return (abs(angles.shortest_angular_distance(rover_yaw, home_tag_yaw))
+            > math.pi / 2
+            and (abs(loc_home.pose.position.x) < 0.6
+                 or abs(loc_home.pose.position.y) < 0.6))
+
+
 def find_home_corner(max_fail_count=3):
     # type: (int) -> bool
     """Drive around and find a corner of the home plate.
@@ -202,18 +247,11 @@ def find_home_corner(max_fail_count=3):
             # rightmost tag" logic here will fail; the rover won't move at
             # all because its already where it should be according to
             # drive_to().
-            # TODO: this if statement's logic could be improved. The rover
-            #  frequently wastes time turning to the right when it arrives
-            #  oriented directly at one of the corners. It just needs to
-            #  drive a little bit forward in that case and it would see the
-            #  corner and get the corner exception.
-            cur_loc = swarmie.get_odom_location().get_pose()
-            rover_yaw = cur_loc.theta
-
-            if (abs(angles.shortest_angular_distance(rover_yaw, home_yaw))
-                    > math.pi / 2):
+            if should_sweep(home_yaw):
                 swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
+
             else:
+                cur_loc = swarmie.get_odom_location().get_pose()
                 dist = math.hypot(cur_loc.x - rightmost_tag.pose.position.x,
                                   cur_loc.y - rightmost_tag.pose.position.y)
 
