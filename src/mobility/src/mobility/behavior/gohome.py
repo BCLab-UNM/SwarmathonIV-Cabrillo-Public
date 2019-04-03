@@ -10,8 +10,7 @@ import math
 import rospy
 import tf
 import angles
-import dynamic_reconfigure.client
-import argparse 
+import argparse
 
 from geometry_msgs.msg import Point
 
@@ -31,7 +30,9 @@ def drive_straight_home_odom() :
     # swarmie's drive_to function takes a point in odometry space.
 
     home = swarmie.get_home_odom_location()
-    swarmie.drive_to(home, ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER)
+    swarmie.drive_to(home,
+                     ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER,
+                     **swarmie.speed_fast)
 
 def drive_home(has_block, home_loc):
     global planner, use_waypoints, GOHOME_FAIL
@@ -49,7 +50,8 @@ def drive_home(has_block, home_loc):
                 tolerance=0.5+counter,
                 tolerance_step=0.5+counter,
                 avoid_targets=has_block,
-                use_waypoints=use_waypoints
+                use_waypoints=use_waypoints,
+                **swarmie.speed_fast
             )
         except rospy.ServiceException:
             use_waypoints = False  # fallback if map service fails
@@ -74,7 +76,8 @@ def spiral_search(has_block):
             tolerance_step=0.5,
             avoid_targets=has_block,
             avoid_home=False,
-            use_waypoints=False
+            use_waypoints=False,
+            **swarmie.speed_fast
         )
     except PathException:
         raise
@@ -94,14 +97,8 @@ def spiral_search(has_block):
     return drive_result
 
 
-def reset_speeds():
-    global initial_config, param_client
-    param_client.update_configuration(initial_config)
-
-
 def main(**kwargs):
     global planner, use_waypoints
-    global initial_config, param_client
 
     has_block = False
     if 'has_block' in kwargs : 
@@ -111,33 +108,10 @@ def main(**kwargs):
     # the map service fails.
     use_waypoints = True
 
-    GOHOME_SPEEDS = {
-         'DRIVE_SPEED': 0.25,
-         'TURN_SPEED': 0.7
-    }
-
     if not has_block:
         swarmie.print_infoLog("I don't have a block. Not avoiding targets.")
 
     planner = Planner()
-
-    # Change drive and turn speeds for this behavior, and register shutdown
-    # hook to reset them at exit.
-    if not rospy.has_param('gohome/speeds'):
-        speeds = GOHOME_SPEEDS
-        rospy.set_param('gohome/speeds', speeds)
-    else:
-        speeds = rospy.get_param('gohome/speeds',
-                                 default=GOHOME_SPEEDS)
-
-    param_client = dynamic_reconfigure.client.Client('mobility')
-    config = param_client.get_configuration()
-    initial_config = {
-        'DRIVE_SPEED': config['DRIVE_SPEED'],
-        'TURN_SPEED': config['TURN_SPEED']
-    }
-    param_client.update_configuration(speeds)
-    rospy.on_shutdown(reset_speeds)
 
     swarmie.fingers_close()  # make sure we keep a firm grip
     swarmie.wrist_middle()  # get block mostly out of camera view
@@ -161,7 +135,7 @@ def main(**kwargs):
         cur_loc = swarmie.get_odom_location()
         if not cur_loc.at_goal(home, 0.3):
             print('Getting a little closer to home position.')
-            swarmie.drive_to(home, ignore=ignore)
+            swarmie.drive_to(home, ignore=ignore, **swarmie.speed_fast)
 
         planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
