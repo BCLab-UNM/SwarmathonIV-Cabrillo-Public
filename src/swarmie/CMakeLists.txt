@@ -19,14 +19,5 @@ catkin_package(
 
 install (
   DIRECTORY launch/
-  DESTINATION launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch/
 )
-
-install (FILES
-  launch/apriltags.xml  
-  launch/robot_localization.xml  
-  launch/swarmie.xml  
-  launch/tf.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-)
-

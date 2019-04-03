@@ -149,6 +149,9 @@ int main(int argc, char **argv) {
     
     ros::param::param<std::string>("odom_frame", odom.header.frame_id, "odom");
     ros::param::param<std::string>("base_link_frame", odom.child_frame_id, "base_link");
+    ros::param::param<std::string>("sonar_left_frame", sonarLeft.header.frame_id, "us_left_link");
+    ros::param::param<std::string>("sonar_center_frame", sonarCenter.header.frame_id, "us_center_link");
+    ros::param::param<std::string>("sonar_right_frame", sonarRight.header.frame_id, "us_right_link");
     imuRaw.header.frame_id = odom.child_frame_id;
 
     // configure dynamic reconfiguration

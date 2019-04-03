@@ -1,0 +1,45 @@
+grid_map_topic: /$(arg name)/map
+
+grid_map_visualizations:
+
+  - name: obstacle_raw
+    type: occupancy_grid
+    params:
+      layer: obstacle_raw
+      data_min: 0.0
+      data_max: 1.0
+
+  - name: obstacle
+    type: occupancy_grid
+    params:
+      layer: obstacle
+      data_min: 0.0
+      data_max: 1.0
+
+  - name: target
+    type: occupancy_grid
+    params:
+      layer: target
+      data_min: 0.0
+      data_max: 1.0
+
+  - name: home_raw
+    type: occupancy_grid
+    params:
+      layer: home_raw
+      data_min: 0.0
+      data_max: 1.0
+
+  - name: home
+    type: occupancy_grid
+    params:
+      layer: home
+      data_min: 0.0
+      data_max: 1.0
+
+  - name: frontier
+    type: occupancy_grid
+    params:
+      layer: frontier
+      data_min: 0.0
+      data_max: 1.0

@@ -21,27 +21,24 @@ find_package(catkin REQUIRED COMPONENTS
   grid_map_ros
   grid_map_msgs
   swarmie_msgs
-  cv_bridge
   dynamic_reconfigure
 )
-
-catkin_python_setup()
 
 generate_dynamic_reconfigure_options(
   cfg/mapping.cfg
 )
 
 add_service_files (
-	FILES FindTarget.srv GetMap.srv GetNavPlan.srv
+  FILES GetNavPlan.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs apriltags2to1 nav_msgs grid_map_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs nav_msgs)
 
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs roscpp rospy sensor_msgs std_msgs 
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs
   tf apriltags2to1 message_runtime
   grid_map_ros grid_map_msgs 
-  nav_msgs swarmie_msgs cv_bridge dynamic_reconfigure
+  nav_msgs swarmie_msgs dynamic_reconfigure
 )
 
 include_directories(
@@ -65,10 +62,4 @@ target_link_libraries(
 install(TARGETS mapping
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
-
-catkin_install_python (
-	PROGRAMS 
-	scripts/findcenter.py 
-	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

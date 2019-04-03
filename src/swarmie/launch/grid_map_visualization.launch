@@ -1,0 +1,16 @@
+<launch>
+  <arg name="name" default="achilles"
+       doc="name of the rover to connect to. Ex: roslaunch swarmie grid_map_visualization.launch name:=achilles"/>
+
+  <group ns="$(arg name)">
+
+    <node name="$(anon rviz)" pkg="rviz" type="rviz"
+          args="-d $(find mapping)/config/occupancy_grids.rviz \
+                -f $(arg name)/odom" />
+
+    <node name="$(anon rqt_gui)" pkg="rqt_gui" type="rqt_gui"
+          args="--perspective-file $(find mapping)/config/map_reconfigure.perspective -s rqt_reconfigure --args /$(arg name)/mapping" />
+
+  </group>
+
+</launch>
