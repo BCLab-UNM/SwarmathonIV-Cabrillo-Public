@@ -107,9 +107,6 @@
 
     <node name="master_discovery" pkg="master_discovery_fkie" type="zeroconf" respawn="true"/>
     <node name="master_sync" pkg="master_sync_fkie" type="master_sync" respawn="true">
-      <rosparam param="sync_topics">
-- /mode
-      </rosparam>
     </node>
 
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
@@ -139,6 +136,7 @@
       <param name="image_width" value="320"/>
       <param name="image_height" value="240"/>
       <param name="framerate" value="10"/>
+      <param name="pixel_format" value="yuyv"/>
       <param name="camera_frame_id" value="$(arg name)/camera_link"/>
       <remap from="/$(arg name)/camera/image_raw" to="/$(arg name)/camera/image"/>
     </node>
