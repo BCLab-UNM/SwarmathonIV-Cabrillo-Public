@@ -140,21 +140,19 @@ def return_to_last_exit_position(last_pose, skip_drive_to=False):
 
 def main(**kwargs):
     global planner, found_tag
-
     found_tag = False
-
     planner = Planner()
-
     swarmie.fingers_open()
     swarmie.wrist_middle()
-
-    # Return to our last search exit pose if possible if nothing found there go to the next one
-    while swarmie.has_resource_pile_locations():
+    locations_gone_to = 0
+    # Return to the best pile if possible, if nothing found there go to the 
+    #next 2 piles
+    while swarmie.has_resource_pile_locations() and locations_gone_to < 3:
+        num_of_pile_locations_gone_to = locations_gone_to + 1
         cur_pose = swarmie.get_odom_location().get_pose()
-        cube_location = swarmie.get_resource_pile_location_with_most_tags()
+        cube_location = swarmie.get_best_resource_pile_location()
         dist = math.sqrt((cube_location.x - cur_pose.x) ** 2
                          + (cube_location.y - cur_pose.y) ** 2)
-
         if dist > .5:  # only bother if it was reasonably far away
             return_to_last_exit_position(cube_location)
             #if we are here then no cubes where found near the location
@@ -162,9 +160,9 @@ def main(**kwargs):
         else: # must be right next to it
             return_to_last_exit_position(cube_location, skip_drive_to=True)
             swarmie.remove_resource_pile_location(cube_location)
-
+    
     random_walk(num_moves=30)
-
+    
     print ("I'm homesick!")
     search_exit(1)
 
