@@ -1050,7 +1050,7 @@ class Swarmie(object):
             cubes = [ x for x in cubes if x.pose.pose.position.z > min_z_dist ]
         num_cubes = len(cubes)
         # if 0,1,2 tags are detected don't bother adding to the list unless overridden
-        if num_cubes < 3 and not override: 
+        if num_cubes < 4 and not override: 
             print("I only see", num_cubes, "tags, Not Adding to list")
             return
         
@@ -1076,7 +1076,7 @@ class Swarmie(object):
                                            'visits':0})
         rospy.set_param('resource_pile_locations', pile_locations_list)
 
-    def remove_resource_pile_location(self, odom_to_remove, threshold=.3):
+    def remove_resource_pile_location(self, odom_to_remove, threshold=.4):
         """ remove_resource_pile_location should be called after search goes here and does not find anything 
         Args:
             * odom_to_remove (`geometry_msgs.msg.Pose2D`) - the odom that will be used to remove cube piles winthin
