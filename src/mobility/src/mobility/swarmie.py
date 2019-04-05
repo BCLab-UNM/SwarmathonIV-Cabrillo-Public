@@ -1059,37 +1059,48 @@ class Swarmie(object):
         else:
             location = swarmie.transform_pose('odom', cubes[0].pose, timeout=3).pose.position
             #get the cubes location and transphorm into the homefram
-        resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
         print("Called add_resource_pile_location, num_cubes:", num_cubes,
                                             'x:', location.x, 'y:', location.y)
         #if homeframe exists
+        #check if 
+        home = self.get_home_odom_location()
+        if abs(location.x - home.x) < .5 and abs(location.y - home.y) < .5: 
+            rospy.logwarn(self.rover_name + ": Pile inside home")
+            return
         #numpy floats are not compatible with rosparam so have to convert to float
-        resource_pile_locations_list.append({'num_cubes': num_cubes,
+        pile_locations_list.append({'num_cubes': num_cubes,
                                            'x': float(location.x), 
                                            'y': float(location.y), 
-                                           'frame':'odom'}) #,'returns':0
-        rospy.set_param('resource_pile_locations', resource_pile_locations_list)
+                                           'frame':'odom',
+                                           'visits':0})
+        rospy.set_param('resource_pile_locations', pile_locations_list)
 
     def remove_resource_pile_location(self, odom_to_remove, threshold=.3):
-        """ remove_resource_pile_location should be called after search goes here and does not find anything """
-        # TODO: look for a matching odom in the list to odom_to_remove within the threshold of meters x or y
-        print("remove_resource_pile_location called, ", 'x:', odom_to_remove.x, 'y:', odom_to_remove.y)
-        resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
-        resource_pile_locations_list = [x for x in resource_pile_locations_list
-                                      if abs(odom_to_remove.x - x['x']) > threshold or
-                                      abs(odom_to_remove.y - x['y']) > threshold]  # will omit the matching dicts
-        if resource_pile_locations_list:
-            rospy.set_param('resource_pile_locations', resource_pile_locations_list)
+        """ remove_resource_pile_location should be called after search goes here and does not find anything 
+        Args:
+            * odom_to_remove (`geometry_msgs.msg.Pose2D`) - the odom that will be used to remove cube piles winthin
+            * threshold (`float`) - the distance from odom_to_remove to remove from the list
+        """
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        # this list comprehension will omit the matching dicts
+        pile_locations_list = [x for x in pile_locations_list
+                                if abs(odom_to_remove.x - x['x']) > threshold or
+                                abs(odom_to_remove.y - x['y']) > threshold]  
+        if pile_locations_list:
+            rospy.set_param('resource_pile_locations', pile_locations_list)
         else:
-            rospy.delete_param('resource_pile_locations')
+            if rospy.has_param('resource_pile_locations'):
+                rospy.delete_param('resource_pile_locations')
 
     def get_resource_pile_locations(self):
         """ Gets the ros peram resource_pile_locations which contains a list of dicts that contains num_tags x & y"""
         return rospy.get_param('resource_pile_locations', [])
 
-    def get_resource_pile_location_with_most_tags(self):
-        '''Get the odom (location and heading) where search saw the most tags when exiting
-
+    def get_best_resource_pile_location(self):
+        '''Get the odom (location) where pickup or planner saw most lucrative pile
+        baised on number of tags seen then by closeness to the swarmie
+        
         Returns:
         * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
 
@@ -1097,25 +1108,48 @@ class Swarmie(object):
         location hasn't been set yet.
 
         Examples:
-        >>> odom_pose = swarmie.get_search_exit_poses()
+        >>> odom_pose = swarmie.get_best_resource_pile_location()
         >>> swarmie.drive_to(odom_pose, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle. )
         '''
         #TODO: when have in terms of homeframe convert to odom
-        #for resource_pile_locations_list if l[frame] == 'home' transform to odom
-        resource_pile_locations_list = rospy.get_param('resource_pile_locations', [])
-        print("resource_pile_locations_list:", resource_pile_locations_list)
+        #for pile_locations_list if l[frame] == 'home' transform to odom
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
         # Get the entry with the most tags
-        if not resource_pile_locations_list:
+        if not pile_locations_list:
             return Pose2D(0,0,0)
-        location_w_most_tags = max(resource_pile_locations_list, key=lambda k: k['num_cubes'])
-        print('location_w_most_tags:', location_w_most_tags)
-        return Pose2D(location_w_most_tags['x'], location_w_most_tags['y'], 0)  # theta is 0
-
+        max_num_cubes = max(pile_locations_list, key=lambda k: 
+                                                    k['num_cubes'])['num_cubes']
+        locations_w_most_tags = [ pile for pile in pile_locations_list if 
+                                            max_num_cubes == pile['num_cubes']]
+        cur_pose = swarmie.get_odom_location().get_pose()
+        #get the closests pile with the most cubes
+        best_pile = min(locations_w_most_tags, key=lambda k: math.sqrt(
+                                                    (k['x'] - cur_pose.x) ** 2 +
+                                                    (k['y'] - cur_pose.y) ** 2))
+        #self.visit_pile(best_pile) #test with and without this, 
+        #I suspect that it will be worse with the visit_pile call
+        return Pose2D(best_pile['x'], best_pile['y'], 0)  # theta is 0
+    
+    def visit_pile(self, pile_visited):
+        """ increments the visits entry in the dict for the pile when the visits 
+        exceed 3 the pile is removed from the list 
+        Args:
+            * pile_visited (`dict`)
+        """
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        if pile_visited in pile_locations_list:
+            if pile_visited['visits'] > 3:
+                pile_locations_list.remove(pile_visited)
+            else:
+                #incrementing visit
+                pile_locations_list[pile_locations_list.index(pile_visited)]['visits'] = pile_locations_list[pile_locations_list.index(pile_visited)]['visits'] + 1
+            rospy.set_param('resource_pile_locations', pile_locations_list)
+        else:
+            rospy.logwarn(self.rover_name + ": Visiting Invalid Pile")
+    
     def has_resource_pile_locations(self):
         '''Check to see if the search exit locations parameter is set.
-
         Returns:
-
         * (`bool`): True if the parameter exists, False otherwise.
         '''
         return rospy.has_param('resource_pile_locations')
