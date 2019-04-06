@@ -27,6 +27,11 @@
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
   </include>
+  
+  <include file="$(find swarmie)/launch/topic_tools.xml">
+      <arg name="name" value="$(arg name)"/>
+      <arg name="simulation" value="$(arg simulation)"  />
+  </include>
 
   <node name="diagnostics" pkg="diagnostics" type="diags_node.py" respawn="true"/> 
   
