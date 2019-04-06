@@ -148,7 +148,7 @@ def main(**kwargs):
     # Return to the best pile if possible, if nothing found there go to the 
     #next 2 piles
     while swarmie.has_resource_pile_locations() and locations_gone_to < 3:
-        num_of_pile_locations_gone_to = locations_gone_to + 1
+        locations_gone_to+=1
         cur_pose = swarmie.get_odom_location().get_pose()
         cube_location = swarmie.get_best_resource_pile_location()
         dist = math.sqrt((cube_location.x - cur_pose.x) ** 2
