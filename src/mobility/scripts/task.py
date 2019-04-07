@@ -56,12 +56,16 @@ class Task :
         self.has_block = rospy.get_param('~has_block', False)
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         self.status_pub = rospy.Publisher('swarmie_status', String, queue_size=1, latch=True)
+        self.status_timer = rospy.Timer(rospy.Duration(1), self.publish_status)
         rospy.on_shutdown(self.save_state)
 
     def save_state(self):
         rospy.set_param('~task_state', self.current_state)
         rospy.set_param('~has_block', self.has_block)
-                        
+
+    def publish_status(self, event):
+        self.status_pub.publish(self.get_task())
+
     def print_state(self, msg):
         s = String()
         s.data = msg 

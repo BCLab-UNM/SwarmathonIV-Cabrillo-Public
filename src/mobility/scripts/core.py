@@ -10,8 +10,10 @@ from std_msgs.msg import String, UInt8
 from mobility.driver import State
 
 def heartbeat(event):
-    global heartbeat_pub, status_pub
+    global heartbeat_pub, status_pub, task
     heartbeat_pub.publish("ok")
+    if task is None:
+        status_pub.publish("idle")
 
 def mode(msg):
     global rover_mode, driver
@@ -19,7 +21,7 @@ def mode(msg):
     driver.set_mode(msg)
 
 def main() :     
-    global driver, heartbeat_pub, rover_mode, status_pub
+    global driver, heartbeat_pub, rover_mode, status_pub, task
     
     rover_mode = 0 
     
@@ -34,13 +36,13 @@ def main() :
     # Subscribers 
     rospy.Subscriber('mode', UInt8, mode)
 
+    task = None 
+    
     # Timers
     rospy.Timer(rospy.Duration(1), heartbeat)
 
     launcher = roslaunch.scriptapi.ROSLaunch()
     launcher.start()
-    task = None 
-    status_pub.publish("idle")
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
         if rover_mode > 1 :
