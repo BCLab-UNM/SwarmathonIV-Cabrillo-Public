@@ -352,7 +352,7 @@ rosstart=`rostopic echo -n 1 /clock/clock/secs | head -n 1`; start=$(date +%s)
 score="Error"
 echo "Time, Score" | tee -a $SCORE_OUTPUT_PATH
 # Let the simulation run until the experiment duration is reached arg 4 is the time in mins
-until (( $(( $rosnow-$rosstart )) >= $(( $duration*60 )) )); do
+until [ $(( $rosnow-$rosstart )) -ge $(( $duration*60 )) -o $score -ge 1 ]; do
 	score=`rostopic echo -n 1 /collectionZone/score/data | head -n1 | tr -d '"'`  # update the score
 	rosnow=`rostopic echo -n 1 /clock/clock/secs | head -n 1` # get the current ros time # lookinto the --filter 
 	echo "$(( $rosnow-$rosstart )) : $score" | tee -a $SCORE_OUTPUT_PATH  # print out something that looks like 492 : 3 time_in_secs : score
