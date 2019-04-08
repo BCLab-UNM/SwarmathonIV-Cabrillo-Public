@@ -24,7 +24,7 @@
 
   <group unless="$(arg startsim)">
     <group if="$(arg multimaster)">
-      <node name="$(anon master_discovery)" pkg="master_discovery_fkie" type="zeroconf" respawn="true" output="screen"/>
+      <node name="$(anon master_discovery)" pkg="master_discovery_fkie" type="master_discovery" respawn="true" output="screen"/>
       <node name="$(anon master_sync)" pkg="master_sync_fkie" type="master_sync" respawn="true" output="screen">
         <rosparam param="ignore_topics">
           - /rosout
