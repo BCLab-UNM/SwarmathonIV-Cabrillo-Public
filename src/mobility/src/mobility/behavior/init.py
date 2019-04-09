@@ -32,7 +32,7 @@ def main(**kwargs):
     try:
         # Ignore cubes if they're put in the way. It's more important to continue
         # this behavior and find a corner of home than it is to stop for a cube.
-        swarmie.drive(1, ignore=Obstacle.TAG_TARGET)
+        swarmie.drive(1, ignore=Obstacle.TAG_TARGET | Obstacle.IS_SONAR)
     except AbortException:
         raise
     except DriveException:
