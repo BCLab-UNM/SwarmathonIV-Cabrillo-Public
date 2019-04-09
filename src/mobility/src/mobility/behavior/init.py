@@ -45,6 +45,7 @@ def main(**kwargs):
     except PathException as e:
         # It isn't ideal if we can't find a home corner, but it's worth
         # continuing to turn around and let the rover begin searching.
+        swarmie.print_infoLog('<font color="red">{}</font>'.format(e.status))
         rospy.logwarn(e.status)
 
     swarmie.turn(
