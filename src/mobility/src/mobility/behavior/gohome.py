@@ -24,16 +24,6 @@ from mobility.planner import Planner
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
-def drive_straight_home_odom() :
-    # We remember home in the Odom frame when we see it. Unlike GPS
-    # there's no need to translate the location into r and theta. The
-    # swarmie's drive_to function takes a point in odometry space.
-
-    home = swarmie.get_home_odom_location()
-    swarmie.drive_to(home,
-                     ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER,
-                     **swarmie.speed_fast)
-
 
 def face_home_tag():
     # todo: is it necessary to check that we can still see a home tag? or does dropoff handle it ok?
