@@ -74,6 +74,15 @@ def drive_home(has_block, home_loc):
 
         counter += 1
 
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        face_home_tag()
+
+    elif drive_result == MoveResult.OBSTACLE_TAG:
+        # This can happen if we're going home without a block.
+        planner.face_nearest_block()
+
+    return drive_result
+
 
 def spiral_search(has_block):
     global planner
@@ -123,9 +132,11 @@ def main(**kwargs):
     swarmie.wrist_middle()  # get block mostly out of camera view
     home = swarmie.get_home_odom_location()
 
-    drive_home(has_block, home)
-
-    face_home_tag()
+    drive_result = drive_home(has_block, home)
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        sys.exit(0)
+    elif drive_result == MoveResult.OBSTACLE_TAG:
+        sys.exit(GOHOME_FOUND_TAG)
 
     # Look to the right and left before starting spiral search, which goes
     # left:
