@@ -1038,7 +1038,7 @@ class HomeTransformGen:
                                                         detection.pose)
                     r, p, y = euler_from_quaternion(xpose.pose.orientation)
 
-                    if r < 0.25 and p < 0.25:  # ~15 degrees
+                    if abs(r) < 0.25 and abs(p) < 0.25:  # ~15 degrees
                         # TODO: is this a good number?
                         # TODO: could filtering ever be a problem, since the
                         #  transform is going to the base link frame, if the
