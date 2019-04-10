@@ -43,7 +43,7 @@ def wander():
 
     except ObstacleException:
         print ("I saw an obstacle!")
-        turnaround(ignore=Obstacle.IS_SONAR)
+        turnaround(ignore=Obstacle.IS_SONAR | Obstacle.VISION_HOME)
 
 
 def random_walk(num_moves):
