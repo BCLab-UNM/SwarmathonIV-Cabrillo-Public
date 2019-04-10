@@ -174,6 +174,76 @@ def should_sweep(home_tag_yaw):
                  or abs(loc_home.pose.position.y) < 0.6))
 
 
+def drive_to_next_tag(rightmost_tag, prev_rightmost_tag):
+    """Attempt to drive to the next rightmost home tag in view.
+
+    Args:
+        rightmost_tag: The current rightmost tag in view.
+        prev_rightmost_tag: The previous rightmost tag in view. Used as a
+            fallback if no home tags are currently in view.
+
+    Returns:
+        True if successful, False if we had to recover.
+
+    Raises:
+        HomeCornerException: From Swarmie.drive(), if we find a corner of home.
+    """
+    # The rover drives repeatedly to the rightmost home tag in view. However,
+    # swarmie.drive_to() drives to a point such that the rover is on top of that
+    # point. If the rover did this here, it's likely no home tags would be in
+    # view anymore. The claw_offset argument allows the rover to stop short of
+    # the goal point by this distance in meters.
+    claw_offset = 0.3
+
+    # TODO: should sonar be ignored all the time?
+    ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
+              Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
+
+    if rightmost_tag is None:
+        if prev_rightmost_tag is not None:
+            rightmost_tag = prev_rightmost_tag
+        else:
+            return False
+
+    # TODO: pull helpers out of home_transform.py and into utils.py
+    #  so you can use yaw_from_quaternion() here.
+    _r, _p, home_yaw = tf.transformations.euler_from_quaternion(
+        [rightmost_tag.pose.orientation.x,
+         rightmost_tag.pose.orientation.y,
+         rightmost_tag.pose.orientation.z,
+         rightmost_tag.pose.orientation.w]
+    )
+
+    # Using set heading before driving is useful when the rover is
+    # mostly facing the corner to its left (which isn't the one we
+    # want to drive to). Given the home tag's orientation on the
+    # home ring, this gets the rover facing to the right, and keeps
+    # it that way. Otherwise, it's possible for the rover to be
+    # facing a corner to its left, and the simple "drive to the
+    # rightmost tag" logic here will fail; the rover won't move at
+    # all because its already where it should be according to
+    # drive_to().
+    if should_sweep(home_yaw):
+        swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
+
+    else:
+        cur_loc = swarmie.get_odom_location().get_pose()
+        dist = math.hypot(cur_loc.x - rightmost_tag.pose.position.x,
+                          cur_loc.y - rightmost_tag.pose.position.y)
+
+        if abs(dist - claw_offset) < 0.07:
+            # If dist - claw_offset is small, drive_to() is unlikely to
+            # make the rover move at all. In this case it's worth
+            # recovering or raising an InsideHomeException
+            # from recover()
+            return False
+
+        swarmie.drive_to(rightmost_tag.pose.position,
+                         claw_offset=claw_offset, ignore=ignore)
+
+    return True
+
+
 def find_home_corner(max_fail_count=3):
     # type: (int) -> bool
     """Drive around and find a corner of the home plate.
@@ -191,21 +261,10 @@ def find_home_corner(max_fail_count=3):
     """
     check_inside_home()
 
-    # The rover drives repeatedly to the rightmost home tag in view. However,
-    # swarmie.drive_to() drives to a point such that the rover is on top of that
-    # point. If the rover did this here, it's likely no home tags would be in
-    # view anymore. The claw_offset argument allows the rover to stop short of
-    # the goal point by this distance in meters.
-    claw_offset = 0.3
-
     # How many times the rover has stopped with no home tags in view.
     fail_count = 0
 
     rightmost_tag = None
-
-    # TODO: should sonar be ignored all the time?
-    ignore = (Obstacle.TAG_TARGET | Obstacle.TAG_HOME |
-              Obstacle.INSIDE_HOME | Obstacle.IS_SONAR)
 
     # Because this function's caller has likely only just seen a home tag,
     # waiting for a brief moment here helps to ensure the first call to
@@ -217,54 +276,13 @@ def find_home_corner(max_fail_count=3):
             prev_rightmost_tag = rightmost_tag
             rightmost_tag = find_rightmost_home_tag()
 
-            if rightmost_tag is None:
-                if prev_rightmost_tag is not None:
-                    rightmost_tag = prev_rightmost_tag
-                else:
-                    fail_count += 1
-                    if fail_count >= max_fail_count:
-                        raise PathException(('Unable to find a home corner, ' +
-                                             'no home tags are in view.'))
+            if not drive_to_next_tag(rightmost_tag, prev_rightmost_tag):
+                recover()
+                fail_count += 1
 
-                    recover()
-                    continue
-
-            # TODO: pull helpers out of home_transform.py and into utils.py
-            #  so you can use yaw_from_quaternion() here.
-            _r, _p, home_yaw = tf.transformations.euler_from_quaternion(
-                [rightmost_tag.pose.orientation.x,
-                 rightmost_tag.pose.orientation.y,
-                 rightmost_tag.pose.orientation.z,
-                 rightmost_tag.pose.orientation.w]
-            )
-
-            # Using set heading before driving is useful when the rover is
-            # mostly facing the corner to its left (which isn't the one we
-            # want to drive to). Given the home tag's orientation on the
-            # home ring, this gets the rover facing to the right, and keeps
-            # it that way. Otherwise, it's possible for the rover to be
-            # facing a corner to its left, and the simple "drive to the
-            # rightmost tag" logic here will fail; the rover won't move at
-            # all because its already where it should be according to
-            # drive_to().
-            if should_sweep(home_yaw):
-                swarmie.set_heading(home_yaw + math.pi / 3, ignore=ignore)
-
-            else:
-                cur_loc = swarmie.get_odom_location().get_pose()
-                dist = math.hypot(cur_loc.x - rightmost_tag.pose.position.x,
-                                  cur_loc.y - rightmost_tag.pose.position.y)
-
-                if abs(dist - claw_offset) < 0.07:
-                    # If dist - claw_offset is small, drive_to() is unlikely to
-                    # make the rover move at all. In this case it's worth
-                    # recovering or raising an InsideHomeException
-                    # from recover()
-                    recover()
-                    continue
-
-                swarmie.drive_to(rightmost_tag.pose.position,
-                                 claw_offset=claw_offset, ignore=ignore)
+                if fail_count >= max_fail_count:
+                    raise PathException(('Unable to find a home corner, ' +
+                                         'no home tags are in view.'))
 
         except HomeCornerException:
             # success!!
