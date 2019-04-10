@@ -155,7 +155,7 @@ def main(**kwargs):
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
             sys.exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG: #TODO: This may not actuly work and may make behavor of task restarting go home
+        elif drive_result == MoveResult.OBSTACLE_TAG:
             sys.exit(GOHOME_FOUND_TAG)
     except PathException:
         sys.exit(GOHOME_FAIL)
