@@ -72,10 +72,6 @@ def search_exit(code):
     if found_tag:
         print('Found a tag! Trying to get a little closer.')
         planner.face_nearest_block()
-    
-    if code == 0:
-        swarmie.print_infoLog('Setting search exit poses.')
-        set_search_exit_poses()
     sys.exit(code)
 
 
@@ -98,7 +94,7 @@ def drive_to(pose, use_waypoints):
         swarmie.drive_to(pose, throw=False)
 
 
-def return_to_last_exit_position(last_pose):
+def return_to_last_exit_position(last_pose, skip_drive_to=False):
     global planner, found_tag
 
     print('Driving to last search exit position.')
@@ -107,7 +103,7 @@ def return_to_last_exit_position(last_pose):
     count = 0
     use_waypoints = True
 
-    while count < 2:
+    while count < 2 and not skip_drive_to:
         try:
             drive_to(last_pose, use_waypoints)
 
@@ -124,10 +120,6 @@ def return_to_last_exit_position(last_pose):
 
     try:
         swarmie.circle()
-        swarmie.set_heading(
-            last_pose.theta,
-            ignore=Obstacle.VISION_HOME
-        )
 
     except TagException:
         rospy.sleep(0.3)  # build buffer a little
@@ -148,27 +140,29 @@ def return_to_last_exit_position(last_pose):
 
 def main(**kwargs):
     global planner, found_tag
-
     found_tag = False
-
     planner = Planner()
-
     swarmie.fingers_open()
     swarmie.wrist_middle()
-
-    # Return to our last search exit pose if possible
-    if swarmie.has_search_exit_poses():
+    locations_gone_to = 0
+    # Return to the best pile if possible, if nothing found there go to the 
+    #next 2 piles
+    while swarmie.has_resource_pile_locations() and locations_gone_to < 3:
+        locations_gone_to+=1
         cur_pose = swarmie.get_odom_location().get_pose()
-
-        last_pose = swarmie.get_search_exit_poses()
-        dist = math.sqrt((last_pose.x - cur_pose.x) ** 2
-                         + (last_pose.y - cur_pose.y) ** 2)
-
-        if dist > 1:  # only bother if it was reasonably far away
-            return_to_last_exit_position(last_pose)
-
+        cube_location = swarmie.get_best_resource_pile_location()
+        dist = math.sqrt((cube_location.x - cur_pose.x) ** 2
+                         + (cube_location.y - cur_pose.y) ** 2)
+        if dist > .5:  # only bother if it was reasonably far away
+            return_to_last_exit_position(cube_location)
+            #if we are here then no cubes where found near the location
+            swarmie.remove_resource_pile_location(cube_location)
+        else: # must be right next to it
+            return_to_last_exit_position(cube_location, skip_drive_to=True)
+            swarmie.remove_resource_pile_location(cube_location)
+    
     random_walk(num_moves=30)
-
+    
     print ("I'm homesick!")
     search_exit(1)
 

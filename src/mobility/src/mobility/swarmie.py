@@ -1032,51 +1032,107 @@ class Swarmie(object):
 
         return nearest.pose.pose.position
 
-    def set_search_exit_poses(self):
-        '''Remember the search exit location.'''
-        odom =  self.get_odom_location().get_pose()
-    
-        rospy.set_param(
-            'search_exit_poses',
-            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},}
-        )
+    def add_resource_pile_location(self, detection_time_tolerance=0.4, override=False, ignore_claw=False):
+        '''Remember the search exit locations.
+            Args:
+            * detection_time_tolerance (`double`) - the time from now 
+            * override (`bool`) - True will add to the list regarless of the number of tags in view
+            * ignore_claw (`bool`) - True will remove all detections within the claw
+        '''
+        # TODO:project location to be in front of the rover & put in the homeframe
+        # TODO: Make sure the location is not inside of home
+        cubes = self.get_targets_buffer(age=detection_time_tolerance, id=0)
+        
+        if ignore_claw:  # will remove cubes within the claw
+            min_z_dist = 0.18
+            if self.simulator_running():
+                min_z_dist = .11
+            cubes = [x for x in cubes if x.pose.pose.position.z > min_z_dist]
+        num_cubes = len(cubes)
+        # if 0,1,2 tags are detected don't bother adding to the list unless overridden
+        if num_cubes < 4 and not override:
+            rospy.loginfo('I only see ' + str(num_cubes) + ' tags, Not Adding to list')
+            return
+        
+        if num_cubes == 0: 
+            location = self.get_odom_location().get_pose()
+        else:
+            location = swarmie.transform_pose('odom', cubes[0].pose, timeout=3
+                                              ).pose.position
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
 
-    def get_search_exit_poses(self):
-        '''Get the odom (location and heading) where search last
-        exited (saw a tag).
+        rospy.loginfo('Called add_resource_pile_location, num_cubes:'
+                      + str(num_cubes)
+                      + ' x:' + str(location.x)
+                      + ' y:' + str(location.y))
+        home = self.get_home_odom_location()
+        if abs(location.x - home.x) < .5 and abs(location.y - home.y) < .5: 
+            rospy.logwarn(self.rover_name + ": Pile inside home")
+            return
+        # numpy floats are not compatible with rosparam so have to convert to float
+        pile_locations_list.append({'num_cubes': num_cubes,
+                                    'x': float(location.x),
+                                    'y': float(location.y)})
+        rospy.set_param('resource_pile_locations', pile_locations_list)
 
+    def remove_resource_pile_location(self, odom_to_remove, threshold=.4):
+        """ remove_resource_pile_location should be called after search goes here and does not find anything 
+        Args:
+            * odom_to_remove (`geometry_msgs.msg.Pose2D`) - the odom that will be used to remove cube piles winthin
+            * threshold (`float`) - the distance from odom_to_remove to remove from the list
+        """
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        # this list comprehension will omit the matching dicts
+        pile_locations_list = [x for x in pile_locations_list
+                               if abs(odom_to_remove.x - x['x']) > threshold or
+                               abs(odom_to_remove.y - x['y']) > threshold]
+        if pile_locations_list:
+            rospy.set_param('resource_pile_locations', pile_locations_list)
+        else:
+            if rospy.has_param('resource_pile_locations'):
+                rospy.delete_param('resource_pile_locations')
+
+    def get_resource_pile_locations(self):
+        """ Gets the ros peram resource_pile_locations which contains a list of dicts that contains num_tags x & y"""
+        return rospy.get_param('resource_pile_locations', [])
+
+    def get_best_resource_pile_location(self):
+        '''Get the odom (location) where pickup or planner saw most lucrative pile
+        baised on number of tags seen then by closeness to the swarmie
+        
         Returns:
-
         * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
 
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
         Examples:
-        >>> odom_pose = swarmie.get_search_exit_poses()
-        >>> swarmie.drive_to(
-        >>>     odom_pose,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
-        >>> swarmie.set_heading(
-        >>>     odom_pose.theta,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
+        >>> odom_pose = swarmie.get_best_resource_pile_location()
+        >>> swarmie.drive_to(odom_pose, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle. )
         '''
-        poses = rospy.get_param(
-            'search_exit_poses',
-            {'odom': {'x': 0, 'y': 0, 'theta': 0}, }
-        )
-        return Pose2D(**poses['odom'])
-
-    def has_search_exit_poses(self):
-        '''Check to see if the search exit location parameter is set.
-
+        # TODO: when have in terms of homeframe convert to odom
+        # for pile_locations_list if l[frame] == 'home' transform to odom
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        # Get the entry with the most tags
+        if not pile_locations_list:
+            return Pose2D(0, 0, 0)
+        max_num_cubes = max(pile_locations_list,
+                            key=lambda k: k['num_cubes'])['num_cubes']
+        locations_w_most_tags = [pile for pile in pile_locations_list if
+                                 max_num_cubes == pile['num_cubes']]
+        cur_pose = swarmie.get_odom_location().get_pose()
+        # get the closest pile with the most cubes
+        best_pile = min(locations_w_most_tags, key=lambda k: math.sqrt(
+                                                    (k['x'] - cur_pose.x) ** 2 +
+                                                    (k['y'] - cur_pose.y) ** 2))
+        return Pose2D(best_pile['x'], best_pile['y'], 0)  # theta is 0
+    
+    def has_resource_pile_locations(self):
+        '''Check to see if the search exit locations parameter is set.
         Returns:
-
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('search_exit_poses')
+        return rospy.has_param('resource_pile_locations')
         
 
 #

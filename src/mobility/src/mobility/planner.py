@@ -951,11 +951,12 @@ class Planner:
                 # self.fail_count may exceed limit here, but I'll let it go
                 while count < 3 and self.result == MoveResult.OBSTACLE_TAG:
                     print('\nObstacle: Found a Tag.')
-
                     if self.avoid_targets is False:
                         if not self.sees_home_tag():
                             return self.result
-
+                    else:
+                        swarmie.add_resource_pile_location( override=True, 
+                                                            ignore_claw=True)
                     count += 1
                     self.fail_count += 1
 
