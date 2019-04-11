@@ -502,6 +502,10 @@ class HomeTransformGen:
                                                PointStamped,
                                                queue_size=10,
                                                latch=True)
+        self._home_point_approx_pub = rospy.Publisher('home_point/approx',
+                                                      PointStamped,
+                                                      queue_size=10,
+                                                      latch=True)
 
         # Additional publishers, for visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
@@ -1017,6 +1021,38 @@ class HomeTransformGen:
 
         return True
 
+    def _find_approx_home_pos(self, detections):
+        # type: (List[PoseStamped]) -> None
+        """Find the approximate home location, given a list of home tag poses."""
+        pose = min(detections, key=lambda d: abs(d.pose.position.y))
+
+        try:
+            self._xform_l.waitForTransform(self._odom_frame,
+                                           pose.header.frame_id,
+                                           pose.header.stamp,
+                                           rospy.Duration(0.15))
+            xpose = self._xform_l.transformPose(self._odom_frame, pose)
+        except tf.Exception as e:
+            rospy.logwarn_throttle(
+                self._log_rate,
+                ('{}: Transform exception in ' +
+                 'HomeTransformGen._find_approx_home_pos():\n{}').format(
+                    self.rover_name, e
+                )
+            )
+            return
+
+        yaw = yaw_from_quaternion(xpose.pose.orientation) + math.pi / 2
+
+        home_pt = PointStamped()
+        home_pt.header.frame_id = self._odom_frame
+        home_pt.header.stamp = rospy.Time.now()
+        home_pt.point.x = xpose.pose.position.x + 0.5 * math.cos(yaw)
+        home_pt.point.y = xpose.pose.position.y + 0.5 * math.sin(yaw)
+        home_pt.point.z = 0.0
+
+        self._home_point_approx_pub.publish(home_pt)
+
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
@@ -1064,6 +1100,8 @@ class HomeTransformGen:
         if len(detections) > 0:
             if self._is_rover_inside_home(good_yaw_count, bad_yaw_count):
                 next_obst_status |= Obstacle.INSIDE_HOME
+
+            self._find_approx_home_pos(detections)
 
             corner = self._find_corner_tags(detections)
             if corner is not None:
