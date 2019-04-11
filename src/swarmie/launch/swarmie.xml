@@ -73,6 +73,8 @@
     <param name="map_inflation_period" value="1.0"/>
     <param name="map_publish_period" value="1.0"/>
 
+    <param if="$(arg simulation)" name="tag_in_claw_dist" value="0.18"/>
+    <param unless="$(arg simulation)" name="tag_in_claw_dist" value="0.22"/>
     <param name="sonar_fov" value="0.2"/>
     <param name="single_sensor_obstacle_dist" value="0.25"/>
     <param name="double_sensor_obstacle_dist" value="0.5"/>
