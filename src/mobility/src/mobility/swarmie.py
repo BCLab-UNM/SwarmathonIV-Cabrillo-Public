@@ -129,8 +129,8 @@ class Swarmie(object):
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self._home_odom_position = None
-        self._home_odom_approx_position = None
+        self._home_odom_position = None  # type: PointStamped
+        self._home_odom_approx_position = None  # type: PointStamped
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -835,15 +835,31 @@ class Swarmie(object):
         with swarmie_lock : 
             return self.Obstacles
 
-    def get_home_odom_location(self):
+    def get_home_odom_location(self, approx=False):
         '''Recall the home odometry location. This is probably the most reliable memory
         of the location of the nest. Odometry drifts, so if we haven't seen home in a 
-        while this will be off. 
+        while this will be off.
+
+        Args:
+        * approx (`bool`) - Whether to get the less accurate, but easier to
+          update approximate home location.
         
         Returns: 
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
+        if approx:
+            if self._home_odom_approx_position is None:
+                rospy.logwarn(
+                    ("{}: No approximate home location has been received " +
+                     "yet, returning odom's origin as the estimated home " +
+                     "location.").format(self.rover_name)
+                )
+                return Point(x=0, y=0)
+
+            return Point(x=self._home_odom_approx_position.point.x,
+                         y=self._home_odom_approx_position.point.y)
+
         if self._home_odom_position is None:
             # Try to set the home position using tf. This is unlikely, but could
             # possibly happen while running behaviors individually as standalone
@@ -869,14 +885,18 @@ class Swarmie(object):
         return Point(x=self._home_odom_position.point.x,
                      y=self._home_odom_position.point.y)
 
-    def has_home_odom_location(self):
+    def has_home_odom_location(self, approx=False):
         '''Check to see if the rover knows home's odometry location.
-        
+
+        Args:
+        * approx (`bool`) - Whether to check the less accurate, but easier to
+          update approximate home location.
+
         Returns:
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        home_odom = self.get_home_odom_location()
+        home_odom = self.get_home_odom_location(approx=approx)
 
         return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
