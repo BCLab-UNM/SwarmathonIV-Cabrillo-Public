@@ -130,6 +130,7 @@ class Swarmie(object):
         self.Obstacles = 0
         self.OdomLocation = Location(None)
         self._home_odom_position = None
+        self._home_odom_approx_position = None
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -241,6 +242,8 @@ class Swarmie(object):
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
         rospy.Subscriber('home_point', PointStamped, self._home_point)
+        rospy.Subscriber('home_point/approx', PointStamped, self._home_point,
+                         callback_args=True)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
@@ -280,9 +283,17 @@ class Swarmie(object):
         self.Obstacles |= msg.msg
 
     @sync(swarmie_lock)
-    def _home_point(self, msg):
-        """Update the home plate's position in the odometry frame."""
-        self._home_odom_position = msg
+    def _home_point(self, msg, approx=False):
+        """Update the home plate's position in the odometry frame.
+
+        Args:
+        * msg (`PointStamped`) - The ROS message.
+        * approx (`bool`) - Whether this is an approximate location.
+        """
+        if approx:
+            self._home_odom_approx_position = msg
+        else:
+            self._home_odom_position = msg
 
     @sync(swarmie_lock)
     def _targets(self, msg):
