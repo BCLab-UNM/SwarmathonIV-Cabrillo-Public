@@ -267,8 +267,7 @@ class State:
                     else:
                         self.CurrentState = State.STATE_TURN
                         
-                    self.__check_obstacles()
-
+                self.__check_obstacles()
 
         elif self.CurrentState == State.STATE_TURN :
             self.print_debug('TURN')
