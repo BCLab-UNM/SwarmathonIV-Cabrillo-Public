@@ -36,6 +36,7 @@ from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Time
 
+from mobility.utils import is_moving
 from mobility import sync
 
 from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
@@ -1049,6 +1050,9 @@ class HomeTransformGen:
         Buckets should contain only home tags (id == 256), and at least one
         bucket should not be empty.
         """
+        if self._cur_odom is not None and is_moving(self._cur_odom):
+            return
+
         approx_corner = False
 
         if pose_bucket1 and pose_bucket2:
