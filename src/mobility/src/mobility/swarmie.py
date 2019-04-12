@@ -595,32 +595,31 @@ class Swarmie(object):
         * Return `False`
         '''
         if self.simulator_running():
-            wrist_angles = (0.0,)
-            max_z_dist = (0.11,)
+            wrist_angles = (0.3, 0.0)
+            max_z_dist = 0.13 #0.151+ is the top of the cube on the ground in the sim
         else:
             wrist_angles = (0.55, 0.0)
-            max_z_dist = (0.18, 0.15)
-
-        for angle, max_z in zip(wrist_angles, max_z_dist):
+            max_z_dist = 0.18
+        
+        for angle in wrist_angles:
             self.set_wrist_angle(angle)
             rospy.sleep(1)
-            blocks = self.get_latest_targets()
+            blocks = self.get_targets_buffer(age=1, id=0)
             blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
             if len(blocks) > 0 :
                 nearest = blocks[0]
                 z_dist = nearest.pose.pose.position.z
-                if abs(z_dist) < max_z:
+                if abs(z_dist) < max_z_dist:
                     return True
-
+        
         # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
         if obstacles & Obstacle.SONAR_BLOCK :
             return True
-
-        # The block does not affect the sonar in the simulator. 
-        # Use the below check if having trouble with visual target check.
-        # return(self.simulator_running())
-        return False  # self.sees_resource(6)
+        # The block does not affect the sonar in the simulator.
+        
+        return False 
+        
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
