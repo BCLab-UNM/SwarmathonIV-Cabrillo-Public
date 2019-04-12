@@ -144,7 +144,7 @@ Visualization Manager:
       Shaft Length: 0.230000004
       Shaft Radius: 0.00999999978
       Shape: Arrow (Flat)
-      Topic: /achilles/tag_detections_pose
+      Topic: /achilles/targets/out/array
       Unreliable: false
       Value: true
     - Class: rviz/TF
