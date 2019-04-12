@@ -14,9 +14,17 @@ from mobility.swarmie import swarmie, PathException
 from mobility.behavior.find_home_corner import find_home_corner
 
 
-def dropoff():
-    """Drive in and drop off a cube."""
-    home_odom = swarmie.get_home_odom_location()
+def dropoff(approx_home=False):
+    """Drive in and drop off a cube.
+
+    Args:
+        approx_home: Whether we should use the approximate home location as the
+        goal point to drive toward.
+    """
+    if approx_home:
+        rospy.logwarn("Performing dropoff using approximate home location.")
+
+    home_odom = swarmie.get_home_odom_location(approx=approx_home)
 
     # Move the wrist up so the resource won't hit the home plate.
     swarmie.set_wrist_angle(.3)
@@ -58,13 +66,15 @@ def main(**kwargs):
 
     # TODO: What should find_home_corner() do when it's called with no home tags
     #  in view? Does this happen very often?
+    use_approx_home = True
     try:
-        find_home_corner()
+        if find_home_corner():
+            use_approx_home = False
     except PathException as e:
+        swarmie.print_infoLog('<font color="red">{}</font>'.format(e.status))
         rospy.logwarn(e.status)
-        return -1
 
-    dropoff()
+    dropoff(use_approx_home)
 
     exit_home()
 
