@@ -97,6 +97,32 @@ def spiral_search(has_block):
     return drive_result
 
 
+def get_best_home_location(dist_threshold=0.7):
+    """Return the home location most likely to be up to date. This will
+    be either:
+
+        - The accurate home odom location, if it's close to the approximate
+          home location.
+        - The approximate home odom location, if the accurate home odom location
+          appears not to have been updated recently enough.
+
+    Args:
+        dist_threshold: Distance (m). If the accurate home odom location is
+            further than this distance away from the approximate home odom
+            location, then it won't be used.
+    """
+    home_accurate = swarmie.get_home_odom_location()
+    home_approx = swarmie.get_home_odom_location(approx=True)
+
+    dist = math.hypot(home_accurate.x - home_approx.x,
+                      home_accurate.y - home_approx.y)
+
+    if dist > dist_threshold:
+        return home_approx
+
+    return home_accurate
+
+
 def main(**kwargs):
     global planner, use_waypoints
 
@@ -115,7 +141,7 @@ def main(**kwargs):
 
     swarmie.fingers_close()  # make sure we keep a firm grip
     swarmie.wrist_middle()  # get block mostly out of camera view
-    home = swarmie.get_home_odom_location()
+    home = get_best_home_location()
 
     drive_home(has_block, home)
 

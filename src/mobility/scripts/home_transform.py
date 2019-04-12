@@ -8,7 +8,7 @@ TODO: Using the voting scheme to converge on a single set of corner orientation
  this would prevent all of the rovers from being able to identify a corner's
  number and calculate the home frame's orientation.
 """
-from __future__ import print_function
+from __future__ import division, print_function
 
 try:
     from typing import TYPE_CHECKING
@@ -36,6 +36,7 @@ from geometry_msgs.msg import (PointStamped, Pose, Pose2D, PoseStamped,
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Time
 
+from mobility.utils import is_moving
 from mobility import sync
 
 from apriltags2to1.msg import AprilTagDetection, AprilTagDetectionArray
@@ -502,6 +503,10 @@ class HomeTransformGen:
                                                PointStamped,
                                                queue_size=10,
                                                latch=True)
+        self._home_point_approx_pub = rospy.Publisher('home_point/approx',
+                                                      PointStamped,
+                                                      queue_size=10,
+                                                      latch=True)
 
         # Additional publishers, for visualizing intermediate steps in RViz.
         self._closest_pub = rospy.Publisher('targets/closest_pair',
@@ -638,32 +643,17 @@ class HomeTransformGen:
         """
         self._xform_vote_pub.publish(self._xform_vote)
 
-    def _find_corner_tags(self, detections):
-        # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
+    @staticmethod
+    def _find_corner_tags(pose_bucket1,  # type: List[PoseStamped]
+                          pose_bucket2,  # type: List[PoseStamped]
+                          ):
+        # type: (...) -> Optional[Tuple[PoseStamped, PoseStamped]]
         """Find the closest pair of tags whose orientations in 2D space are
         approximately perpendicular and are inline with each other.
-
-        Detections should not be empty and should only contain home tags (id ==
-        256).
         """
-        pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
-        pose_buckets[0].append(detections[0])
-
-        for detection in detections[1:]:  # type: PoseStamped
-            angle_between = abs(angles.shortest_angular_distance(
-                yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
-                yaw_from_quaternion(detection.pose.orientation)
-            ))
-
-            if angle_between < 0.25:  # ~15 deg
-                pose_buckets[0].append(detection)
-            elif angle_between > math.pi / 2 - 0.25:
-                # PI/2 minus a nominal ~15 deg.
-                pose_buckets[1].append(detection)
-
-        if len(pose_buckets[1]) > 0:
+        if pose_bucket1 and pose_bucket2:
             # We found 2 different orientations of tags.
-            return closest_inline_pair(*pose_buckets)
+            return closest_inline_pair(pose_bucket1, pose_bucket2)
 
         return None
 
@@ -836,6 +826,28 @@ class HomeTransformGen:
             'Unable to set the bounds using either Bounds Option'
         )
 
+    @staticmethod
+    def _translate_to_center(corner_type, corner_pose):
+        # type: (int, PoseStamped) -> PoseStamped
+        """Given a corner type and its pose in the odometry frame, translate
+        the corner's position to the center of home.
+        """
+        home_pose = copy.deepcopy(corner_pose)
+
+        theta = HomeTransformGen.TRANS_ROT[corner_type]
+
+        angle_to_center = yaw_from_quaternion(rotate_quaternion(
+            corner_pose.pose.orientation, theta, (0, 0, 1)
+        ))
+        home_pose.pose.position.x = (home_pose.pose.position.x
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.cos(angle_to_center))
+        home_pose.pose.position.y = (home_pose.pose.position.y
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.sin(angle_to_center))
+
+        return home_pose
+
     @sync(home_xform_lock)
     def _home_pose(self, corner_type, corner_pose):
         # type: (int, PoseStamped) -> Tuple[PointStamped, Optional[PoseStamped]]
@@ -875,20 +887,7 @@ class HomeTransformGen:
         if not self._are_bounds_set():
             self._choose_bounds_option(corner_type, c_pose_odom)
 
-        home_pose = copy.deepcopy(c_pose_odom)
-
-        theta = HomeTransformGen.TRANS_ROT[corner_type]
-
-        angle_to_center = yaw_from_quaternion(rotate_quaternion(
-            c_pose_odom.pose.orientation, theta, (0, 0, 1)
-        ))
-        home_pose.pose.position.x = (home_pose.pose.position.x
-                                     + HomeTransformGen.CORNER_DIST
-                                     * math.cos(angle_to_center))
-        home_pose.pose.position.y = (home_pose.pose.position.y
-                                     + HomeTransformGen.CORNER_DIST
-                                     * math.sin(angle_to_center))
-
+        home_pose = self._translate_to_center(corner_type, c_pose_odom)
         home_point = ps_to_pt_stamped(home_pose)
 
         corner_num = self._id_corner(corner_type, c_pose_odom)
@@ -1017,6 +1016,110 @@ class HomeTransformGen:
 
         return True
 
+    @staticmethod
+    def _get_bucketed_tags(detections  # type: List[PoseStamped]
+                           ):
+        # type: (...) -> Tuple[List[PoseStamped], List[PoseStamped]]
+        """Place tag poses into buckets by their orientation.
+
+        Detections should not be empty and should only contain home tags (id ==
+        256).
+        """
+        pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
+        pose_buckets[0].append(detections[0])
+
+        for detection in detections[1:]:  # type: PoseStamped
+            angle_between = abs(angles.shortest_angular_distance(
+                yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
+                yaw_from_quaternion(detection.pose.orientation)
+            ))
+
+            if angle_between < 0.25:  # ~15 deg
+                pose_buckets[0].append(detection)
+            elif angle_between > math.pi / 2 - 0.25:
+                # PI/2 minus a nominal ~15 deg.
+                pose_buckets[1].append(detection)
+
+        return pose_buckets[0], pose_buckets[1]
+
+    def _find_approx_home_pos(self, pose_bucket1, pose_bucket2):
+        # type: (List[PoseStamped], List[PoseStamped]) -> None
+        """Find the approximate home location, given two lists of home tag
+        poses, bucketed by their orientation.
+
+        Buckets should contain only home tags (id == 256), and at least one
+        bucket should not be empty.
+        """
+        if self._cur_odom is not None and is_moving(self._cur_odom):
+            return
+
+        approx_corner = False
+
+        if pose_bucket1 and pose_bucket2:
+            approx_corner = True
+            if (angles.shortest_angular_distance(
+                    yaw_from_quaternion(pose_bucket1[0].pose.orientation),
+                    yaw_from_quaternion(pose_bucket2[0].pose.orientation))
+                    < 0):
+                detections = pose_bucket1
+            else:
+                detections = pose_bucket2
+        else:
+            detections = pose_bucket1
+            if len(pose_bucket2) > len(detections):
+                detections = pose_bucket2
+
+        if approx_corner:
+            sum_ = reduce(lambda p, n: (p[0] + n.pose.position.x,
+                                        p[1] + n.pose.position.y),
+                          detections,
+                          (0, 0))
+
+            pose = copy.deepcopy(detections[0])
+            pose.pose.position.x = sum_[0] / len(detections)
+            pose.pose.position.y = sum_[1] / len(detections)
+            pose.pose.orientation = rotate_quaternion(pose.pose.orientation,
+                                                      math.pi, (0, 0, 1))
+        else:
+            pose = max(detections, key=lambda d: d.pose.position.y)
+
+        pose.pose.position.z = 0
+
+        try:
+            self._xform_l.waitForTransform(self._odom_frame,
+                                           pose.header.frame_id,
+                                           pose.header.stamp,
+                                           rospy.Duration(0.15))
+            xpose = self._xform_l.transformPose(self._odom_frame, pose)
+        except tf.Exception as e:
+            rospy.logwarn_throttle(
+                self._log_rate,
+                ('{}: Transform exception in ' +
+                 'HomeTransformGen._find_approx_home_pos():\n{}').format(
+                    self.rover_name, e
+                )
+            )
+            return
+
+        home_pt = PointStamped()
+        home_pt.header.frame_id = self._odom_frame
+        home_pt.header.stamp = rospy.Time.now()
+
+        if approx_corner:
+            home_pose = self._translate_to_center(
+                HomeTransformGen.CORNER_TYPE_1,
+                xpose
+            )
+            home_pt.point = home_pose.pose.position
+        else:
+            yaw = yaw_from_quaternion(xpose.pose.orientation) + math.pi / 2
+            home_pt.point.x = xpose.pose.position.x + 0.5 * math.cos(yaw)
+            home_pt.point.y = xpose.pose.position.y + 0.5 * math.sin(yaw)
+
+        home_pt.point.z = 0.0
+
+        self._home_point_approx_pub.publish(home_pt)
+
     def _targets_cb(self, msg):
         # type: (AprilTagDetectionArray) -> None
         """Find corner of home."""
@@ -1065,7 +1168,10 @@ class HomeTransformGen:
             if self._is_rover_inside_home(good_yaw_count, bad_yaw_count):
                 next_obst_status |= Obstacle.INSIDE_HOME
 
-            corner = self._find_corner_tags(detections)
+            pose_buckets = self._get_bucketed_tags(detections)
+            self._find_approx_home_pos(*pose_buckets)
+
+            corner = self._find_corner_tags(*pose_buckets)
             if corner is not None:
                 next_obst_status |= Obstacle.HOME_CORNER
 

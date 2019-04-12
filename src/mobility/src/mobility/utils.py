@@ -14,6 +14,8 @@ try:
 except ImportError:
     pass
 
+from nav_msgs.msg import Odometry
+
 from apriltags2to1.msg import AprilTagDetection
 
 
@@ -40,4 +42,13 @@ def sort_tags_left_to_right(detections):
         key=lambda x: x.pose.pose.position.x
     )
 
+def is_moving(odom, lin_x_thld=0.1, ang_z_thld=0.2):
+    # type: (Odometry, float, float) -> bool
+    """Given an Odometry message, return True if the rover is moving.
 
+    Args:
+        lin_x_thld: The threshold linear x velocity.
+        ang_z_thld: The threshold angular z velocity.
+    """
+    return (abs(odom.twist.twist.linear.x) > 0.1
+            or abs(odom.twist.twist.angular.z) > 0.2)

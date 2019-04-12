@@ -28,6 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
+from .utils import is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -129,7 +130,8 @@ class Swarmie(object):
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self._home_odom_position = None
+        self._home_odom_position = None  # type: PointStamped
+        self._home_odom_approx_position = None  # type: PointStamped
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -241,6 +243,8 @@ class Swarmie(object):
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
         rospy.Subscriber('home_point', PointStamped, self._home_point)
+        rospy.Subscriber('home_point/approx', PointStamped, self._home_point,
+                         callback_args=True)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
@@ -280,9 +284,17 @@ class Swarmie(object):
         self.Obstacles |= msg.msg
 
     @sync(swarmie_lock)
-    def _home_point(self, msg):
-        """Update the home plate's position in the odometry frame."""
-        self._home_odom_position = msg
+    def _home_point(self, msg, approx=False):
+        """Update the home plate's position in the odometry frame.
+
+        Args:
+        * msg (`PointStamped`) - The ROS message.
+        * approx (`bool`) - Whether this is an approximate location.
+        """
+        if approx:
+            self._home_odom_approx_position = msg
+        else:
+            self._home_odom_position = msg
 
     @sync(swarmie_lock)
     def _targets(self, msg):
@@ -823,15 +835,31 @@ class Swarmie(object):
         with swarmie_lock : 
             return self.Obstacles
 
-    def get_home_odom_location(self):
+    def get_home_odom_location(self, approx=False):
         '''Recall the home odometry location. This is probably the most reliable memory
         of the location of the nest. Odometry drifts, so if we haven't seen home in a 
-        while this will be off. 
+        while this will be off.
+
+        Args:
+        * approx (`bool`) - Whether to get the less accurate, but easier to
+          update approximate home location.
         
         Returns: 
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
+        if approx:
+            if self._home_odom_approx_position is None:
+                rospy.logwarn(
+                    ("{}: No approximate home location has been received " +
+                     "yet, returning odom's origin as the estimated home " +
+                     "location.").format(self.rover_name)
+                )
+                return Point(x=0, y=0)
+
+            return Point(x=self._home_odom_approx_position.point.x,
+                         y=self._home_odom_approx_position.point.y)
+
         if self._home_odom_position is None:
             # Try to set the home position using tf. This is unlikely, but could
             # possibly happen while running behaviors individually as standalone
@@ -857,14 +885,18 @@ class Swarmie(object):
         return Point(x=self._home_odom_position.point.x,
                      y=self._home_odom_position.point.y)
 
-    def has_home_odom_location(self):
+    def has_home_odom_location(self, approx=False):
         '''Check to see if the rover knows home's odometry location.
-        
+
+        Args:
+        * approx (`bool`) - Whether to check the less accurate, but easier to
+          update approximate home location.
+
         Returns:
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        home_odom = self.get_home_odom_location()
+        home_odom = self.get_home_odom_location(approx=approx)
 
         return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
@@ -918,7 +950,7 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        return(self._is_moving())
+        return self._is_moving()
         
     def _is_moving(self):
         ''' uses OdomLocation angular.z & linear.x  
@@ -926,9 +958,10 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        if (self.OdomLocation.Odometry is None):
-            return(False)
-        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+        if self.OdomLocation.Odometry is None:
+            return False
+
+        return is_moving(self.OdomLocation.Odometry)
 
     def transform_pose(self, target_frame, pose, timeout=3.0):
         """Transform PoseStamped into the target frame of reference.
