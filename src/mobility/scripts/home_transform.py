@@ -825,6 +825,28 @@ class HomeTransformGen:
             'Unable to set the bounds using either Bounds Option'
         )
 
+    @staticmethod
+    def _translate_to_center(corner_type, corner_pose):
+        # type: (int, PoseStamped) -> PoseStamped
+        """Given a corner type and its pose in the odometry frame, translate
+        the corner's position to the center of home.
+        """
+        home_pose = copy.deepcopy(corner_pose)
+
+        theta = HomeTransformGen.TRANS_ROT[corner_type]
+
+        angle_to_center = yaw_from_quaternion(rotate_quaternion(
+            corner_pose.pose.orientation, theta, (0, 0, 1)
+        ))
+        home_pose.pose.position.x = (home_pose.pose.position.x
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.cos(angle_to_center))
+        home_pose.pose.position.y = (home_pose.pose.position.y
+                                     + HomeTransformGen.CORNER_DIST
+                                     * math.sin(angle_to_center))
+
+        return home_pose
+
     @sync(home_xform_lock)
     def _home_pose(self, corner_type, corner_pose):
         # type: (int, PoseStamped) -> Tuple[PointStamped, Optional[PoseStamped]]
@@ -864,20 +886,7 @@ class HomeTransformGen:
         if not self._are_bounds_set():
             self._choose_bounds_option(corner_type, c_pose_odom)
 
-        home_pose = copy.deepcopy(c_pose_odom)
-
-        theta = HomeTransformGen.TRANS_ROT[corner_type]
-
-        angle_to_center = yaw_from_quaternion(rotate_quaternion(
-            c_pose_odom.pose.orientation, theta, (0, 0, 1)
-        ))
-        home_pose.pose.position.x = (home_pose.pose.position.x
-                                     + HomeTransformGen.CORNER_DIST
-                                     * math.cos(angle_to_center))
-        home_pose.pose.position.y = (home_pose.pose.position.y
-                                     + HomeTransformGen.CORNER_DIST
-                                     * math.sin(angle_to_center))
-
+        home_pose = self._translate_to_center(corner_type, c_pose_odom)
         home_point = ps_to_pt_stamped(home_pose)
 
         corner_num = self._id_corner(corner_type, c_pose_odom)
