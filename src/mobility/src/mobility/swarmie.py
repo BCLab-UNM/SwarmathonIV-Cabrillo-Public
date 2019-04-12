@@ -28,6 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
+from .utils import is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -950,7 +951,7 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        return(self._is_moving())
+        return self._is_moving()
         
     def _is_moving(self):
         ''' uses OdomLocation angular.z & linear.x  
@@ -958,9 +959,10 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        if (self.OdomLocation.Odometry is None):
-            return(False)
-        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+        if self.OdomLocation.Odometry is None:
+            return False
+
+        return is_moving(self.OdomLocation.Odometry)
 
     def transform_pose(self, target_frame, pose, timeout=3.0):
         """Transform PoseStamped into the target frame of reference.
