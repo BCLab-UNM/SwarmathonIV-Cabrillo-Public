@@ -8,7 +8,7 @@ TODO: Using the voting scheme to converge on a single set of corner orientation
  this would prevent all of the rovers from being able to identify a corner's
  number and calculate the home frame's orientation.
 """
-from __future__ import print_function
+from __future__ import division, print_function
 
 try:
     from typing import TYPE_CHECKING
@@ -1041,10 +1041,45 @@ class HomeTransformGen:
 
         return pose_buckets[0], pose_buckets[1]
 
-    def _find_approx_home_pos(self, detections):
-        # type: (List[PoseStamped]) -> None
-        """Find the approximate home location, given a list of home tag poses."""
-        pose = min(detections, key=lambda d: abs(d.pose.position.y))
+    def _find_approx_home_pos(self, pose_bucket1, pose_bucket2):
+        # type: (List[PoseStamped], List[PoseStamped]) -> None
+        """Find the approximate home location, given two lists of home tag
+        poses, bucketed by their orientation.
+
+        Buckets should contain only home tags (id == 256), and at least one
+        bucket should not be empty.
+        """
+        approx_corner = False
+
+        if pose_bucket1 and pose_bucket2:
+            approx_corner = True
+            if (angles.shortest_angular_distance(
+                    yaw_from_quaternion(pose_bucket1[0].pose.orientation),
+                    yaw_from_quaternion(pose_bucket2[0].pose.orientation))
+                    < 0):
+                detections = pose_bucket1
+            else:
+                detections = pose_bucket2
+        else:
+            detections = pose_bucket1
+            if len(pose_bucket2) > len(detections):
+                detections = pose_bucket2
+
+        if approx_corner:
+            sum_ = reduce(lambda p, n: (p[0] + n.pose.position.x,
+                                        p[1] + n.pose.position.y),
+                          detections,
+                          (0, 0))
+
+            pose = copy.deepcopy(detections[0])
+            pose.pose.position.x = sum_[0] / len(detections)
+            pose.pose.position.y = sum_[1] / len(detections)
+            pose.pose.orientation = rotate_quaternion(pose.pose.orientation,
+                                                      math.pi, (0, 0, 1))
+        else:
+            pose = max(detections, key=lambda d: d.pose.position.y)
+
+        pose.pose.position.z = 0
 
         try:
             self._xform_l.waitForTransform(self._odom_frame,
@@ -1062,13 +1097,21 @@ class HomeTransformGen:
             )
             return
 
-        yaw = yaw_from_quaternion(xpose.pose.orientation) + math.pi / 2
-
         home_pt = PointStamped()
         home_pt.header.frame_id = self._odom_frame
         home_pt.header.stamp = rospy.Time.now()
-        home_pt.point.x = xpose.pose.position.x + 0.5 * math.cos(yaw)
-        home_pt.point.y = xpose.pose.position.y + 0.5 * math.sin(yaw)
+
+        if approx_corner:
+            home_pose = self._translate_to_center(
+                HomeTransformGen.CORNER_TYPE_1,
+                xpose
+            )
+            home_pt.point = home_pose.pose.position
+        else:
+            yaw = yaw_from_quaternion(xpose.pose.orientation) + math.pi / 2
+            home_pt.point.x = xpose.pose.position.x + 0.5 * math.cos(yaw)
+            home_pt.point.y = xpose.pose.position.y + 0.5 * math.sin(yaw)
+
         home_pt.point.z = 0.0
 
         self._home_point_approx_pub.publish(home_pt)
@@ -1121,8 +1164,8 @@ class HomeTransformGen:
             if self._is_rover_inside_home(good_yaw_count, bad_yaw_count):
                 next_obst_status |= Obstacle.INSIDE_HOME
 
-            self._find_approx_home_pos(detections)
             pose_buckets = self._get_bucketed_tags(detections)
+            self._find_approx_home_pos(*pose_buckets)
 
             corner = self._find_corner_tags(*pose_buckets)
             if corner is not None:
