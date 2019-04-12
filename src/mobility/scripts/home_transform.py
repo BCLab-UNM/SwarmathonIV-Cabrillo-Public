@@ -642,32 +642,17 @@ class HomeTransformGen:
         """
         self._xform_vote_pub.publish(self._xform_vote)
 
-    def _find_corner_tags(self, detections):
-        # type: (List[PoseStamped]) -> Optional[Tuple[PoseStamped, PoseStamped]]
+    @staticmethod
+    def _find_corner_tags(pose_bucket1,  # type: List[PoseStamped]
+                          pose_bucket2,  # type: List[PoseStamped]
+                          ):
+        # type: (...) -> Optional[Tuple[PoseStamped, PoseStamped]]
         """Find the closest pair of tags whose orientations in 2D space are
         approximately perpendicular and are inline with each other.
-
-        Detections should not be empty and should only contain home tags (id ==
-        256).
         """
-        pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
-        pose_buckets[0].append(detections[0])
-
-        for detection in detections[1:]:  # type: PoseStamped
-            angle_between = abs(angles.shortest_angular_distance(
-                yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
-                yaw_from_quaternion(detection.pose.orientation)
-            ))
-
-            if angle_between < 0.25:  # ~15 deg
-                pose_buckets[0].append(detection)
-            elif angle_between > math.pi / 2 - 0.25:
-                # PI/2 minus a nominal ~15 deg.
-                pose_buckets[1].append(detection)
-
-        if len(pose_buckets[1]) > 0:
+        if pose_bucket1 and pose_bucket2:
             # We found 2 different orientations of tags.
-            return closest_inline_pair(*pose_buckets)
+            return closest_inline_pair(pose_bucket1, pose_bucket2)
 
         return None
 
@@ -1021,6 +1006,32 @@ class HomeTransformGen:
 
         return True
 
+    @staticmethod
+    def _get_bucketed_tags(detections  # type: List[PoseStamped]
+                           ):
+        # type: (...) -> Tuple[List[PoseStamped], List[PoseStamped]]
+        """Place tag poses into buckets by their orientation.
+
+        Detections should not be empty and should only contain home tags (id ==
+        256).
+        """
+        pose_buckets = [[], []]  # type: List[List[PoseStamped], List[PoseStamped]]
+        pose_buckets[0].append(detections[0])
+
+        for detection in detections[1:]:  # type: PoseStamped
+            angle_between = abs(angles.shortest_angular_distance(
+                yaw_from_quaternion(pose_buckets[0][0].pose.orientation),
+                yaw_from_quaternion(detection.pose.orientation)
+            ))
+
+            if angle_between < 0.25:  # ~15 deg
+                pose_buckets[0].append(detection)
+            elif angle_between > math.pi / 2 - 0.25:
+                # PI/2 minus a nominal ~15 deg.
+                pose_buckets[1].append(detection)
+
+        return pose_buckets[0], pose_buckets[1]
+
     def _find_approx_home_pos(self, detections):
         # type: (List[PoseStamped]) -> None
         """Find the approximate home location, given a list of home tag poses."""
@@ -1102,8 +1113,9 @@ class HomeTransformGen:
                 next_obst_status |= Obstacle.INSIDE_HOME
 
             self._find_approx_home_pos(detections)
+            pose_buckets = self._get_bucketed_tags(detections)
 
-            corner = self._find_corner_tags(detections)
+            corner = self._find_corner_tags(*pose_buckets)
             if corner is not None:
                 next_obst_status |= Obstacle.HOME_CORNER
 
