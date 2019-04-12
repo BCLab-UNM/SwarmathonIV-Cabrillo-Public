@@ -322,6 +322,7 @@ echo "Experiment started at $(date +%d-%m-%Y" "%H:%M:%S)."
 #---------------------------------------------------------#
 # Start the gazebo simulation
 startGazeboServer $WORLD_FILE_PATH $RANDOM_SEED
+sleep 5
 $visualize && startGazeboClient # Start the gazebo simulation if got agrument
 echo -e "$cyan Adding models to the world $reset"
 addGroundPlane
