@@ -12,6 +12,8 @@
   <param name="sonar_right_frame" value="$(arg name)/us_right_link"/>
   <param name="sonar_center_frame" value="$(arg name)/us_center_link"/>
   <param name="sonar_left_frame" value="$(arg name)/us_left_link"/>
+  <param if="$(arg simulation)" name="block_size" value="0.05"/>
+  <param unless="$(arg simulation)" name="block_size" value="0.055"/>
 
   <include file="$(find swarmie)/launch/robot_localization.xml">
       <arg name="name" value="$(arg name)"/>
