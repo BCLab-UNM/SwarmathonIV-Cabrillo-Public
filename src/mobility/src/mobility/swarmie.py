@@ -139,6 +139,8 @@ class Swarmie(object):
         self.finger_publisher = None
         self.wrist_publisher = None
 
+        self.block_size = None
+
         self._param_client = None
         self._drive_speeds = {
             'slow':   (None, None),
@@ -199,6 +201,8 @@ class Swarmie(object):
             node_name = kwargs['node_name']
 
         rospy.init_node(node_name, anonymous=anon)
+
+        self.block_size = rospy.get_param('block_size', 0.05)
 
         # Setup dynamic reconfigure client to get notifications of drive speed
         # changes on the server.
