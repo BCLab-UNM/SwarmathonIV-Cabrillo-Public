@@ -34,7 +34,7 @@ def publish(pub, nearest_block_pub, detections):
 
     for detection in detections:
         try:
-            ps = block_pose(detection)
+            ps = block_pose(detection, swarmie.block_size)
             array.poses.append(ps.pose)
 
         except tf.Exception:
