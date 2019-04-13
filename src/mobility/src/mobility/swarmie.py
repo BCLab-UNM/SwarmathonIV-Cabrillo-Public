@@ -920,10 +920,18 @@ class Swarmie(object):
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
+        effective_dist = dist - claw_offset
+
+        if effective_dist < 0:
+            # The driver API skips the turn state if the request distance is
+            # negative. This ensures the rover will perform the turn before
+            # backing up slightly in this case.
+            self.turn(angle, **kwargs)
+            return self.drive(effective_dist, **kwargs)
 
         req = MoveRequest(
             theta=angle, 
-            r=dist-claw_offset,
+            r=effective_dist,
         )        
         return self.__drive(req, **kwargs)
     
