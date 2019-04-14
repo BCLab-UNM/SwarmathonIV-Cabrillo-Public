@@ -28,7 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
-from .utils import block_pose, is_moving
+from .utils import block_pose, filter_detections, is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -670,26 +670,9 @@ class Swarmie(object):
         '''
         buffer = sum(self.targets, [])
         if cleanup:
-            buffer = self._detection_cleanup(buffer, age, id)
+            buffer = filter_detections(buffer, age, id, round_to_nearest=0.01)
         return buffer
 
-    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
-        """ Returns the detections with the duplicate tags and old tags removed """
-        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
-        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
-        if id == -1:
-            id = [0, 1, 256]  # resource & home
-        else:
-            id = [id]
-        targets_dict = {(round(tag.pose.pose.position.x, 2),
-                        round(tag.pose.pose.position.y, 2),
-                        round(tag.pose.pose.position.z, 2)):
-                        tag for tag in detections
-                        if (((tag.pose.header.stamp + rospy.Duration(age)) > rospy.Time.now()) and (tag.id in id))}
-        # get the tags from the dict and saves them to detections
-        detections = targets_dict.values()
-        return detections
-    
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 

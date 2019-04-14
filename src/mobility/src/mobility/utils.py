@@ -14,6 +14,8 @@ try:
 except ImportError:
     pass
 
+import decimal
+import rospy
 import tf.transformations
 
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
@@ -112,3 +114,53 @@ def block_detection(detection, block_size=0.5):
     det.pose = block_pose(detection, block_size)
 
     return det
+
+
+def round_(x, nearest):
+    """Round x to the closest multiple of nearest."""
+    prec = abs(decimal.Decimal(str(nearest)).as_tuple().exponent)
+    return round(nearest * round(float(x) / nearest), prec)
+
+
+def filter_detections(detections,  # type: List[AprilTagDetection]
+                      age=8.0,  # type: float
+                      id=-1,  # type: int
+                      round_to_nearest=0.01  # type: float
+                      ):
+    # type: (...) -> List[AprilTagDetection]
+    """Filter a list of AprilTagDetections such that:
+
+        - Each detection was seen in the last age seconds.
+        - Each detection's id == id, if id is specified (not -1).
+        - No duplicate detections are included. Tags are considered duplicates
+          if their position, after rounding to the nearest 'round_to_nearest'
+          meters, is the same as another tag.
+
+    Args:
+        detections: The list of AprilTagDetections.
+        age: The age to filter by.
+        id: The id to filter by.
+        round_to_nearest: Dist (m). Round tag positions to the nearest multiple
+            of this value when considering whether a tag is a duplicate.
+
+    Returns:
+        The filtered list of AprilTagDetections.
+    """
+    nearest = round_to_nearest
+    dur = rospy.Duration(age)
+    now = rospy.Time.now()
+
+    if id == -1:
+        id = [0, 1, 256]  # resource & home
+    else:
+        id = [id]
+
+    filtered = {}
+
+    for det in detections:
+        if det.pose.header.stamp + dur > now and det.id in id:
+            filtered[(round_(det.pose.pose.position.x, nearest),
+                      round_(det.pose.pose.position.y, nearest),
+                      round_(det.pose.pose.position.z, nearest))] = det
+
+    return filtered.values()
