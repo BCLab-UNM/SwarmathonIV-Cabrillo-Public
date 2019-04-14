@@ -670,7 +670,7 @@ class Swarmie(object):
         '''
         buffer = sum(self.targets, [])
         if cleanup:
-            buffer = filter_detections(buffer, age, id, round_to_nearest=0.01)
+            buffer = filter_detections(buffer, age, id, dist=0.01)
         return buffer
 
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):

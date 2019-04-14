@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-import decimal
+import math
 import rospy
 import tf.transformations
 
@@ -116,16 +116,36 @@ def block_detection(detection, block_size=0.5):
     return det
 
 
-def round_(x, nearest):
-    """Round x to the closest multiple of nearest."""
-    prec = abs(decimal.Decimal(str(nearest)).as_tuple().exponent)
-    return round(nearest * round(float(x) / nearest), prec)
+def insert_to_filtered_set(det,  # type: AprilTagDetection
+                           det_set,  # type: List[AprilTagDetection]
+                           dist=0.01  # type: float
+                           ):
+    # type: (...) -> List[AprilTagDetection]
+    """Given an AprilTagDetection and the current set of filtered detections,
+    add the new detection to the set, if appropriate.
+
+    Args:
+        See utils.filtered_detections()
+
+    Returns:
+        The updated set of filtered detections.
+    """
+    for d in det_set:
+        if (math.sqrt((det.pose.pose.position.x - d.pose.pose.position.x)**2
+                      + (det.pose.pose.position.y - d.pose.pose.position.y)**2
+                      + (det.pose.pose.position.z - d.pose.pose.position.z)**2)
+                < dist):
+            return det_set
+
+    det_set.append(det)
+
+    return det_set
 
 
 def filter_detections(detections,  # type: List[AprilTagDetection]
                       age=8.0,  # type: float
                       id=-1,  # type: int
-                      round_to_nearest=0.01  # type: float
+                      dist=0.01  # type: float
                       ):
     # type: (...) -> List[AprilTagDetection]
     """Filter a list of AprilTagDetections such that:
@@ -140,13 +160,13 @@ def filter_detections(detections,  # type: List[AprilTagDetection]
         detections: The list of AprilTagDetections.
         age: The age to filter by.
         id: The id to filter by.
-        round_to_nearest: Dist (m). Round tag positions to the nearest multiple
-            of this value when considering whether a tag is a duplicate.
+        dist: Dist threshold (m). Two tags closer to each other than this are
+            considered duplicates and only one will be added to the list.
 
     Returns:
         The filtered list of AprilTagDetections.
     """
-    nearest = round_to_nearest
+    nearest = dist
     dur = rospy.Duration(age)
     now = rospy.Time.now()
 
@@ -155,12 +175,10 @@ def filter_detections(detections,  # type: List[AprilTagDetection]
     else:
         id = [id]
 
-    filtered = {}
+    filtered = []  # type: List[AprilTagDetection]
 
     for det in detections:
         if det.pose.header.stamp + dur > now and det.id in id:
-            filtered[(round_(det.pose.pose.position.x, nearest),
-                      round_(det.pose.pose.position.y, nearest),
-                      round_(det.pose.pose.position.z, nearest))] = det
+            filtered = insert_to_filtered_set(det, filtered, nearest)
 
-    return filtered.values()
+    return filtered
