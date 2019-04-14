@@ -94,3 +94,21 @@ def block_pose(detection, block_size=0.05):
     ps.pose.orientation = Quaternion(*q)
 
     return ps
+
+
+def block_detection(detection, block_size=0.5):
+    # type: (AprilTagDetection, float) -> AprilTagDetection
+    """Given a tag detection (id == 0), return a new AprilTagDetection whose
+    pose is the block's pose. The block pose has the same orientation as the tag
+    detection, but it's position is translated to be at the cube's center.
+
+    Args:
+        detection: The AprilTagDetection.
+        block_size: The block's side length in meters.
+    """
+    det = AprilTagDetection()
+    det.id = detection.id
+    det.size = detection.size
+    det.pose = block_pose(detection, block_size)
+
+    return det
