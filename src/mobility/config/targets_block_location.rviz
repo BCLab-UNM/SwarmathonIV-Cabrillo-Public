@@ -8,6 +8,7 @@ Panels:
         - /Status1
         - /Targets1
         - /Block Locations1
+        - /Blocks Filtered1
         - /Nearest Block1
         - /TF1
         - /TF1/Frames1
@@ -75,7 +76,7 @@ Visualization Manager:
       Axes Radius: 0.00999999978
       Class: rviz/PoseArray
       Color: 0; 85; 255
-      Enabled: true
+      Enabled: false
       Head Length: 0.00499999989
       Head Radius: 0.00700000022
       Name: Block Locations
@@ -83,6 +84,22 @@ Visualization Manager:
       Shaft Radius: 0.00499999989
       Shape: Arrow (3D)
       Topic: targets/blocks
+      Unreliable: false
+      Value: false
+    - Alpha: 1
+      Arrow Length: 0.300000012
+      Axes Length: 0.300000012
+      Axes Radius: 0.00999999978
+      Class: rviz/PoseArray
+      Color: 170; 85; 255
+      Enabled: true
+      Head Length: 0.00499999989
+      Head Radius: 0.00700000022
+      Name: Blocks Filtered
+      Shaft Length: 0.0299999993
+      Shaft Radius: 0.00499999989
+      Shape: Arrow (3D)
+      Topic: targets/blocks/filtered
       Unreliable: false
       Value: true
     - Alpha: 1
