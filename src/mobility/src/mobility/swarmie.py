@@ -28,7 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
-from .utils import block_pose, filter_detections, is_moving
+from .utils import block_detection, block_pose, filter_detections, is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -1075,13 +1075,17 @@ class Swarmie(object):
         '''
         # TODO:project location to be in front of the rover & put in the homeframe
         # TODO: Make sure the location is not inside of home
-        cubes = self.get_targets_buffer(age=detection_time_tolerance, id=0)
-        
+        detections = self.get_targets_buffer(age=detection_time_tolerance, id=0)
+
         if ignore_claw:  # will remove cubes within the claw
             min_z_dist = 0.18
             if self.simulator_running():
                 min_z_dist = .11
-            cubes = [x for x in cubes if x.pose.pose.position.z > min_z_dist]
+            detections = [d for d in detections
+                          if d.pose.pose.position.z > min_z_dist]
+
+        cubes = [block_detection(d, self.block_size) for d in detections]
+        cubes = filter_detections(cubes, dist=swarmie.block_size - 0.01)
         num_cubes = len(cubes)
         # if 0,1,2 tags are detected don't bother adding to the list unless overridden
         if num_cubes < 4 and not override:
