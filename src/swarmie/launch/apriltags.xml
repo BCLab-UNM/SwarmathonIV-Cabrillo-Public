@@ -2,6 +2,11 @@
   <arg name="name"/>
   <arg name="simulation"/>
 
+  <rosparam unless="$(arg simulation)" ns="/$(arg name)/targets/image/compressed">
+    format: jpeg
+    jpeg_quality: 10
+  </rosparam>
+
   <node name="apriltag" pkg="apriltags2_ros" type="apriltags2_ros_continuous_node"
         clear_params="true" respawn="true">
     
