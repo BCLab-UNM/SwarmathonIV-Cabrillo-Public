@@ -18,11 +18,6 @@
       <param name="lazy" value="true" />
     </node>
 
-    <node name="navsol" pkg="topic_tools" type="throttle"
-          args="messages /$(arg name)/navsol $(arg rate)">
-      <param name="lazy" value="true" />
-    </node>
-
     <node name="odom_filtered" pkg="topic_tools" type="throttle"
           args="messages /$(arg name)/odom/filtered $(arg rate)">
       <param name="lazy" value="true" />
