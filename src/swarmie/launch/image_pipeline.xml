@@ -1,0 +1,23 @@
+<launch>
+  <arg name="name"/>
+  <arg name="simulation"/>
+
+  <arg name="manager" default="camera_nodelet"/>
+
+  <group ns="camera">
+
+    <node name="$(arg manager)" pkg="nodelet" type="nodelet"
+          args="manager" respawn="true"/>
+
+    <node name="debayer" pkg="nodelet" type="nodelet"
+          args="load image_proc/debayer $(arg manager)" respawn="true">
+      <remap from="image_raw" to="image"/>
+    </node>
+
+    <node name="rectify" pkg="nodelet" type="nodelet"
+          args="load image_proc/rectify $(arg manager)" respawn="true">
+    </node>
+
+  </group>
+
+</launch>

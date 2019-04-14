@@ -22,7 +22,12 @@
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
   </include>
-  
+
+  <include file="$(find swarmie)/launch/image_pipeline.xml">
+    <arg name="name" value="$(arg name)"/>
+    <arg name="simulation" value="$(arg simulation)"  />
+  </include>
+
   <include file="$(find swarmie)/launch/tf.xml">
       <arg name="name" value="$(arg name)"/>
       <arg name="simulation" value="$(arg simulation)"  />
