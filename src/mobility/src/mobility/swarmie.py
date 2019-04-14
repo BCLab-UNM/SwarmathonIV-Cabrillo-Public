@@ -1087,9 +1087,10 @@ class Swarmie(object):
         cubes = [block_detection(d, self.block_size) for d in detections]
         cubes = filter_detections(cubes, dist=swarmie.block_size - 0.01)
         num_cubes = len(cubes)
-        # if 0,1,2 tags are detected don't bother adding to the list unless overridden
-        if num_cubes < 4 and not override:
-            rospy.loginfo('I only see ' + str(num_cubes) + ' tags, Not Adding to list')
+
+        # if 0,1 cubes are detected don't bother adding to the list unless overridden
+        if num_cubes <= 1 and not override:
+            rospy.loginfo('I only see ' + str(num_cubes) + ' cubes, Not Adding to list')
             return
         
         if num_cubes == 0: 
