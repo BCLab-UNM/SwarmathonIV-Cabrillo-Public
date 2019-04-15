@@ -803,9 +803,6 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
     const double CAMERA_NEAR_DIST = 0.29; // meters
     const double CAMERA_FAR_DIST = 0.74;
 
-    // TAG_TARGET detections closer than this won't be marked as obstacles
-    const double TAG_IN_CLAW_DIST = 0.22; // meters
-
     // Clear camera field of view at different rates if moving or stopped
     // todo: are these rates good?
     const double MOVING_CLEAR_RATE = 0.03;
@@ -922,7 +919,8 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
                 // Only consider TAG_TARGET's far enough away from camera
                 // to avoid marking block in claw as an obstacle.
                 if (message->detections[i].id == 0 &&
-                    message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+                    message->detections[i].pose.pose.position.z
+                        > map_cfg.tag_in_claw_dist) {
                     rover_map.at("target", ind) = 1;
                 } else if (message->detections[i].id == 256) {
                     rover_map.at("home_raw", ind) = 1;
@@ -936,7 +934,8 @@ void targetHandler(const apriltags2to1::AprilTagDetectionArray::ConstPtr& messag
         // the try/catch block for transforms
         for (int i=0; i<message->detections.size(); i++) {
             if (message->detections[i].id == 0 &&
-                message->detections[i].pose.pose.position.z > TAG_IN_CLAW_DIST) {
+                message->detections[i].pose.pose.position.z
+                    > map_cfg.tag_in_claw_dist) {
                 next_status |= swarmie_msgs::Obstacle::TAG_TARGET;
             }
             else if (message->detections[i].id == 256) {
@@ -1377,6 +1376,7 @@ void reconfigure(mapping::mappingConfig& cfg, uint32_t level) {
 }
 
 void initialconfig() {
+    ros::param::get("~tag_in_claw_dist", map_cfg.tag_in_claw_dist);
     ros::param::get("~sonar_fov", map_cfg.sonar_fov);
     ros::param::get("~single_sensor_obstacle_dist", map_cfg.single_sensor_obstacle_dist);
     ros::param::get("~double_sensor_obstacle_dist", map_cfg.double_sensor_obstacle_dist);
