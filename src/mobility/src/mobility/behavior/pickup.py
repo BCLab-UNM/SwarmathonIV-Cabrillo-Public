@@ -42,7 +42,8 @@ def setup_approach(save_loc=False):
             swarmie.drive_to(
                 block,
                 claw_offset=claw_offset_distance+extra_offset,
-                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                angular=swarmie.speed_slow['angular']
             )
 
     if save_loc:
@@ -63,7 +64,8 @@ def approach(save_loc=False):
         swarmie.drive_to(
             block,
             claw_offset=claw_offset_distance,
-            ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+            ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+            angular=swarmie.speed_slow['angular']
         )
         # Grab - minimal pickup with sim_check.
 
