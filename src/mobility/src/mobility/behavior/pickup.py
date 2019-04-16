@@ -118,9 +118,6 @@ def recover():
             swarmie.drive(-0.15,
                           ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
-        #swarmie.turn(math.pi/2)
-        #swarmie.turn(-math.pi)
-        #swarmie.turn(math.pi/2)
     except (AbortException, InsideHomeException):
         raise
     except DriveException as e:
