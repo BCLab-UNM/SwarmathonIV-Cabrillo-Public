@@ -1,0 +1,15 @@
+<launch>
+  <arg name="name" default="achilles"
+       doc="name of the rover to connect to. Ex: roslaunch swarmie block_locations.launch name:=achilles"/>
+
+  <group ns="$(arg name)">
+
+    <node name="$(anon rviz)" pkg="rviz" type="rviz"
+          args="-d $(find mobility)/config/targets_block_location.rviz \
+                -f $(arg name)/base_link" />
+
+    <node name="$(anon targets_block_location)" pkg="mobility"
+          type="targets_block_location.py"/>
+  </group>
+
+</launch>

@@ -28,7 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
-from .utils import is_moving
+from .utils import block_detection, block_pose, filter_detections, is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -139,6 +139,8 @@ class Swarmie(object):
         self.finger_publisher = None
         self.wrist_publisher = None
 
+        self.block_size = None
+
         self._param_client = None
         self._drive_speeds = {
             'slow':   (None, None),
@@ -199,6 +201,8 @@ class Swarmie(object):
             node_name = kwargs['node_name']
 
         rospy.init_node(node_name, anonymous=anon)
+
+        self.block_size = rospy.get_param('block_size', 0.05)
 
         # Setup dynamic reconfigure client to get notifications of drive speed
         # changes on the server.
@@ -666,26 +670,9 @@ class Swarmie(object):
         '''
         buffer = sum(self.targets, [])
         if cleanup:
-            buffer = self._detection_cleanup(buffer, age, id)
+            buffer = filter_detections(buffer, age, id, dist=0.01)
         return buffer
 
-    def _detection_cleanup(self, detections, age=8, id=-1):  # does not need to be in Swarmie, static?
-        """ Returns the detections with the duplicate tags and old tags removed """
-        # the rounded to 2 to make the precision of the tags location something like 1/3 the size of the cube
-        # essentially using the dict as a set to remove duplicate cubes, also removing old cubes
-        if id == -1:
-            id = [0, 1, 256]  # resource & home
-        else:
-            id = [id]
-        targets_dict = {(round(tag.pose.pose.position.x, 2),
-                        round(tag.pose.pose.position.y, 2),
-                        round(tag.pose.pose.position.z, 2)):
-                        tag for tag in detections
-                        if (((tag.pose.header.stamp + rospy.Duration(age)) > rospy.Time.now()) and (tag.id in id))}
-        # get the tags from the dict and saves them to detections
-        detections = targets_dict.values()
-        return detections
-    
     def get_plan(self, goal, tolerance=0.0, use_home_layer=True):
         '''Get plan from current location to goal location.
 
@@ -1018,35 +1005,40 @@ class Swarmie(object):
         claw_offset = 0.2  # meters
 
         if targets_buffer_age > 0:
-            blocks = self.get_targets_buffer(age=targets_buffer_age)
+            detections = self.get_targets_buffer(age=targets_buffer_age)
         else:
-            blocks = self.get_latest_targets()
+            detections = self.get_latest_targets()
 
-        blocks_xformed = []
+        detections_xformed = []
         now = rospy.Time.now()
 
         # Wait for a little more than a 1/10th sec for each transform, since
         # transforms are published at approximately 10 Hz in this system.
         timeout = 0.15
 
-        for block in blocks:  # type: AprilTagDetection
+        for det in detections:  # type: AprilTagDetection
             try:
+                if det.id == 0:
+                    ps_det = block_pose(det, self.block_size)
+                else:
+                    ps_det = det.pose
+
                 # One simple method of getting a tag's current position relative
                 # to the base_link frame is using a 2-step transform: first into
                 # the fixed odom frame, and then into the base_link frame. We
                 # need to re-stamp the pose after performing the first transform
                 # in order to get the tag's current pose in the base_link frame,
                 # instead of its pose in the base_link frame when it was seen.
-                ps_odom = swarmie.transform_pose('odom', block.pose,
+                ps_odom = swarmie.transform_pose('odom', ps_det,
                                                  timeout=timeout)
                 ps_odom.header.stamp = now
                 ps_base_link = swarmie.transform_pose('base_link', ps_odom,
                                                       timeout=timeout)
                 ps_base_link.pose.position.x -= claw_offset
 
-                blocks_xformed.append(
-                    (AprilTagDetection(block.id, block.size, ps_odom),
-                     AprilTagDetection(block.id, block.size, ps_base_link))
+                detections_xformed.append(
+                    (AprilTagDetection(det.id, det.size, ps_odom),
+                     AprilTagDetection(det.id, det.size, ps_base_link))
                 )
             except tf.Exception as e:
                 rospy.logwarn_throttle(
@@ -1055,16 +1047,18 @@ class Swarmie(object):
                      'Swarmie.get_nearest_block_location(): {}').format(e)
                 )
 
-        if len(blocks_xformed) == 0:
+        if len(detections_xformed) == 0:
             return None
 
         # Sort blocks by their distance from the base_link frame
-        blocks_xformed = sorted(blocks_xformed, key=lambda x:
-                                math.sqrt(x[1].pose.pose.position.x**2
-                                          + x[1].pose.pose.position.y**2
-                                          + x[1].pose.pose.position.z**2))
+        detections_xformed = sorted(
+            detections_xformed,
+            key=lambda x: math.sqrt(x[1].pose.pose.position.x**2
+                                    + x[1].pose.pose.position.y**2
+                                    + x[1].pose.pose.position.z**2)
+        )
 
-        nearest = blocks_xformed[0][0]
+        nearest = detections_xformed[0][0]
 
         # Check for a home tag between the rover and the block.
         if nearest.id == 256:
@@ -1081,17 +1075,22 @@ class Swarmie(object):
         '''
         # TODO:project location to be in front of the rover & put in the homeframe
         # TODO: Make sure the location is not inside of home
-        cubes = self.get_targets_buffer(age=detection_time_tolerance, id=0)
-        
+        detections = self.get_targets_buffer(age=detection_time_tolerance, id=0)
+
         if ignore_claw:  # will remove cubes within the claw
             min_z_dist = 0.18
             if self.simulator_running():
                 min_z_dist = .11
-            cubes = [x for x in cubes if x.pose.pose.position.z > min_z_dist]
+            detections = [d for d in detections
+                          if d.pose.pose.position.z > min_z_dist]
+
+        cubes = [block_detection(d, self.block_size) for d in detections]
+        cubes = filter_detections(cubes, dist=swarmie.block_size - 0.01)
         num_cubes = len(cubes)
-        # if 0,1,2 tags are detected don't bother adding to the list unless overridden
-        if num_cubes < 4 and not override:
-            rospy.loginfo('I only see ' + str(num_cubes) + ' tags, Not Adding to list')
+
+        # if 0,1 cubes are detected don't bother adding to the list unless overridden
+        if num_cubes <= 1 and not override:
+            rospy.loginfo('I only see ' + str(num_cubes) + ' cubes, Not Adding to list')
             return
         
         if num_cubes == 0: 

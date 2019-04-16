@@ -104,8 +104,6 @@ def recover():
 
     if not swarmie.simulator_running():
         claw_offset_distance -= 0.02
-    else:
-        claw_offset_distance += 0.02
 
     print ("Missed, trying to recover.")
     try:
@@ -136,7 +134,7 @@ def main(**kwargs):
     
     claw_offset_distance = 0.24 
     if swarmie.simulator_running():
-        claw_offset_distance = 0.17
+        claw_offset_distance = 0.21
 
     setup_first_approach()
     swarmie.print_infoLog('Setting resource pile location.')
