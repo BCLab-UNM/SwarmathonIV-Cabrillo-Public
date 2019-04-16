@@ -407,9 +407,9 @@ class Swarmie(object):
         * See `mobility.swarmie.Swarmie.drive`
         ''' 
         if random.randint(0,1) == 0 :
-            return self.timed_drive(15, 0.1, 0.62, **kwargs)
+            return self.timed_drive(15, 0.1, self.speed_normal['angular'], **kwargs)
         else:
-            return self.timed_drive(15, 0.1, -0.62, **kwargs)
+            return self.timed_drive(15, 0.1, -self.speed_normal['angular'], **kwargs)
 
     def timed_drive(self, time, linear, angular, **kwargs):
         '''Send the specified velocity command for a given period of time.
