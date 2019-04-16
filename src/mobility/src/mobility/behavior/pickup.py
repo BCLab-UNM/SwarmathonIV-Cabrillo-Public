@@ -125,7 +125,7 @@ def recover():
 def main(**kwargs):
     global claw_offset_distance
     
-    claw_offset_distance = 0.24 
+    claw_offset_distance = 0.30
     if swarmie.simulator_running():
         claw_offset_distance = 0.21
 
