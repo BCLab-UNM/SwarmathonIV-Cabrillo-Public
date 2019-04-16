@@ -28,6 +28,7 @@ import threading
 
 swarmie_lock = threading.Lock()
 
+from .utils import is_moving
 from mobility import sync
 
 class DriveException(Exception):
@@ -129,7 +130,8 @@ class Swarmie(object):
         self.rover_name = None
         self.Obstacles = 0
         self.OdomLocation = Location(None)
-        self._home_odom_position = None
+        self._home_odom_position = None  # type: PointStamped
+        self._home_odom_approx_position = None  # type: PointStamped
         self.sm_publisher = None
         self.status_publisher = None
         self.info_publisher = None
@@ -241,6 +243,8 @@ class Swarmie(object):
         rospy.Subscriber('odom/filtered', Odometry, self._odom)
         rospy.Subscriber('obstacle', Obstacle, self._obstacle)
         rospy.Subscriber('home_point', PointStamped, self._home_point)
+        rospy.Subscriber('home_point/approx', PointStamped, self._home_point,
+                         callback_args=True)
 
         # Wait for Odometry messages to come in.
         # Don't wait for messages on /obstacle because it's published infrequently
@@ -280,9 +284,17 @@ class Swarmie(object):
         self.Obstacles |= msg.msg
 
     @sync(swarmie_lock)
-    def _home_point(self, msg):
-        """Update the home plate's position in the odometry frame."""
-        self._home_odom_position = msg
+    def _home_point(self, msg, approx=False):
+        """Update the home plate's position in the odometry frame.
+
+        Args:
+        * msg (`PointStamped`) - The ROS message.
+        * approx (`bool`) - Whether this is an approximate location.
+        """
+        if approx:
+            self._home_odom_approx_position = msg
+        else:
+            self._home_odom_position = msg
 
     @sync(swarmie_lock)
     def _targets(self, msg):
@@ -595,32 +607,31 @@ class Swarmie(object):
         * Return `False`
         '''
         if self.simulator_running():
-            wrist_angles = (0.0,)
-            max_z_dist = (0.11,)
+            wrist_angles = (0.3, 0.0)
+            max_z_dist = 0.13 #0.151+ is the top of the cube on the ground in the sim
         else:
             wrist_angles = (0.55, 0.0)
-            max_z_dist = (0.18, 0.15)
-
-        for angle, max_z in zip(wrist_angles, max_z_dist):
+            max_z_dist = 0.18
+        
+        for angle in wrist_angles:
             self.set_wrist_angle(angle)
             rospy.sleep(1)
-            blocks = self.get_latest_targets()
+            blocks = self.get_targets_buffer(age=1, id=0)
             blocks = sorted(blocks, key=lambda x: abs(x.pose.pose.position.z))
             if len(blocks) > 0 :
                 nearest = blocks[0]
                 z_dist = nearest.pose.pose.position.z
-                if abs(z_dist) < max_z:
+                if abs(z_dist) < max_z_dist:
                     return True
-
+        
         # Third test: is something blocking the center sonar at a short range.
         obstacles = self.get_obstacle_condition()        
         if obstacles & Obstacle.SONAR_BLOCK :
             return True
-
-        # The block does not affect the sonar in the simulator. 
-        # Use the below check if having trouble with visual target check.
-        # return(self.simulator_running())
-        return False  # self.sees_resource(6)
+        # The block does not affect the sonar in the simulator.
+        
+        return False 
+        
         
     def simulator_running(self): 
         '''Helper Returns True if there is a /gazebo/link_states topic otherwise False'''
@@ -824,15 +835,31 @@ class Swarmie(object):
         with swarmie_lock : 
             return self.Obstacles
 
-    def get_home_odom_location(self):
+    def get_home_odom_location(self, approx=False):
         '''Recall the home odometry location. This is probably the most reliable memory
         of the location of the nest. Odometry drifts, so if we haven't seen home in a 
-        while this will be off. 
+        while this will be off.
+
+        Args:
+        * approx (`bool`) - Whether to get the less accurate, but easier to
+          update approximate home location.
         
         Returns: 
 
         * (`geometry_msgs.msg.Point`) : The location of home.
         '''
+        if approx:
+            if self._home_odom_approx_position is None:
+                rospy.logwarn(
+                    ("{}: No approximate home location has been received " +
+                     "yet, returning odom's origin as the estimated home " +
+                     "location.").format(self.rover_name)
+                )
+                return Point(x=0, y=0)
+
+            return Point(x=self._home_odom_approx_position.point.x,
+                         y=self._home_odom_approx_position.point.y)
+
         if self._home_odom_position is None:
             # Try to set the home position using tf. This is unlikely, but could
             # possibly happen while running behaviors individually as standalone
@@ -858,14 +885,18 @@ class Swarmie(object):
         return Point(x=self._home_odom_position.point.x,
                      y=self._home_odom_position.point.y)
 
-    def has_home_odom_location(self):
+    def has_home_odom_location(self, approx=False):
         '''Check to see if the rover knows home's odometry location.
-        
+
+        Args:
+        * approx (`bool`) - Whether to check the less accurate, but easier to
+          update approximate home location.
+
         Returns:
         
         * (`bool`): `True` if the rover knows where home is, `False` otherwise.
         '''
-        home_odom = self.get_home_odom_location()
+        home_odom = self.get_home_odom_location(approx=approx)
 
         return abs(home_odom.x) > 0.01 and abs(home_odom.y) > 0.01
     
@@ -889,10 +920,18 @@ class Swarmie(object):
         angle = angles.shortest_angular_distance(loc.theta, 
                                                  math.atan2(place.y - loc.y,
                                                             place.x - loc.x))
+        effective_dist = dist - claw_offset
+
+        if effective_dist < 0:
+            # The driver API skips the turn state if the request distance is
+            # negative. This ensures the rover will perform the turn before
+            # backing up slightly in this case.
+            self.turn(angle, **kwargs)
+            return self.drive(effective_dist, **kwargs)
 
         req = MoveRequest(
             theta=angle, 
-            r=dist-claw_offset,
+            r=effective_dist,
         )        
         return self.__drive(req, **kwargs)
     
@@ -919,7 +958,7 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        return(self._is_moving())
+        return self._is_moving()
         
     def _is_moving(self):
         ''' uses OdomLocation angular.z & linear.x  
@@ -927,9 +966,10 @@ class Swarmie(object):
 
         * (`bool`) : True if swarmie is moving and False if stationary or no Odometry
         '''
-        if (self.OdomLocation.Odometry is None):
-            return(False)
-        return((abs(self.OdomLocation.Odometry.twist.twist.angular.z) > 0.2) or (abs(self.OdomLocation.Odometry.twist.twist.linear.x) > 0.1))
+        if self.OdomLocation.Odometry is None:
+            return False
+
+        return is_moving(self.OdomLocation.Odometry)
 
     def transform_pose(self, target_frame, pose, timeout=3.0):
         """Transform PoseStamped into the target frame of reference.
@@ -1032,51 +1072,107 @@ class Swarmie(object):
 
         return nearest.pose.pose.position
 
-    def set_search_exit_poses(self):
-        '''Remember the search exit location.'''
-        odom =  self.get_odom_location().get_pose()
-    
-        rospy.set_param(
-            'search_exit_poses',
-            {'odom': {'x': odom.x, 'y': odom.y, 'theta': odom.theta},}
-        )
+    def add_resource_pile_location(self, detection_time_tolerance=0.4, override=False, ignore_claw=False):
+        '''Remember the search exit locations.
+            Args:
+            * detection_time_tolerance (`double`) - the time from now 
+            * override (`bool`) - True will add to the list regarless of the number of tags in view
+            * ignore_claw (`bool`) - True will remove all detections within the claw
+        '''
+        # TODO:project location to be in front of the rover & put in the homeframe
+        # TODO: Make sure the location is not inside of home
+        cubes = self.get_targets_buffer(age=detection_time_tolerance, id=0)
+        
+        if ignore_claw:  # will remove cubes within the claw
+            min_z_dist = 0.18
+            if self.simulator_running():
+                min_z_dist = .11
+            cubes = [x for x in cubes if x.pose.pose.position.z > min_z_dist]
+        num_cubes = len(cubes)
+        # if 0,1,2 tags are detected don't bother adding to the list unless overridden
+        if num_cubes < 4 and not override:
+            rospy.loginfo('I only see ' + str(num_cubes) + ' tags, Not Adding to list')
+            return
+        
+        if num_cubes == 0: 
+            location = self.get_odom_location().get_pose()
+        else:
+            location = swarmie.transform_pose('odom', cubes[0].pose, timeout=3
+                                              ).pose.position
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
 
-    def get_search_exit_poses(self):
-        '''Get the odom (location and heading) where search last
-        exited (saw a tag).
+        rospy.loginfo('Called add_resource_pile_location, num_cubes:'
+                      + str(num_cubes)
+                      + ' x:' + str(location.x)
+                      + ' y:' + str(location.y))
+        home = self.get_home_odom_location()
+        if abs(location.x - home.x) < .5 and abs(location.y - home.y) < .5: 
+            rospy.logwarn(self.rover_name + ": Pile inside home")
+            return
+        # numpy floats are not compatible with rosparam so have to convert to float
+        pile_locations_list.append({'num_cubes': num_cubes,
+                                    'x': float(location.x),
+                                    'y': float(location.y)})
+        rospy.set_param('resource_pile_locations', pile_locations_list)
 
+    def remove_resource_pile_location(self, odom_to_remove, threshold=.4):
+        """ remove_resource_pile_location should be called after search goes here and does not find anything 
+        Args:
+            * odom_to_remove (`geometry_msgs.msg.Pose2D`) - the odom that will be used to remove cube piles winthin
+            * threshold (`float`) - the distance from odom_to_remove to remove from the list
+        """
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        # this list comprehension will omit the matching dicts
+        pile_locations_list = [x for x in pile_locations_list
+                               if abs(odom_to_remove.x - x['x']) > threshold or
+                               abs(odom_to_remove.y - x['y']) > threshold]
+        if pile_locations_list:
+            rospy.set_param('resource_pile_locations', pile_locations_list)
+        else:
+            if rospy.has_param('resource_pile_locations'):
+                rospy.delete_param('resource_pile_locations')
+
+    def get_resource_pile_locations(self):
+        """ Gets the ros peram resource_pile_locations which contains a list of dicts that contains num_tags x & y"""
+        return rospy.get_param('resource_pile_locations', [])
+
+    def get_best_resource_pile_location(self):
+        '''Get the odom (location) where pickup or planner saw most lucrative pile
+        baised on number of tags seen then by closeness to the swarmie
+        
         Returns:
-
         * `geometry_msgs.msg.Pose2D`: odom_pose - The pose in the /odom frame
 
         Will return invalid poses (containing all zeroes) if search exit
         location hasn't been set yet.
 
         Examples:
-        >>> odom_pose = swarmie.get_search_exit_poses()
-        >>> swarmie.drive_to(
-        >>>     odom_pose,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
-        >>> swarmie.set_heading(
-        >>>     odom_pose.theta,
-        >>>     ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle.IS_SONAR
-        >>> )
+        >>> odom_pose = swarmie.get_best_resource_pile_location()
+        >>> swarmie.drive_to(odom_pose, ignore=Obstacle.TAG_HOME|Obstacle.TAG_TARGET|Obstacle. )
         '''
-        poses = rospy.get_param(
-            'search_exit_poses',
-            {'odom': {'x': 0, 'y': 0, 'theta': 0}, }
-        )
-        return Pose2D(**poses['odom'])
-
-    def has_search_exit_poses(self):
-        '''Check to see if the search exit location parameter is set.
-
+        # TODO: when have in terms of homeframe convert to odom
+        # for pile_locations_list if l[frame] == 'home' transform to odom
+        pile_locations_list = rospy.get_param('resource_pile_locations', [])
+        # Get the entry with the most tags
+        if not pile_locations_list:
+            return Pose2D(0, 0, 0)
+        max_num_cubes = max(pile_locations_list,
+                            key=lambda k: k['num_cubes'])['num_cubes']
+        locations_w_most_tags = [pile for pile in pile_locations_list if
+                                 max_num_cubes == pile['num_cubes']]
+        cur_pose = swarmie.get_odom_location().get_pose()
+        # get the closest pile with the most cubes
+        best_pile = min(locations_w_most_tags, key=lambda k: math.sqrt(
+                                                    (k['x'] - cur_pose.x) ** 2 +
+                                                    (k['y'] - cur_pose.y) ** 2))
+        return Pose2D(best_pile['x'], best_pile['y'], 0)  # theta is 0
+    
+    def has_resource_pile_locations(self):
+        '''Check to see if the search exit locations parameter is set.
         Returns:
-
         * (`bool`): True if the parameter exists, False otherwise.
         '''
-        return rospy.has_param('search_exit_poses')
+        return rospy.has_param('resource_pile_locations')
         
 
 #

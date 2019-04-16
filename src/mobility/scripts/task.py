@@ -51,15 +51,22 @@ class Task :
     PROG_ESCAPE_HOME = 'escape_home.py'
 
     def __init__(self):
-        self.current_state = rospy.get_param('~task_state', Task.STATE_IDLE)
-        self.prev_state = None
-        self.has_block = rospy.get_param('~has_block', False)
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
         # Published regularly on a timer.
         self.status_pub = rospy.Publisher('swarmie_status', String, queue_size=1, latch=True)
         # Published once when the status changes.
         self.task_pub = rospy.Publisher('task_state', String, queue_size=1, latch=True)
         self.status_timer = rospy.Timer(rospy.Duration(1), self.publish_status)
+
+        if rospy.has_param('~task_state'):
+            self.current_state = rospy.get_param('~task_state')
+            self.print_state('<font color="red">Task manager restarted.</font>')
+        else:
+            self.current_state = Task.STATE_IDLE
+
+        self.prev_state = None
+        self.has_block = rospy.get_param('~has_block', False)
+
         rospy.on_shutdown(self.save_state)
 
     def save_state(self):

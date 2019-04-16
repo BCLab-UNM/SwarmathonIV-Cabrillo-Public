@@ -32,7 +32,7 @@ def main(**kwargs):
     try:
         # Ignore cubes if they're put in the way. It's more important to continue
         # this behavior and find a corner of home than it is to stop for a cube.
-        swarmie.drive(1, ignore=Obstacle.TAG_TARGET)
+        swarmie.drive(1, ignore=Obstacle.TAG_TARGET | Obstacle.IS_SONAR)
     except AbortException:
         raise
     except DriveException:
@@ -43,8 +43,10 @@ def main(**kwargs):
     try:
         find_home_corner()
     except PathException as e:
+        # It isn't ideal if we can't find a home corner, but it's worth
+        # continuing to turn around and let the rover begin searching.
+        swarmie.print_infoLog('<font color="red">{}</font>'.format(e.status))
         rospy.logwarn(e.status)
-        return -1
 
     swarmie.turn(
         -2 * math.pi / 3,
