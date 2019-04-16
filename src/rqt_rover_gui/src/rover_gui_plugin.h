@@ -50,6 +50,7 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <ublox_msgs/NavSOL.h>
 #include "swarmie_msgs/Waypoint.h" // For waypoint commands
 
 //ROS msg types
@@ -62,7 +63,6 @@
 
 #include "GazeboSimManager.h"
 #include "JoystickGripperInterface.h"
-
 
 // Forward declarations
 class MapData;
@@ -106,6 +106,9 @@ namespace rqt_rover_gui {
     void waypointEventHandler(const swarmie_msgs::Waypoint& event);
     void joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg);
     void cameraEventHandler(const sensor_msgs::ImageConstPtr& image);
+    void EKFEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
+    void GPSEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
+    void GPSNavSolutionEventHandler(const ros::MessageEvent<const ublox_msgs::NavSOL> &event);
     void encoderEventHandler(const ros::MessageEvent<const nav_msgs::Odometry> &event);
     void obstacleEventHandler(const ros::MessageEvent<std_msgs::UInt8 const> &event);
     void scoreEventHandler(const ros::MessageEvent<std_msgs::String const> &event);
@@ -126,6 +129,8 @@ namespace rqt_rover_gui {
     QString addClusteredTargets();
     QString addFinalsWalls();
     QString addPrelimsWalls();
+    QString addFinalsTagBoundary();
+    QString addPrelimsTagBoundary();
 
 
    // void targetDetectedEventHandler( rover_onboard_target_detection::ATag tagInfo ); //rover_onboard_target_detection::ATag msg );
@@ -200,6 +205,21 @@ namespace rqt_rover_gui {
     void displayDiagLogMessage(QString msg);
     void receiveWaypointCmd(WaypointCmd, int, float, float);
 
+    // scalable GUI display event handlers
+    void cameraDisplayCheckboxToggledEventHandler(bool checked);
+    void mapDisplayCheckboxToggledEventHandler(bool checked);
+    void ultrasoundDisplayCheckboxToggledEventHandler(bool checked);
+    void imuDisplayCheckboxToggledEventHandler(bool checked);
+    void mapSettingsDisplayCheckboxToggledEventHandler(bool checked);
+    void simulationSetupDisplayCheckboxToggledEventHandler(bool checked);
+    void simSensorOutputCheckboxToggledEventHandler(bool checked);
+    void logTabDisplayCheckboxToggledEventHandler(bool checked);
+    void roverControlsDisplayCheckboxToggledEventHandler(bool checked);
+    void simButtonsDisplayCheckboxToggledEventHandler(bool checked);
+    void simTimerStatusDisplayCheckboxToggledEventHandler(bool checked);
+    void tabWidgetDisplayCheckboxToggledEventHandler(bool checked);
+    void changeFontEventComboBoxEventHandler(int index);
+
     // Needed to refocus the keyboard events when the user clicks on the widget list
     // to the main widget so keyboard manual control is handled properly
     void refocusKeyboardEventHandler();
@@ -217,6 +237,9 @@ namespace rqt_rover_gui {
     // ROS Subscribers
     ros::Subscriber joystick_subscriber;
     map<string,ros::Subscriber> encoder_subscribers;
+    map<string,ros::Subscriber> gps_subscribers;
+    map<string,ros::Subscriber> gps_nav_solution_subscribers;
+    map<string,ros::Subscriber> ekf_subscribers;
     map<string,ros::Subscriber> rover_diagnostic_subscribers;
     map<string,ros::Subscriber> waypoint_subscribers;
     ros::Subscriber us_center_subscriber;

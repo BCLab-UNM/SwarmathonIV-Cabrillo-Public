@@ -1,0 +1,50 @@
+<launch>
+  <arg name="name"/>
+  <arg name="simulation"/>
+
+  <arg name="sim_rate" value="10.0"/>
+  <arg if="$(arg simulation)" name="sensor_rate" value="$(arg sim_rate)"/>
+  <arg if="$(arg simulation)" name="camera_rate" value="$(arg sim_rate)"/>
+
+  <arg unless="$(arg simulation)" name="sensor_rate" value="5.0"/>
+  <arg unless="$(arg simulation)" name="camera_rate" value="5.0"/>
+
+  <group ns="relay">
+    <node name="odom_ekf" pkg="topic_tools" type="relay"
+          args="/$(arg name)/odom/filtered_throttle /$(arg name)/odom/ekf_throttle">
+      <param name="lazy" value="true" />
+    </node>
+  </group>
+
+  <group ns="throttle">
+    <node name="imu" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/imu $(arg sensor_rate)">
+      <param name="lazy" value="true" />
+    </node>
+
+    <node name="odom_filtered" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/odom/filtered $(arg sensor_rate)">
+      <param name="lazy" value="true" />
+    </node>
+
+    <node name="sonarCenter" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/sonarCenter $(arg sensor_rate)">
+      <param name="lazy" value="true" />
+    </node>
+
+    <node name="sonarRight" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/sonarRight $(arg sensor_rate)">
+      <param name="lazy" value="true" />
+    </node>
+
+    <node name="sonarLeft" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/sonarLeft $(arg sensor_rate)">
+      <param name="lazy" value="true" />
+    </node>
+
+    <node name="targets_image" pkg="topic_tools" type="throttle"
+          args="messages /$(arg name)/targets/image/compressed $(arg camera_rate) /$(arg name)/targets/image_throttle/compressed">
+      <param name="lazy" value="true" />
+    </node>
+  </group>
+</launch>

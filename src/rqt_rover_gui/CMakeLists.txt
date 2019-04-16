@@ -30,6 +30,8 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   geometry_msgs
+  ublox_msgs
+  ublox_serialization
   swarmie_msgs
 )
 
@@ -102,6 +104,7 @@ add_library(
 
 add_dependencies(
   rqt_rover_gui ${catkin_EXPORTED_TARGETS}
+  ${ublox_msgs_EXPORTED_TARGETS}
 )
 
 target_link_libraries(

@@ -52,7 +52,11 @@ class Task :
 
     def __init__(self):
         self.state_publisher = rospy.Publisher('/infoLog', String, queue_size=2, latch=False)
-        self.status_pub = rospy.Publisher('status', String, queue_size=1, latch=True)
+        # Published regularly on a timer.
+        self.status_pub = rospy.Publisher('swarmie_status', String, queue_size=1, latch=True)
+        # Published once when the status changes.
+        self.task_pub = rospy.Publisher('task_state', String, queue_size=1, latch=True)
+        self.status_timer = rospy.Timer(rospy.Duration(1), self.publish_status)
 
         if rospy.has_param('~task_state'):
             self.current_state = rospy.get_param('~task_state')
@@ -68,7 +72,10 @@ class Task :
     def save_state(self):
         rospy.set_param('~task_state', self.current_state)
         rospy.set_param('~has_block', self.has_block)
-                        
+
+    def publish_status(self, event):
+        self.status_pub.publish(self.get_task())
+
     def print_state(self, msg):
         s = String()
         s.data = msg 
@@ -108,6 +115,7 @@ class Task :
     @sync(task_lock)
     def run_next(self):
         self.status_pub.publish(self.get_task())
+        self.task_pub.publish(self.get_task())
 
         try:
             if self.current_state == Task.STATE_IDLE:

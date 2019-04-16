@@ -19,7 +19,9 @@ class MapData
 public:
     MapData();
 
+    void addToGPSRoverPath(std::string rover, float x, float y);
     void addToEncoderRoverPath(std::string rover, float x, float y);
+    void addToEKFRoverPath(std::string rover, float x, float y);
     void addTargetLocation(std::string rover, float x, float y);
     void addCollectionPoint(std::string rover, float x, float y);
 
@@ -40,6 +42,8 @@ public:
     void lock();
     void unlock();
 
+    std::vector< std::pair<float,float> >* getEKFPath(std::string rover_name);
+    std::vector< std::pair<float,float> >* getGPSPath(std::string rover_name);
     std::vector< std::pair<float,float> >* getEncoderPath(std::string rover_name);
     std::vector< std::pair<float,float> >* getTargetLocations(std::string rover_name);
     std::vector< std::pair<float,float> >* getCollectionPoints(std::string rover_name);
@@ -49,6 +53,16 @@ public:
     void resetWaypointPathForSelectedRover(std::string rover);
 
     // These functions provide a fast way to get the min and max coords
+    float getMaxGPSX(std::string rover_name);
+    float getMaxGPSY(std::string rover_name);
+    float getMinGPSX(std::string rover_name);
+    float getMinGPSY(std::string rover_name);
+
+    float getMaxEKFX(std::string rover_name);
+    float getMaxEKFY(std::string rover_name);
+    float getMinEKFX(std::string rover_name);
+    float getMinEKFY(std::string rover_name);
+
     float getMaxEncoderX(std::string rover_name);
     float getMaxEncoderY(std::string rover_name);
     float getMinEncoderX(std::string rover_name);
@@ -64,19 +78,33 @@ private:
 
     std::map<std::string, std::pair<float,float> > rover_global_offsets;
 
+    std::map<std::string, std::vector< std::pair<float,float> > > gps_rover_path;
+    std::map<std::string, std::vector< std::pair<float,float> > > ekf_rover_path;
     std::map<std::string, std::vector< std::pair<float,float> > > encoder_rover_path;
     std::map<std::string, std::map< int, std::tuple<float,float,bool> > >  waypoint_path;
 
+    std::map<std::string, std::vector< std::pair<float,float> > > global_offset_gps_rover_path;
+    std::map<std::string, std::vector< std::pair<float,float> > > global_offset_ekf_rover_path;
     std::map<std::string, std::vector< std::pair<float,float> > > global_offset_encoder_rover_path;
     std::map<std::string, std::map< int, std::tuple<float,float,bool> > >  global_offset_waypoint_path;
 
     std::map<std::string, std::vector< std::pair<float,float> > >  collection_points;
     std::map<std::string, std::vector< std::pair<float,float> > >  target_locations;
 
+    std::map<std::string, float> max_gps_seen_x;
+    std::map<std::string, float> max_gps_seen_y;
+    std::map<std::string, float> min_gps_seen_x;
+    std::map<std::string, float> min_gps_seen_y;
+
     std::map<std::string, float> max_encoder_seen_x;
     std::map<std::string, float> max_encoder_seen_y;
     std::map<std::string, float> min_encoder_seen_x;
     std::map<std::string, float> min_encoder_seen_y;
+
+    std::map<std::string, float> max_ekf_seen_x;
+    std::map<std::string, float> max_ekf_seen_y;
+    std::map<std::string, float> min_ekf_seen_x;
+    std::map<std::string, float> min_ekf_seen_y;
 
     bool display_global_offset;
 

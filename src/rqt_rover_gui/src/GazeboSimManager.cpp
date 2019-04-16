@@ -68,7 +68,7 @@ QProcess* GazeboSimManager::startGazeboClient()
 
     gazebo_client_process->start(command);
 
-   // gazebo_client_process->waitForStarted();
+    // gazebo_client_process->waitForStarted();
 
     return gazebo_client_process;
 }
@@ -134,18 +134,47 @@ QString GazeboSimManager::stopGazeboClient()
 QString GazeboSimManager::stopRoverNode( QString rover_name )
 {
     if (rover_processes.find(rover_name) == rover_processes.end()) return "Could not stop " + rover_name + " rover process since it does not exist.";
+
     rover_processes[rover_name]->terminate();
     rover_processes[rover_name]->waitForFinished();
     rover_processes.erase(rover_name);
-    return "Rover launch killed";
+
+    // Names of the nodes to kill. 
+    vector<QString> nodes;
+    nodes.push_back("APRILTAG");
+    nodes.push_back("BASE2CAM");
+    nodes.push_back("DIAGNOSTICS");
+    nodes.push_back("MAP");
+    nodes.push_back("BEHAVIOUR");
+    nodes.push_back("SBRIDGE");
+    nodes.push_back("NAVSAT");
+    nodes.push_back("OBSTACLE");
+    nodes.push_back("ODOM");
+
+    // Kill nodes
+    QString output = "";
+    for (int i = 0; i < nodes.size(); i++) {
+      QString argument = "rosnode kill "+rover_name+"_"+nodes[i];
+      QProcess sh;
+      sh.start("sh", QStringList() << "-c" << argument);
+      sh.waitForFinished();
+      output += "<br>" + sh.readAll();
+      sh.close();
+    }
+
+    return output;
 }
 
 QString GazeboSimManager::startRoverNode( QString rover_name )
 {
-	QString command = "roslaunch " + app_root + "/launch/swarmie.launch name:=" + rover_name;
+  QString argument = "roslaunch "+app_root+"/launch/swarmie.launch name:="+rover_name+">"+log_root+rover_name+".log";
+
     QProcess* rover_process = new QProcess();
+
     rover_processes[rover_name] = rover_process;
-    rover_process->start(command);
+
+    rover_process->start("sh", QStringList() << "-c" << argument);
+    
     return "rover process spawned";
 }
 
