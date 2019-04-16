@@ -97,11 +97,9 @@ def approach(save_loc=False):
     swarmie.wrist_up()
     return False
 
+
 def recover():
     global claw_offset_distance
-
-    if not swarmie.simulator_running():
-        claw_offset_distance -= 0.02
 
     print ("Missed, trying to recover.")
     try:
