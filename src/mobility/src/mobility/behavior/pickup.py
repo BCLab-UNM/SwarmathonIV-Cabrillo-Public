@@ -25,7 +25,10 @@ from mobility.swarmie import (swarmie, TagException, HomeException,
 def setup_approach(save_loc=False):
     """Drive a little closer to the nearest block if it's far enough away."""
     global claw_offset_distance
-    extra_offset = 0.20
+    if swarmie.simulator_running():
+        extra_offset = 0.20
+    else:
+        extra_offset = 0.15
 
     swarmie.fingers_open()
     swarmie.set_wrist_angle(1.15)
