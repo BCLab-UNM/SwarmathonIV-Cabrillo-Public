@@ -22,10 +22,13 @@ from mobility.swarmie import (swarmie, TagException, HomeException,
 '''Pickup node.'''
 
 
-def setup_first_approach():
+def setup_approach(save_loc=False):
     """Drive a little closer to the nearest block if it's far enough away."""
     global claw_offset_distance
-    extra_offset = 0.20
+    if swarmie.simulator_running():
+        extra_offset = 0.20
+    else:
+        extra_offset = 0.15
 
     swarmie.fingers_open()
     swarmie.set_wrist_angle(1.15)
@@ -34,7 +37,7 @@ def setup_first_approach():
     block = swarmie.get_nearest_block_location(targets_buffer_age=5.0)
 
     if block is not None:
-        print("Getting setup for pickup.")
+        print("Making the setup approach.")
         cur_loc = swarmie.get_odom_location().get_pose()
         dist = math.hypot(cur_loc.x - block.x, cur_loc.y - block.y)
 
@@ -42,21 +45,20 @@ def setup_first_approach():
             swarmie.drive_to(
                 block,
                 claw_offset=claw_offset_distance+extra_offset,
-                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+                ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                angular=swarmie.speed_slow['angular']
             )
 
+    if save_loc:
+        swarmie.print_infoLog('Setting resource pile location.')
+        swarmie.add_resource_pile_location()
 
 
-def approach(setup_claw=True):
+def approach(save_loc=False):
     global claw_offset_distance
     print ("Attempting a pickup.")
 
-    if setup_claw:
-        swarmie.fingers_open()
-        swarmie.set_wrist_angle(1.15)
-        rospy.sleep(1)
-    else:
-        rospy.sleep(0.25)
+    setup_approach(save_loc)
 
     block = swarmie.get_nearest_block_location(targets_buffer_age=0.5)
 
@@ -65,7 +67,8 @@ def approach(setup_claw=True):
         swarmie.drive_to(
             block,
             claw_offset=claw_offset_distance,
-            ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR
+            ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+            angular=swarmie.speed_slow['angular']
         )
         # Grab - minimal pickup with sim_check.
 
@@ -99,11 +102,9 @@ def approach(setup_claw=True):
     swarmie.wrist_up()
     return False
 
+
 def recover():
     global claw_offset_distance
-
-    if not swarmie.simulator_running():
-        claw_offset_distance -= 0.02
 
     print ("Missed, trying to recover.")
     try:
@@ -120,9 +121,6 @@ def recover():
             swarmie.drive(-0.15,
                           ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
 
-        #swarmie.turn(math.pi/2)
-        #swarmie.turn(-math.pi)
-        #swarmie.turn(math.pi/2)
     except (AbortException, InsideHomeException):
         raise
     except DriveException as e:
@@ -132,16 +130,12 @@ def recover():
 def main(**kwargs):
     global claw_offset_distance
     
-    claw_offset_distance = 0.24 
+    claw_offset_distance = 0.30
     if swarmie.simulator_running():
         claw_offset_distance = 0.21
 
-    setup_first_approach()
-    swarmie.print_infoLog('Setting resource pile location.')
-    swarmie.add_resource_pile_location()
-
     for i in range(3):
-        if approach(setup_claw=bool(i > 0)):
+        if approach(save_loc=bool(i == 0)):
             print ("Got it!")
             sys.exit(0)        
         recover()
