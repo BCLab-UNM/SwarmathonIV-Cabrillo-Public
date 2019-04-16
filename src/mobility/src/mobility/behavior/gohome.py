@@ -24,15 +24,16 @@ from mobility.planner import Planner
 GOHOME_FOUND_TAG = 1
 GOHOME_FAIL = -1
 
-def drive_straight_home_odom() :
-    # We remember home in the Odom frame when we see it. Unlike GPS
-    # there's no need to translate the location into r and theta. The
-    # swarmie's drive_to function takes a point in odometry space.
 
-    home = swarmie.get_home_odom_location()
-    swarmie.drive_to(home,
-                     ignore=Obstacle.TAG_TARGET | Obstacle.SONAR_CENTER,
-                     **swarmie.speed_fast)
+def face_home_tag():
+    # todo: is it necessary to check that we can still see a home tag? or does dropoff handle it ok?
+    rospy.sleep(0.25)  # improve target detection chances?
+    if planner.sees_home_tag():
+        try:
+            planner.face_home_tag()
+        except tf.Exception:
+            pass  # good enough
+
 
 def drive_home(has_block, home_loc):
     global planner, use_waypoints, GOHOME_FAIL
@@ -63,6 +64,15 @@ def drive_home(has_block, home_loc):
 
         counter += 1
 
+    if drive_result == MoveResult.OBSTACLE_HOME:
+        face_home_tag()
+
+    elif drive_result == MoveResult.OBSTACLE_TAG:
+        # This can happen if we're going home without a block.
+        planner.face_nearest_block()
+
+    return drive_result
+
 
 def spiral_search(has_block):
     global planner
@@ -83,12 +93,7 @@ def spiral_search(has_block):
         raise
 
     if drive_result == MoveResult.OBSTACLE_HOME:
-        rospy.sleep(0.25)  # improve target detection chances?
-        if planner.sees_home_tag():
-            try:
-                planner.face_home_tag()
-            except tf.Exception:
-                pass  # good enough
+        face_home_tag()
 
     elif drive_result == MoveResult.OBSTACLE_TAG:
         # This can happen if we're going home without a block.
@@ -143,14 +148,11 @@ def main(**kwargs):
     swarmie.wrist_middle()  # get block mostly out of camera view
     home = get_best_home_location()
 
-    drive_home(has_block, home)
-
-    # todo: is it necessary to check that we can still see a home tag? or does dropoff handle it ok?
-    rospy.sleep(0.25)  # improve target detection chances?
-    if planner.sees_home_tag():
-        # victory!
-        planner.face_home_tag()
+    drive_result = drive_home(has_block, home)
+    if drive_result == MoveResult.OBSTACLE_HOME:
         sys.exit(0)
+    elif drive_result == MoveResult.OBSTACLE_TAG:
+        sys.exit(GOHOME_FOUND_TAG)
 
     # Look to the right and left before starting spiral search, which goes
     # left:
@@ -165,7 +167,7 @@ def main(**kwargs):
 
         planner.clear(2 * math.pi / 5, ignore=ignore, throw=True)
     except HomeException:
-        planner.face_home_tag()
+        face_home_tag()
         sys.exit(0)
     except TagException:
         sys.exit(GOHOME_FOUND_TAG)
@@ -179,7 +181,7 @@ def main(**kwargs):
         drive_result = spiral_search(has_block)
         if drive_result == MoveResult.OBSTACLE_HOME:
             sys.exit(0)
-        elif drive_result == MoveResult.OBSTACLE_TAG: #TODO: This may not actuly work and may make behavor of task restarting go home
+        elif drive_result == MoveResult.OBSTACLE_TAG:
             sys.exit(GOHOME_FOUND_TAG)
     except PathException:
         sys.exit(GOHOME_FAIL)

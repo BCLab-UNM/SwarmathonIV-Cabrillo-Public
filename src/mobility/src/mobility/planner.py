@@ -719,7 +719,7 @@ class Planner:
                     self.prev_state == Planner.STATE_AVOID_RIGHT or
                     self.prev_state == Planner.STATE_AVOID_REVERSE):
                 dist = -0.25
-            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
+            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR, throw=False)
 
             turn_angle = self.get_angle_to_face_point(point)
             if turn_angle > 0:
@@ -747,7 +747,7 @@ class Planner:
                     self.prev_state == Planner.STATE_AVOID_RIGHT or
                     self.prev_state == Planner.STATE_AVOID_REVERSE):
                 dist = -0.25
-            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR)
+            swarmie.drive(dist, ignore=ignore | Obstacle.IS_SONAR, throw=False)
 
         turn_angle = self.get_angle_to_face_point(point)
 
