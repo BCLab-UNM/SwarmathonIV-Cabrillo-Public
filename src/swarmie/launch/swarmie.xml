@@ -107,8 +107,8 @@
   
   <group unless="$(arg simulation)">
 
-    <node name="master_discovery" pkg="master_discovery_fkie" type="master_discovery" respawn="true"/>
-    <node name="master_sync" pkg="master_sync_fkie" type="master_sync" respawn="true">
+    <node name="master_discovery" pkg="master_discovery_fkie" type="zeroconf" respawn="true" output="screen"/>
+    <node name="master_sync" pkg="master_sync_fkie" type="master_sync" respawn="true" output="screen">
     </node>
 
     <node name="abridge" pkg="bridge" type="abridge" respawn="true"> 
