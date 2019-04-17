@@ -111,8 +111,8 @@ class Diagnostics:
                 with open(fx) as f:
                     total += int(f.readline())
         except IOError as e:
-            # This can happen in the simulator
-            print ('Could not open interface', self.interface)
+            if not self._is_simulator:
+                self._diags_log.publish(_warn('Could not open interface' + self.interface))
         
         return total 
 
