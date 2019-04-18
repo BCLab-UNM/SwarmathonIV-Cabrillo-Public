@@ -33,6 +33,26 @@ from geometry_msgs.msg import PoseStamped
 from swarmie_msgs.msg import Obstacle
 
 
+# TODO: Put this into utils.py. It's also called/defined in home_transform.py
+def euler_from_quaternion(quat):
+    # type: (Quaternion) -> Tuple[float, float, float]
+    """Return roll, pitch, yaw representation of the Quaternion."""
+    r, p, y = tf.transformations.euler_from_quaternion(
+        [quat.x, quat.y, quat.z, quat.w]
+    )
+    return r, p, y
+
+
+def is_accurate_detection(ps):
+    # type: (PoseStamped) -> bool
+    """Given an AprilTag detection pose in the base link frame, return True if
+    the detection seems reasonably accurate, given that a home tag sits on
+    approximately level ground.
+    """
+    r, p, y = euler_from_quaternion(ps.pose.orientation)
+    return abs(r) < 0.25 and abs(p) < 0.25  # ~15 degrees
+
+
 def check_inside_home():
     """Raise an exception if we're inside home."""
     if swarmie.get_obstacle_condition() & Obstacle.INSIDE_HOME:
@@ -111,7 +131,9 @@ def find_rightmost_home_tag(transform_timeout=0.15):
             ps_odom.header.stamp = now
             ps_base_link = swarmie.transform_pose('base_link', ps_odom,
                                                   timeout=transform_timeout)
-            targets_xformed.append((ps_odom, ps_base_link))
+
+            if is_accurate_detection(ps_base_link):
+                targets_xformed.append((ps_odom, ps_base_link))
 
         except tf.Exception as e:
             rospy.logwarn_throttle(1.0,
@@ -138,13 +160,17 @@ def find_rightmost_home_tag(transform_timeout=0.15):
     if len(targets_sorted) == 0:
         return None
 
-    rightmost_target = targets_sorted[-1]
-    try:
-        return swarmie.transform_pose('odom', rightmost_target.pose)
-    except tf.Exception as e:
-        rospy.logwarn(
-            'Transform exception in find_rightmost_home_tag(): {}'.format(e)
-        )
+    for target in reversed(targets_sorted):
+        try:
+            target_xformed = swarmie.transform_pose('odom', target.pose)
+            if is_accurate_detection(target_xformed):
+                return target_xformed
+
+        except tf.Exception as e:
+            rospy.logwarn_throttle(
+                1.0,
+                'Transform exception in find_rightmost_home_tag(): {}'.format(e)
+            )
 
     return None
 
@@ -207,12 +233,7 @@ def drive_to_next_tag(rightmost_tag, prev_rightmost_tag):
 
     # TODO: pull helpers out of home_transform.py and into utils.py
     #  so you can use yaw_from_quaternion() here.
-    _r, _p, home_yaw = tf.transformations.euler_from_quaternion(
-        [rightmost_tag.pose.orientation.x,
-         rightmost_tag.pose.orientation.y,
-         rightmost_tag.pose.orientation.z,
-         rightmost_tag.pose.orientation.w]
-    )
+    _r, _p, home_yaw = euler_from_quaternion(rightmost_tag.pose.orientation)
 
     # Using set heading before driving is useful when the rover is
     # mostly facing the corner to its left (which isn't the one we
