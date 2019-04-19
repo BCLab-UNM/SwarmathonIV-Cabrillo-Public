@@ -75,7 +75,7 @@ def approach(save_loc=False):
         if swarmie.simulator_running():
             finger_close_angle = 0
         else:
-            finger_close_angle = 0.5
+            finger_close_angle = 0.2
 
         swarmie.set_finger_angle(finger_close_angle) #close
         rospy.sleep(1)
