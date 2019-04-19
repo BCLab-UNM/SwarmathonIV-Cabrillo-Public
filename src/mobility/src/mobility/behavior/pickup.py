@@ -46,6 +46,7 @@ def setup_approach(save_loc=False):
                 block,
                 claw_offset=claw_offset_distance+extra_offset,
                 ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                timeout=20,
                 **swarmie.speed_slow
             )
 
@@ -68,6 +69,7 @@ def approach(save_loc=False):
             block,
             claw_offset=claw_offset_distance,
             ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+            timeout=20,
             **swarmie.speed_slow
         )
         # Grab - minimal pickup with sim_check.
@@ -85,7 +87,8 @@ def approach(save_loc=False):
         if swarmie.has_block():
             swarmie.wrist_middle()
             swarmie.drive(-0.3,
-                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
             return True
         else:
             swarmie.set_wrist_angle(0.55)
@@ -109,7 +112,8 @@ def recover():
     print ("Missed, trying to recover.")
     try:
         swarmie.drive(-0.15,
-                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                      timeout=20)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
 
@@ -119,7 +123,8 @@ def recover():
             pass
         else:
             swarmie.drive(-0.15,
-                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
 
     except (AbortException, InsideHomeException):
         raise
