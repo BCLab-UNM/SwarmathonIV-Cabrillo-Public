@@ -17,7 +17,8 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import (swarmie, TagException, HomeException,
                               ObstacleException, PathException, AbortException,
-                              DriveException, InsideHomeException)
+                              DriveException, TimeoutException,
+                              InsideHomeException)
 
 '''Pickup node.'''
 
@@ -140,10 +141,19 @@ def main(**kwargs):
         claw_offset_distance = 0.21
 
     for i in range(3):
-        if approach(save_loc=bool(i == 0)):
-            print ("Got it!")
-            sys.exit(0)        
-        recover()
+        try:
+            if approach(save_loc=bool(i == 0)):
+                print ("Got it!")
+                sys.exit(0)
+            recover()
+        except TimeoutException:
+            rospy.logwarn(
+                ('Timeout exception during pickup. This rover may be ' +
+                 'physically deadlocked with an obstacle or another rover.')
+            )
+            swarmie.drive(random.uniform(-0.1, -0.2),
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
         
     print ("Giving up after too many attempts.")
     return 1
