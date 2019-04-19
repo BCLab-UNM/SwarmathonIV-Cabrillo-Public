@@ -17,7 +17,8 @@ from swarmie_msgs.msg import Obstacle
 
 from mobility.swarmie import (swarmie, TagException, HomeException,
                               ObstacleException, PathException, AbortException,
-                              DriveException, InsideHomeException)
+                              DriveException, TimeoutException,
+                              InsideHomeException)
 
 '''Pickup node.'''
 
@@ -46,7 +47,8 @@ def setup_approach(save_loc=False):
                 block,
                 claw_offset=claw_offset_distance+extra_offset,
                 ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
-                angular=swarmie.speed_slow['angular']
+                timeout=20,
+                **swarmie.speed_slow
             )
 
     if save_loc:
@@ -68,14 +70,15 @@ def approach(save_loc=False):
             block,
             claw_offset=claw_offset_distance,
             ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
-            angular=swarmie.speed_slow['angular']
+            timeout=20,
+            **swarmie.speed_slow
         )
         # Grab - minimal pickup with sim_check.
 
         if swarmie.simulator_running():
             finger_close_angle = 0
         else:
-            finger_close_angle = 0.5
+            finger_close_angle = 0.2
 
         swarmie.set_finger_angle(finger_close_angle) #close
         rospy.sleep(1)
@@ -85,7 +88,8 @@ def approach(save_loc=False):
         if swarmie.has_block():
             swarmie.wrist_middle()
             swarmie.drive(-0.3,
-                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
             return True
         else:
             swarmie.set_wrist_angle(0.55)
@@ -109,7 +113,8 @@ def recover():
     print ("Missed, trying to recover.")
     try:
         swarmie.drive(-0.15,
-                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                      ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                      timeout=20)
         # Wait a moment to detect tags before possible backing up further
         rospy.sleep(0.25)
 
@@ -119,7 +124,8 @@ def recover():
             pass
         else:
             swarmie.drive(-0.15,
-                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR)
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
 
     except (AbortException, InsideHomeException):
         raise
@@ -129,16 +135,25 @@ def recover():
 
 def main(**kwargs):
     global claw_offset_distance
-    
-    claw_offset_distance = 0.30
+
+    claw_offset_distance = 0.23
     if swarmie.simulator_running():
         claw_offset_distance = 0.21
 
     for i in range(3):
-        if approach(save_loc=bool(i == 0)):
-            print ("Got it!")
-            sys.exit(0)        
-        recover()
+        try:
+            if approach(save_loc=bool(i == 0)):
+                print ("Got it!")
+                sys.exit(0)
+            recover()
+        except TimeoutException:
+            rospy.logwarn(
+                ('Timeout exception during pickup. This rover may be ' +
+                 'physically deadlocked with an obstacle or another rover.')
+            )
+            swarmie.drive(random.uniform(-0.1, -0.2),
+                          ignore=Obstacle.VISION_SAFE | Obstacle.IS_SONAR,
+                          timeout=20)
         
     print ("Giving up after too many attempts.")
     return 1
