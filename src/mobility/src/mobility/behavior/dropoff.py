@@ -28,8 +28,14 @@ def dropoff(approx_home=False):
 
     # Move the wrist up so the resource won't hit the home plate.
     swarmie.set_wrist_angle(.3)
-    swarmie.drive_to(home_odom, claw_offset=0.5,
-                     ignore=Obstacle.IS_VISION|Obstacle.IS_SONAR)
+
+    if swarmie.simulator_running():
+        claw_offset = 0.5
+    else:
+        claw_offset = 0.6
+
+    swarmie.drive_to(home_odom, claw_offset=claw_offset,
+                     ignore=Obstacle.IS_VISION | Obstacle.IS_SONAR)
 
     swarmie.set_wrist_angle(.7)
     # Wait a moment for the wrist to move down before opening the fingers next.
