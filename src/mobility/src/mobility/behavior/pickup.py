@@ -138,7 +138,7 @@ def main(**kwargs):
 
     claw_offset_distance = 0.23
     if swarmie.simulator_running():
-        claw_offset_distance = 0.21
+        claw_offset_distance = 0.16
 
     for i in range(3):
         try:
