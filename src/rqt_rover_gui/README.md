@@ -85,9 +85,13 @@ git push git@github.com:darrenchurchill/rqt_rover_gui.git rqt-rover-gui:devel
 ```
 
 
-#### Resetting our repository to the sub project's master branch
+### Resetting our repository to the sub project's master branch
 ```
 git fetch origin
 git checkout -b staging-branch origin/master
 git subtree pull -P src/rqt_rover_gui --squash git@github.com:darrenchurchill/rqt_rover_gui.git master
+```
+Note: If you haven't worked with the subtree in your local repository, you might first need to pull the remote sub project's `devel` branch:
+```
+git subtree pull -P src/rqt_rover_gui --squash git@github.com:darrenchurchill/rqt_rover_gui.git devel
 ```
