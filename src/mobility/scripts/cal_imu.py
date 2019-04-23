@@ -163,12 +163,12 @@ class IMU:
                 queue_size=10
             )
         self.info_log = rospy.Publisher(
-            'infoLog',
+            '/infoLog',
             String,
             queue_size=10
         )
         self.diags_log = rospy.Publisher(
-            'diagsLog',
+            '/diagsLog',
             String,
             queue_size=10,
             latch=True
