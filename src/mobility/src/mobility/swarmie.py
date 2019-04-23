@@ -553,6 +553,10 @@ class Swarmie(object):
         * `angle` (`float`) Wrist angle in radians. 
         '''
         self.wrist_publisher.publish(Float32(angle))
+        self.wrist_publisher.publish(Float32(angle))
+        self.wrist_publisher.publish(Float32(angle))
+        self.wrist_publisher.publish(Float32(angle))
+
 
     def set_finger_angle(self, angle):
         '''Set the finger angle to the spedified angle
@@ -562,27 +566,51 @@ class Swarmie(object):
         * `angle` (`float`) Finger angle in radians.
         '''
         self.finger_publisher.publish(Float32(angle))
+        self.finger_publisher.publish(Float32(angle))
+        self.finger_publisher.publish(Float32(angle))
+        self.finger_publisher.publish(Float32(angle))
+
         
     def wrist_down(self):
         '''Lower the wrist to put it in the pickup position'''
         self.wrist_publisher.publish(Float32(1.25))
-    
+        self.wrist_publisher.publish(Float32(1.25))
+        self.wrist_publisher.publish(Float32(1.25))
+        self.wrist_publisher.publish(Float32(1.25))
+
+
     def wrist_up(self):
         '''Raise the wrist to the top'''
         self.wrist_publisher.publish(Float32(0.0))
-    
+        self.wrist_publisher.publish(Float32(0.0))
+        self.wrist_publisher.publish(Float32(0.0))
+        self.wrist_publisher.publish(Float32(0.0))
+
+
     def wrist_middle(self):
         '''Put the wrist in the middle of its travel so that the rover can drive with a block'''
         self.wrist_publisher.publish(Float32(0.75))
+        self.wrist_publisher.publish(Float32(0.75))
+        self.wrist_publisher.publish(Float32(0.75))
+        self.wrist_publisher.publish(Float32(0.75))
+
 
     def fingers_open(self):
         '''Open the fingers'''
-        self.finger_publisher.publish(Float32(math.pi/2))
-    
+        self.finger_publisher.publish(Float32(math.pi / 2))
+        self.finger_publisher.publish(Float32(math.pi / 2))
+        self.finger_publisher.publish(Float32(math.pi / 2))
+        self.finger_publisher.publish(Float32(math.pi / 2))
+
+
     def fingers_close(self):
         '''Close the fingers'''
         self.finger_publisher.publish(Float32(0.0))
-    
+        self.finger_publisher.publish(Float32(0.0))
+        self.finger_publisher.publish(Float32(0.0))
+        self.finger_publisher.publish(Float32(0.0))
+
+
     def print_state_machine(self, msg):
         '''Print a message to the /rover/state_machine topic.'''
         s = String()
