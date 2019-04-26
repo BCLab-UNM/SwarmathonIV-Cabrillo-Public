@@ -23,7 +23,7 @@
     <param name="remove_duplicates" value="false" />
     
     <remap from="image_rect" to="camera/image" />
-    <remap from="camera_info" to="camera/camera_info" />
+    <remap from="camera/camera_info" to="camera/info" />
     <remap from="tag_detections_image" to="targets/image" />
     <remap from="tag_detections" to="targets/in" />
     

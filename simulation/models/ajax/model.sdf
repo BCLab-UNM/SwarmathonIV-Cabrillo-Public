@@ -148,7 +148,7 @@
 					<updateRate>0.0</updateRate>
 					<cameraName>/ajax/camera</cameraName>
 					<imageTopicName>/ajax/camera/image</imageTopicName>
-					<cameraInfoTopicName>/ajax/camera/camera_info</cameraInfoTopicName>
+					<cameraInfoTopicName>/ajax/camera/info</cameraInfoTopicName>
 					<frameName>camera_link</frameName>
 					<hackBaseline>0.1</hackBaseline>
 					<distortionK1>0.0</distortionK1>
