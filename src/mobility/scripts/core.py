@@ -13,7 +13,7 @@ def heartbeat(event):
     global heartbeat_pub, status_pub, task
     heartbeat_pub.publish("ok")
     if task is None:
-        status_pub.publish("idle")
+        status_pub.publish('+Cabrillo: idle')
 
 def mode(msg):
     global rover_mode, driver
@@ -22,7 +22,7 @@ def mode(msg):
 
 def publish_status(msg):
     global status_pub, task_pub
-    status_pub.publish(msg)
+    status_pub.publish('+Cabrillo: {}'.format(msg))
     task_pub.publish(msg)
 
 def main() :     
