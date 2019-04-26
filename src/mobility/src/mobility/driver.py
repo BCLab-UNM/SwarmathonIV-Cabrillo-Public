@@ -100,8 +100,6 @@ class State:
         
         # Publishers
         self.state_machine = rospy.Publisher('state_machine', String, queue_size=1, latch=True)
-        self.fingerAngle = rospy.Publisher('fingerAngle', Float32, queue_size=1, latch=True)
-        self.wristAngle = rospy.Publisher('wristAngle', Float32, queue_size=1, latch=True)
         self.driveControl = rospy.Publisher('driveControl', Twist, queue_size=10)
 
         # Configuration 

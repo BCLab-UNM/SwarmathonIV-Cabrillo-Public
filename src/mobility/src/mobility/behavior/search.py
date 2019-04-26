@@ -75,10 +75,6 @@ def search_exit(code):
     sys.exit(code)
 
 
-def set_search_exit_poses():
-    swarmie.set_search_exit_poses()
-
-
 def drive_to(pose, use_waypoints):
     planner.drive_to(pose,
                      tolerance=0.5,
