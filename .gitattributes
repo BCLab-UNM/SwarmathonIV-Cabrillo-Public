@@ -1,5 +1,4 @@
 arduino/libraries/* linguist-vendored=true
 src/apriltags_ros/* linguist-vendored=true
-src/behaviours/* linguist-detectable=false
 src/mobility/resources/* linguist-detectable=false
 doc/* linguist-documentation=true
