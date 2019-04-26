@@ -152,6 +152,7 @@
       <param name="pixel_format" value="yuyv"/>
       <param name="camera_frame_id" value="$(arg name)/camera_link"/>
       <remap from="/$(arg name)/camera/image_raw" to="/$(arg name)/camera/image"/>
+      <remap from="/$(arg name)/camera/camera_info" to="/$(arg name)/camera/info"/>
     </node>
   </group>
   
