@@ -73,8 +73,8 @@ class Task :
         rospy.set_param('~task_state', self.current_state)
         rospy.set_param('~has_block', self.has_block)
 
-    def publish_status(self, event):
-        self.status_pub.publish(self.get_task())
+    def publish_status(self, _event):
+        self.status_pub.publish('+Cabrillo: {}'.format(self.get_task()))
 
     def print_state(self, msg):
         s = String()
@@ -114,7 +114,7 @@ class Task :
         
     @sync(task_lock)
     def run_next(self):
-        self.status_pub.publish(self.get_task())
+        self.publish_status(None)
         self.task_pub.publish(self.get_task())
 
         try:
