@@ -4,7 +4,7 @@
 		<static>true</static>
 		<link name="link">
 			<sensor type="camera" name="prelim_camera">
-				<pose>0 0 13 0.0 1.57079 0.0</pose>
+				<pose>0 0 13 0.0 1.57079 3.14159</pose>
 				<visualize>false</visualize>
 				<update_rate>6.0</update_rate>
 				<camera name="prelim_camera">
@@ -22,7 +22,7 @@
 			</sensor>
 			
 			<sensor type="camera" name="final_camera">
-				<pose>0 0 20.1 0.0 1.57079 0.0</pose>
+				<pose>0 0 20.1 0.0 1.57079 3.14159</pose>
 				<visualize>false</visualize>
 				<update_rate>6.0</update_rate>
 				<camera name="final_camera">
