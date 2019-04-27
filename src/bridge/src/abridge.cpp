@@ -195,7 +195,7 @@ void driveCommandHandler(const geometry_msgs::Twist::ConstPtr& message) {
 // radians, write them to a string and send that to the arduino
 // for processing.
 void fingerAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
-
+  ROS_INFO("fingerAngleHandler called with angle: %f",angle->data);
   // To throttle the message rate so we don't lose connection to the arduino
   usleep(min_usb_send_delay);
   
@@ -213,6 +213,7 @@ void fingerAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
 }
 
 void wristAngleHandler(const std_msgs::Float32::ConstPtr& angle) {
+  ROS_INFO("wristAngleHandler called with angle: %f",angle->data);
   // To throttle the message rate so we don't lose connection to the arduino
   usleep(min_usb_send_delay);
   

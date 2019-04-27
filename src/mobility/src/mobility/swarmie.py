@@ -137,7 +137,7 @@ class Swarmie(object):
         self.info_publisher = None
         self.mode_publisher = None
         self.finger_publisher = None
-        self.wrist_publisher = None
+        self.wrist_publisher = None  # type: rospy.Publisher
 
         self.block_size = None
 
@@ -552,6 +552,9 @@ class Swarmie(object):
         
         * `angle` (`float`) Wrist angle in radians. 
         '''
+        rospy.loginfo("set_wrist_angle: {} with {} connections".format(
+            angle, self.wrist_publisher.get_num_connections())
+        )
         self.wrist_publisher.publish(Float32(angle))
 
     def set_finger_angle(self, angle):
@@ -561,6 +564,9 @@ class Swarmie(object):
         
         * `angle` (`float`) Finger angle in radians.
         '''
+        rospy.loginfo("finger_publisher: {} with {} connections".format(
+            angle, self.wrist_publisher.get_num_connections())
+        )
         self.finger_publisher.publish(Float32(angle))
         
     def wrist_down(self):
