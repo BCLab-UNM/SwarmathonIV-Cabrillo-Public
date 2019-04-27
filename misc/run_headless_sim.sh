@@ -59,12 +59,12 @@ addCollectionZone() {
 } #end addCollectionZone
 
 addGroundPlane() {
-$spawn\concrete_ground_plane/model.sdf -model concrete_ground_plane -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0 || echo -e "$red Concrete_ground_plane Spawn Failed $reset" 
+	$spawn\concrete_ground_plane/model.sdf -model concrete_ground_plane -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0 || echo -e "$red Concrete_ground_plane Spawn Failed $reset" 
 	echo -e "$cyan Attempted to add concrete ground plane: name=concrete_ground_plane, x=0, y=0, z=0, roll=0, pitch=0, yaw=0 $reset"
 } #end addGroundPlane
 
 addCam() {
-$spawn\aerial_cam/model.sdf -model aerial_cam -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0 || echo -e "$red aerial_cam Spawn Failed $reset" 
+	$spawn\aerial_cam/model.sdf -model aerial_cam -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0 || echo -e "$red aerial_cam Spawn Failed $reset" 
 	echo -e "$cyan Attempted to add aerial cam: name=aerial_cam, x=0, y=0, z=0, roll=0, pitch=0, yaw=0 $reset"
 } #end addGroundPlane
 
@@ -160,7 +160,7 @@ addRovers(){
 # Stops the ROS nodes associated with rovers
 startRoverNodes() {
 	local rover_name=$1
-	setsid roslaunch $PWD/launch/swarmie.launch name:=$rover_name > logs/$rover_name.log &
+	setsid roslaunch $(catkin locate)/launch/swarmie.launch name:=$rover_name >./logs/$rover_name.log &
 	echo "Attempted to start rover ROS nodes"
 } #end startRoverNodes
 
@@ -326,9 +326,9 @@ sleep 5
 $visualize && startGazeboClient # Start the gazebo simulation if got agrument
 echo -e "$cyan Adding models to the world $reset"
 addGroundPlane
+addCam
 addRovers $NUM_ROVERS
 addCollectionZone
-addCam
 addWalls $type # will be either prelim or final
 sleep 10
 echo -e "$green Done adding models to the world $reset"
@@ -336,15 +336,15 @@ echo -e "$green Done adding models to the world $reset"
 publishRoverModes $NUM_ROVERS "autonomous"
 
 #---------------------------   Checking for errors    ------------------------------#
-#  # test for  [Err] [Model.cc:921] Sensors failed to initialize when loading model[collection_disk] via the factory mechanism.Plugins for the model will not be loaded."
+# Testing for  [Err] [Model.cc:921] Sensors failed to initialize when loading model[collection_disk] via the factory mechanism.Plugins for the model will not be loaded."
 echo "Looking for /collectionZone/score"
 [[ $(rostopic list /collectionZone/score) ]] || userExit 9
 n=10 #10-18
 for (( i=0;i<$NUM_ROVERS;i++ )); do
-		echo "Looking for /${ROVER_NAMES[i]}/status"
-		[[ $(rostopic list /${ROVER_NAMES[i]}/status) ]] || userExit $(( $n + $i ))
-		echo "Looking for /${ROVER_NAMES[i]}/targets/image/compressed"
-		[[ $(rostopic list /${ROVER_NAMES[i]}/targets/image/compressed) ]] || userExit $(( $n + $i ))
+	echo "Looking for /${ROVER_NAMES[i]}/status"
+	[[ $(rostopic list /${ROVER_NAMES[i]}/status) ]] || userExit $(( $n + $i ))
+	echo "Looking for /${ROVER_NAMES[i]}/targets/image/compressed"
+	[[ $(rostopic list /${ROVER_NAMES[i]}/targets/image/compressed) ]] || userExit $(( $n + $i ))
 done #end foreach checking rovers status exists
 #---------------------------   Done checking for errors    ------------------------------#
 
