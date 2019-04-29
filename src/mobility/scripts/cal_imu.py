@@ -92,6 +92,13 @@ class IMU:
         self.rover = rover
         rospy.init_node('imu')
 
+        if rospy.has_param('~imu_is_failed'):
+            rospy.logfatal(
+                'The IMU node has previously encountered a fatal error. ' +
+                'Exiting now.'
+            )
+            sys.exit(-1)
+
         if rospy.has_param('~imu_mode'):  # if respawning
             self._get_mode()
         else:
@@ -348,6 +355,7 @@ class IMU:
                     self.RAW_DATA_PATH
                 )
             )
+            rospy.set_param('~imu_is_failed', True)
             raise
         except ValueError as e:
             self._diag_fatal(
@@ -355,6 +363,7 @@ class IMU:
                  'file {}. The file is corrupt: {}. This rover must ' +
                  'be replaced.').format(self.RAW_DATA_PATH, e.message)
             )
+            rospy.set_param('~imu_is_failed', True)
             raise
 
         # Calibration matrices are stored as lists and converted to numpy
