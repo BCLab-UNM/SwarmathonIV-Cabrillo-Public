@@ -38,6 +38,7 @@ from __future__ import print_function
 import math
 import numpy
 import sys
+import textwrap
 import tf
 import rospy
 
@@ -75,9 +76,28 @@ class IMU:
     MAG_VAR_TOLERANCE = 1e-3
     ACC_VAR_TOLERANCE = 4e-3
 
+    REPLACEMENT_MSG = ' '.join(
+        textwrap.wrap(
+            textwrap.dedent(
+                '''
+                This fails the standard validation test and the rover should
+                be replaced. However, it will continue to run if you choose
+                not to replace it.
+                '''
+            )
+        )
+    )
+
     def __init__(self, rover):
         self.rover = rover
         rospy.init_node('imu')
+
+        if rospy.has_param('~imu_is_failed'):
+            rospy.logfatal(
+                'The IMU node has previously encountered a fatal error. ' +
+                'Exiting now.'
+            )
+            sys.exit(-1)
 
         if rospy.has_param('~imu_mode'):  # if respawning
             self._get_mode()
@@ -163,12 +183,12 @@ class IMU:
                 queue_size=10
             )
         self.info_log = rospy.Publisher(
-            'infoLog',
+            '/infoLog',
             String,
             queue_size=10
         )
         self.diags_log = rospy.Publisher(
-            'diagsLog',
+            '/diagsLog',
             String,
             queue_size=10,
             latch=True
@@ -235,20 +255,41 @@ class IMU:
             self.current_state = IMU.STATE_NORMAL
             self.finished_validating = True
             self.needs_calibration = False
-            msg = self.rover + ': reloaded calibration matrices after respawn.'
+            msg = 'Reloaded calibration matrices after respawn.'
             if self.current_mode == IMU.MODE_2D:
                 msg += ' Using 2D mode.'
             elif self.current_mode == IMU.MODE_3D:
                 msg += ' Using 3D mode.'
 
-            rospy.loginfo(msg)
-            self.diags_log.publish(msg)
+            self._diag_info(msg)
 
         elif self.LOAD_RAW_DATA:
             self.load_and_validate_calibration()
 
         # Publish current calibration once:
         self.publish_diagnostic_msg()
+
+    def _diag_info(self, msg):
+        """Log an info message and publish it on /diagsLog."""
+        m = '{}: {}'.format(self.rover, msg)
+        rospy.loginfo(m)
+        self._diag_pub(m, 'White')
+
+    def _diag_warn(self, msg):
+        """Log a warning message and publish it on /diagsLog."""
+        m = '{}: {}'.format(self.rover, msg)
+        rospy.logwarn(m)
+        self._diag_pub(m, 'Yellow')
+
+    def _diag_fatal(self, msg):
+        """Log a fatal error message and publish it on /diagsLog."""
+        m = '{}: {}'.format(self.rover, msg)
+        rospy.logfatal(m)
+        self._diag_pub(m, 'Red')
+
+    def _diag_pub(self, msg, color):
+        m = '<font color="{}" size="2">{}</font>'.format(color, msg)
+        self.diags_log.publish(m)
 
     def _set_mode(self, mode):
         """Sets the IMU mode to mode and puts it onto the parameter server.
@@ -307,17 +348,28 @@ class IMU:
                 self.rover + ': IMU raw data file loaded from ' +
                 self.RAW_DATA_PATH
             )
-        except IOError as e:
-            msg = (self.rover +
-                   ': FATAL ERROR. Extended calibration file not found.')
-            rospy.logfatal(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
+        except IOError:
+            self._diag_fatal(
+                ('FATAL ERROR. Extended calibration file {} ' +
+                 'not found. This rover must be replaced.').format(
+                    self.RAW_DATA_PATH
+                )
+            )
+            rospy.set_param('~imu_is_failed', True)
+            # Wait in hope the message gets published and received by any
+            # subscribers before the node exits.
+            rospy.sleep(3.0)
             raise
         except ValueError as e:
-            msg = (self.rover +
-                   ': FATAL ERROR. Error reading extended calibration file.')
-            rospy.logfatal(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
+            self._diag_fatal(
+                ('FATAL ERROR. Error reading extended calibration ' +
+                 'file {}. The file is corrupt: {}. This rover must ' +
+                 'be replaced.').format(self.RAW_DATA_PATH, e.message)
+            )
+            rospy.set_param('~imu_is_failed', True)
+            # Wait in hope the message gets published and received by any
+            # subscribers before the node exits.
+            rospy.sleep(3.0)
             raise
 
         # Calibration matrices are stored as lists and converted to numpy
@@ -336,32 +388,34 @@ class IMU:
         acc_var_err = self.error(acc_x, acc_y, acc_z,
                                  self.acc_offsets, self.acc_transform)
 
-        mag_msg = '{}: Magnetometer v[Err]: {:7.6f}'.format(self.rover,
-                                                            mag_var_err)
-        acc_msg = '{}: Accelerometer v[Err]: {:7.6f}'.format(self.rover,
-                                                             acc_var_err)
-        self.diags_log.publish(mag_msg)
-        rospy.loginfo(mag_msg)
-        self.diags_log.publish(acc_msg)
-        rospy.loginfo(acc_msg)
+        self._diag_info(('IMU calibration validation: Magnetometer ' +
+                         'v[Err]: {:7.6f}').format(mag_var_err))
+        self._diag_info(('IMU calibration validation: Accelerometer ' +
+                         'v[Err]: {:7.6f}').format(acc_var_err))
 
         if (math.isnan(mag_var_err) or
                 abs(mag_var_err) >= IMU.MAG_VAR_TOLERANCE):
-            msg = "{}: The magnetometer fit is too poor to use.".format(
-                self.rover
+            self._diag_warn(
+                ("The magnetometer fit is too poor to use. The data's " +
+                 "variance ({:7.6f}) exceeds the threshold of {}. {}").format(
+                    mag_var_err,
+                    IMU.MAG_VAR_TOLERANCE,
+                    IMU.REPLACEMENT_MSG
+                )
             )
-            rospy.logwarn(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
             self.needs_calibration = True
             self._set_mode(IMU.MODE_2D)
 
         if (math.isnan(acc_var_err) or
                 abs(acc_var_err) >= IMU.ACC_VAR_TOLERANCE):
-            msg = "{}: The accelerometer fit is too poor to use.".format(
-                self.rover
+            self._diag_warn(
+                ("The accelerometer fit is too poor to use. The data's " +
+                 "variance ({:7.6f}) exceeds the threshold of {}. {}").format(
+                    acc_var_err,
+                    IMU.ACC_VAR_TOLERANCE,
+                    IMU.REPLACEMENT_MSG
+                )
             )
-            rospy.logwarn(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
             self.needs_calibration = True
             self._set_mode(IMU.MODE_2D)
 
@@ -384,32 +438,30 @@ class IMU:
         avg_roll = numpy.average(self.rolls) * 180 / math.pi
         avg_pitch = numpy.average(self.pitches) * 180 / math.pi
 
-        self.diags_log.publish('{}: Average roll: {:6.3f} deg'.format(
-            self.rover,
-            avg_roll)
-        )
-        self.diags_log.publish('{}: Average pitch: {:6.3f} deg'.format(
-            self.rover,
-            avg_pitch)
-        )
+        self._diag_info(('IMU calibration validation: ' +
+                         'Average roll: {:6.3f} deg').format(avg_roll))
+        self._diag_info(('IMU calibration validation: ' +
+                         'Average pitch: {:6.3f} deg').format(avg_pitch))
 
         if abs(avg_roll) > IMU.ROLL_PITCH_TOLERANCE:
-            msg = '{}: Roll exceeds tolerance threshold of {:.1f} deg.'.format(
-                self.rover,
-                IMU.ROLL_PITCH_TOLERANCE
+            self._diag_warn(
+                ('The avg roll exceeds the tolerance threshold of ' +
+                 '{:.1f} deg. {}').format(
+                    IMU.ROLL_PITCH_TOLERANCE,
+                    IMU.REPLACEMENT_MSG
+                )
             )
-            rospy.logwarn(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
             self.needs_calibration = True
             self._set_mode(IMU.MODE_2D)
 
         if abs(avg_pitch) > IMU.ROLL_PITCH_TOLERANCE:
-            msg = '{}: Pitch exceeds tolerance threshold of {:.1f} deg.'.format(
-                self.rover,
-                IMU.ROLL_PITCH_TOLERANCE
+            self._diag_warn(
+                ('The avg pitch exceeds the tolerance threshold of ' +
+                 '{:.1f} deg. {}').format(
+                    IMU.ROLL_PITCH_TOLERANCE,
+                    IMU.REPLACEMENT_MSG
+                )
             )
-            rospy.logwarn(msg)
-            self.diags_log.publish('<font color=Red>' + msg + '</font>')
             self.needs_calibration = True
             self._set_mode(IMU.MODE_2D)
 
