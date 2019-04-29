@@ -34,7 +34,8 @@ def smart_square(distance, ignore_sonar=False):
     start_pose = swarmie.get_odom_location().get_pose()
     start = Point()
     start.x = start_pose.x 
-    start.y = start_pose.y 
+    start.y = start_pose.y
+    print('Start point: ({:.2f}, {:.2f})'.format(start.x, start.y))
     
     sq1 = Point()
     sq1.x = start.x + distance * math.cos(start_pose.theta)
@@ -54,7 +55,10 @@ def smart_square(distance, ignore_sonar=False):
     swarmie.drive_to(start, ignore=ignore)
 
     swarmie.set_heading(start_pose.theta)
-    
+
+    end_pose = swarmie.get_odom_location().get_pose()
+    print('Start point: ({:.2f}, {:.2f})'.format(end_pose.x, end_pose.y))
+
 def abs_square(distance):
     
     start_pose = swarmie.get_odom_location().get_pose()
