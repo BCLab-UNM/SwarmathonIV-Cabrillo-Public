@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+import argparse
 import sys 
 import math 
 import rospy 
@@ -67,17 +68,18 @@ def abs_square(distance):
     swarmie.set_heading(start_pose.theta, ignore=-1)
 
 def main():
-    global rovername 
-    
-    if len(sys.argv) < 3 :
-        print ('usage:', sys.argv[0], '<rovername> <distance>')
-        exit (-1)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        'distance',
+        type=float,
+        help='The length (m) of each side of the square.'
+    )
+    args = parser.parse_args()
 
-    rovername = sys.argv[1]
-    distance = float(sys.argv[2])
+    smart_square(args.distance)
 
-    smart_square(swarmie, distance)
-    
 if __name__ == '__main__' : 
     swarmie.start(node_name='square')
     main()
