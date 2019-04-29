@@ -356,6 +356,9 @@ class IMU:
                 )
             )
             rospy.set_param('~imu_is_failed', True)
+            # Wait in hope the message gets published and received by any
+            # subscribers before the node exits.
+            rospy.sleep(3.0)
             raise
         except ValueError as e:
             self._diag_fatal(
@@ -364,6 +367,9 @@ class IMU:
                  'be replaced.').format(self.RAW_DATA_PATH, e.message)
             )
             rospy.set_param('~imu_is_failed', True)
+            # Wait in hope the message gets published and received by any
+            # subscribers before the node exits.
+            rospy.sleep(3.0)
             raise
 
         # Calibration matrices are stored as lists and converted to numpy
