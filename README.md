@@ -12,7 +12,7 @@ This repository contains:
 
 Be sure you are using the latest drivers for your video card using the "additional drivers tool" in Ubuntu. Gazebo client often does not do well with the open source drivers.
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/InstallGraphics.png "Additional Drivers")
+![Alt text](readmeImages/InstallGraphics.png "Additional Drivers")
 
 ### Quick Start Installation Guide
 
@@ -134,11 +134,11 @@ The GUI will now launch.
 
 This is the first screen of the GUI:
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/guiFirstScreen.png "Opening Screen")
+![Alt text](readmeImages/guiFirstScreen.png "Opening Screen")
 
 Click the "Simulation Control" tab:
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/simControlTab.png "Simulation Parameters")
+![Alt text](readmeImages/simControlTab.png "Simulation Parameters")
 
 There are several settings you can change:
 
@@ -162,11 +162,11 @@ Click the "Build Simulation" button when ready.
 
 The Gazebo physics simulator will open.
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/buildSim.png "Gazebo Simulator")
+![Alt text](readmeImages/buildSim.png "Gazebo Simulator")
 
 Click back to the Swarmathon GUI and select the "Sensor Display" tab.
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/sensorDisplayTab.png "Sesnor display")
+![Alt text](readmeImages/sensorDisplayTab.png "Sesnor display")
 
 Any active rovers, simulated and/or real, will be displayed in the rover list on the left side. To the right of the rover list is their corresponding connection status. Please note that the number here reflects different things for simulated vs. physical rovers:
 - physical rovers: This number represents the wireless link quality and the bitrate of their connection.
@@ -175,11 +175,11 @@ Any active rovers, simulated and/or real, will be displayed in the rover list on
 
 To the right of the connection status is a checkbox for the map frame. If you select a checkbox for a given rover, it's map information will appear in the map to the right. You can arbitrarily select any number of rovers to be displayed in the map frame.
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/activeRovers.png "Active rovers")
+![Alt text](readmeImages/activeRovers.png "Active rovers")
 
 Select a rover to view its sensor outputs. 
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/roverSensorOutputs.png "Rover sensor outputs")
+![Alt text](readmeImages/roverSensorOutputs.png "Rover sensor outputs")
 
 There are four sensor display frames and one settings frame:
 
@@ -200,7 +200,7 @@ The map settings frame contains several settings that affect the map view:
 
 Look on the left hand side of the RQT Rover GUI.
 
-![Alt text](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/readmeImages/taskStatusTab.png "Task Status tab")
+![Alt text](readmeImages/taskStatusTab.png "Task Status tab")
 
 This section displays important status information:
 
@@ -227,7 +227,7 @@ Source code can be found in the repository /src directory. This directory contai
 ### Robot Behaviors
 Behavior code is launched by the task manager. The task manager is a state machine that implements the phases of the robot operation during the competition. The task states are shown below:
 
-![Figure of task manager state machine](https://github.com/BCLab-UNM/Swarmathon-Cabrillo/blob/master/readmeImages/statemachine.jpg)
+![Figure of task manager state machine](readmeImages/statemachine.jpg)
 
 The task manager operates as a single ROS node, starting each behavior importing it as a Python module and calling its `main()` function. Separating tasks into individual modules eliminates interaction between behaviors, reducing programmer error due to unforeseen consequences. Further, each behavior can be tested in isolation. For example, you can place the rover in front of some blocks then manually launch the pick-up node. This experiment can be repeated quickly and enables programmers to write more thoroughly tested code.
 
