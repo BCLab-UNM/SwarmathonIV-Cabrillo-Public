@@ -109,20 +109,17 @@ Install ROS Grid Map, which is used to build maps containing sonar-marked obstac
 sudo apt install ros-kinetic-grid-map 
 ```
 
-##### 3. Clone and build this repository:
+##### 3. Clone the repository and build:
 
 1. Install git, if necessary.
     ```
     sudo apt install git
     ```
 
-2. Clone the repository and initialize submodules
+2. Clone the repository, initialize submodules, and build:
     ```
     git clone --recursive git@github.com:BCLab-UNM/Swarmathon-Cabrillo.git
-    ```
-
-3. Build:
-    ```
+    cd Swarmathon-Cabrillo
     catkin build
     ```
     
