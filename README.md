@@ -18,6 +18,18 @@ Be sure you are using the latest drivers for your video card using the "addition
 
 SwarmBaseCode-ROS is designed and tested exclusively on the 64 bit version of Ubuntu 16.04 LTS (Xenial Xerus) and ROS Kinetic Kame. Other systems are untested and are therefore not supported at this time.
 
+#### Summary:
+1. Install ROS Kinetic. Instructions below in the detailed guide.
+2. Install dependencies, clone and build.
+    ```bash
+    sudo apt install python-rosinstall python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers ros-kinetic-grid-map ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino ros-kinetic-usb-cam ros-kinetic-multimaster-fkie libusb-dev
+    git clone --recursive git@github.com:BCLab-UNM/Swarmathon-Cabrillo.git
+    cd Swarmathon-Cabrillo
+    catkin build
+    source ./devel/setup.bash
+    ```
+
+#### Detail
 ##### 1. Install ROS Kinetic Kame
 
 Detailed instructions for installing ROS Kinetic Kame under Ubuntu 16.04 [here](http://wiki.ros.org/kinetic/Installation/Ubuntu) or follow the summarized instructions below:
@@ -81,11 +93,6 @@ Install the usb camera driver:
 sudo apt install ros-kinetic-usb-cam
 ```
 
-Installing additional packages summarized 
-[Preinstalled Package](https://raw.githubusercontent.com/BCLab-UNM/Swarmathon-Docs/master/PreinstalledCompetitionPackages.md)
-```bash
-sudo apt install ros-kinetic-desktop-full python-rosinstall ros-kinetic-video-stream-opencv git libusb-dev python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers git qtcreator libcap2-bin ros-kinetic-grid-map ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino ros-kinetic-usb-cam ros-kinetic-multimaster-fkie  
-```
 
 ##### 4. Clone and build this repository:
 
