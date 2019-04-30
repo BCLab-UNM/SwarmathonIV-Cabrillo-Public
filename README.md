@@ -243,3 +243,11 @@ The task manager operates as a single ROS node, starting each behavior importing
 * `gohome` Drives the rover back to the collection area, planning a path around any obstacles currently on the map.
 * `dropoff` Drops a cube off inside the collection area.
 
+## Using the code
+### Deploying code to a physical rover
+```
+# deploy code to the rover with hostname lovelace
+./misc/deploy_host.sh lovelace
+```
+
+`deploy_host.sh` builds the code in the current working tree on the local host machine, copies binaries to the rover, and brings up the ROS graph on the rover via SSH.
