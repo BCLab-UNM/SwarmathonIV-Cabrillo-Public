@@ -251,3 +251,27 @@ The task manager operates as a single ROS node, starting each behavior importing
 ```
 
 `deploy_host.sh` builds the code in the current working tree on the local host machine, copies binaries to the rover, and brings up the ROS graph on the rover via SSH.
+
+### Working with ROS Multimaster
+We use [multimaster_fkie](http://wiki.ros.org/multimaster_fkie) to run separate, synchronized ROS graphs on each host machine when running code on multiple physical rovers.
+
+This helps reduce wireless network bandwidth usage by allowing us to sync specific topics across machines. Also, since each rover has its own local ROS graph, with a local ROS Master, it should be more resilient against temporary wireless connectivity dropouts.
+
+`mutimaster_fkie` requires a `master_discovery` node running on each machine, and a `master_sync` node running on at least one machine.
+- The `master_discovery` node publishes information about the local ROS Master on the network, making it automatically discoverable.
+- The `master_sync` node connects to any discovered `master_discovery` nodes and synchronizes the remote ROS graph with the local one.
+
+To create a mesh of synchronized ROS graphs, we run the `master_discovery` and `master_sync` nodes on the laptop and all rovers, so each local ROS Master is connected to every other remote ROS Master. The `master_discovery` and `master_sync` nodes are launched automatically alongside the GUI on the laptop and with the rover nodes on each rover.
+
+#### Benefits
+In the Multimaster system, you can have GUIs open on multiple laptops if you want. Also, closing and re-opening the GUI has no effect on the physical rovers and their local ROS graphs, other than a causing a short burst of network activity serving the sync/unsync procedure amongst the `master_discovery`/`master_sync` nodes.
+
+#### Requirements
+##### Name resolution:
+- Each host (laptop and all rovers) must be able to resolve the hostname of all other hosts. This can be done by hard coding names in `/etc/hosts` or using a DNS server on the local network.
+- You cannot rely on mDNS and Avahi's `.local` domain for name resolution. Neither ROS nor `master_discovery`/`master_sync` currently support this.
+
+#### Troubleshooting
+As long as names resolve on each host, the `master_sync` nodes should discover sync with every `master_discovery` node on the network within 10-15 seconds. On rare occasions, this doesn't work properly, and not all of the rovers will show up in the GUI display. If this happens, you can:
+- Re-launch the GUI and accompanying `master_discovery`/`master_sync` nodes, without re-deploying to any of the rovers.
+- If the above doesn't work, re-deploy code to the missing/un-synced rover.
