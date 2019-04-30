@@ -47,25 +47,26 @@ rosdep update      # Note this is not run with sudo
 
 Note: if you accidentally ran ```sudo rosdep update``` you can repair the permissions ```sudo rosdep fix-permissions```.
 
-Most systems will already have usb development support installed, but just in case:
 
-```
- sudo apt install libusb-dev
-```
-
-##### 2. Environment Setup
+###### Environment Setup
 From ROS Wiki: It's convenient if the ROS environment variables are automatically added to your bash session every time a new shell is launched:
 ```
 echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-##### 3. Install additional ROS packages
+##### 2. Install additional ROS packages
 
 We use [catkin_tools](https://catkin-tools.readthedocs.io/) to build:
 
 ```
 sudo apt install python-rosinstall python-catkin-tools
+```
+
+Most systems will already have usb development support installed, but just in case:
+
+```
+ sudo apt install libusb-dev
 ```
 
 We use [robot_localization](http://wiki.ros.org/robot_localization) for state estimation and sensor fusion:
@@ -88,13 +89,27 @@ The Swarmies can receive commands from the thumb sticks on a Microsoft Xbox 360 
 
 Joystick commands can also be simulated using the direction keys (Up=I, Down=K, Left=J, Right=L) on the keyboard. The Rover GUI window must have focus for keyboard control to work.
 
-Install the usb camera driver:
+Install the usb camera driver, which runs on the physical rover:
 ```
 sudo apt install ros-kinetic-usb-cam
 ```
 
+Install ROS Serial, which is used to run the IMU calibration code:
+```
+sudo apt install ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino
+```
 
-##### 4. Clone and build this repository:
+Install ROS Multimaster, which is used to sync the ROS graphs of each physical rover:
+```
+sudo apt install ros-kinetic-multimaster-fkie
+```
+
+Install ROS Grid Map, which is used to build maps containing sonar-marked obstacles and locations of AprilTag detections:
+```
+sudo apt install ros-kinetic-grid-map 
+```
+
+##### 3. Clone and build this repository:
 
 1. Install git, if necessary.
     ```
@@ -111,7 +126,7 @@ sudo apt install ros-kinetic-usb-cam
     catkin build
     ```
     
-##### 5. Run the simulation:
+##### 4. Run the simulation:
 
 1. Start the GUI
   ```
