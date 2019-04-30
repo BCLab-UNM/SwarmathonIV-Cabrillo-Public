@@ -77,10 +77,10 @@ The Swarmies can receive commands from the thumb sticks on a Microsoft Xbox 360 
 Joystick commands can also be simulated using the direction keys (Up=I, Down=K, Left=J, Right=L) on the keyboard. The Rover GUI window must have focus for keyboard control to work.
 
 Install the usb camera driver:
+```
+sudo apt install ros-kinetic-usb-cam
+```
 
-```
-sudo apt install ros-kinetic-video-stream-opencv
-```
 Installing additional packages summarized 
 [Preinstalled Package](https://raw.githubusercontent.com/BCLab-UNM/Swarmathon-Docs/master/PreinstalledCompetitionPackages.md)
 ```bash
