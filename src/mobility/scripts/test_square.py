@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+import argparse
 import sys 
 import math 
 import rospy 
@@ -24,12 +25,17 @@ def dumb_square(distance):
     swarmie.drive(distance, ignore=Obstacle.IS_VISION)   
     swarmie.turn(math.pi/2, ignore=Obstacle.IS_VISION)   
 
-def smart_square(distance):
+def smart_square(distance, ignore_sonar=False):
+    ignore = Obstacle.IS_VISION
+    if ignore_sonar:
+        ignore |= Obstacle.IS_SONAR
+
     # Compute a square based on the current heading. 
     start_pose = swarmie.get_odom_location().get_pose()
     start = Point()
     start.x = start_pose.x 
-    start.y = start_pose.y 
+    start.y = start_pose.y
+    print('Start point: ({:.2f}, {:.2f})'.format(start.x, start.y))
     
     sq1 = Point()
     sq1.x = start.x + distance * math.cos(start_pose.theta)
@@ -43,13 +49,16 @@ def smart_square(distance):
     sq3.x = sq2.x + distance * math.cos(start_pose.theta + math.pi)
     sq3.y = sq2.y + distance * math.sin(start_pose.theta + math.pi)
 
-    swarmie.drive_to(sq1, ignore=Obstacle.IS_VISION)
-    swarmie.drive_to(sq2, ignore=Obstacle.IS_VISION)
-    swarmie.drive_to(sq3, ignore=Obstacle.IS_VISION)
-    swarmie.drive_to(start, ignore=Obstacle.IS_VISION)
-    
+    swarmie.drive_to(sq1, ignore=ignore)
+    swarmie.drive_to(sq2, ignore=ignore)
+    swarmie.drive_to(sq3, ignore=ignore)
+    swarmie.drive_to(start, ignore=ignore)
+
     swarmie.set_heading(start_pose.theta)
-    
+
+    end_pose = swarmie.get_odom_location().get_pose()
+    print('Start point: ({:.2f}, {:.2f})'.format(end_pose.x, end_pose.y))
+
 def abs_square(distance):
     
     start_pose = swarmie.get_odom_location().get_pose()
@@ -67,17 +76,23 @@ def abs_square(distance):
     swarmie.set_heading(start_pose.theta, ignore=-1)
 
 def main():
-    global rovername 
-    
-    if len(sys.argv) < 3 :
-        print ('usage:', sys.argv[0], '<rovername> <distance>')
-        exit (-1)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        'distance',
+        type=float,
+        help='The length (m) of each side of the square.'
+    )
+    parser.add_argument(
+        '--ignore-sonar',
+        action='store_true',
+        help='Whether the rover should ignore sonar obstacles on its journey.'
+    )
+    args = parser.parse_args()
 
-    rovername = sys.argv[1]
-    distance = float(sys.argv[2])
+    smart_square(args.distance, args.ignore_sonar)
 
-    smart_square(swarmie, distance)
-    
-if __name__ == '__main__' : 
+if __name__ == '__main__' :
     swarmie.start(node_name='square')
     main()
