@@ -22,7 +22,7 @@ SwarmBaseCode-ROS is designed and tested exclusively on the 64 bit version of Ub
 1. Install ROS Kinetic. Instructions below in the detailed guide.
 2. Install dependencies, clone and build.
     ```bash
-    sudo apt install python-rosinstall python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers ros-kinetic-grid-map ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino ros-kinetic-usb-cam ros-kinetic-multimaster-fkie libusb-dev
+    sudo apt install python-rosinstall python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers ros-kinetic-grid-map ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino ros-kinetic-usb-cam ros-kinetic-multimaster-fkie libusb-dev ipython
     git clone --recursive git@github.com:BCLab-UNM/Swarmathon-Cabrillo.git
     cd Swarmathon-Cabrillo
     catkin build
@@ -55,7 +55,7 @@ echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-##### 2. Install additional ROS packages
+##### 2. Install additional packages
 
 We use [catkin_tools](https://catkin-tools.readthedocs.io/) to build:
 
@@ -107,6 +107,11 @@ sudo apt install ros-kinetic-multimaster-fkie
 Install ROS Grid Map, which is used to build maps containing sonar-marked obstacles and locations of AprilTag detections:
 ```
 sudo apt install ros-kinetic-grid-map 
+```
+
+Install IPython, which we use to help develop robot behavior code.
+```
+sudo apt install ipython
 ```
 
 ##### 3. Clone the repository and build:
