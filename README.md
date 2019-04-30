@@ -275,3 +275,23 @@ In the Multimaster system, you can have GUIs open on multiple laptops if you wan
 As long as names resolve on each host, the `master_sync` nodes should discover sync with every `master_discovery` node on the network within 10-15 seconds. On rare occasions, this doesn't work properly, and not all of the rovers will show up in the GUI display. If this happens, you can:
 - Re-launch the GUI and accompanying `master_discovery`/`master_sync` nodes, without re-deploying to any of the rovers.
 - If the above doesn't work, re-deploy code to the missing/un-synced rover.
+
+### Starting a simulation quickly (removed from competition submission)
+`run.sh` is a wrapper for a `roslaunch` command to start the GUI. The launch file has a number of useful arguments you can specify from the command line. Any arguments you give to `run.sh` will be added as arguments to the `roslaunch` command it runs.
+
+Example: Start the simulation automatically, with 2 rovers, final round arena dimensions using a specific world file:
+```
+./run.sh startsim:=true numrovers:=2 round:=final world:=$(pwd)/simulation/worlds/others/8by8_128_powerlaw_with_obstacles.world
+```
+
+You can view available arguments and their default values using the `--ros-args` flag. Apologies for the undocumented argument descriptions:
+```
+$ ./run.sh --ros-args
+Optional Arguments:
+  gazebo (default "false"): undocumented
+  multimaster (default "true"): undocumented
+  numrovers (default "1"): undocumented
+  round (default "prelim"): undocumented
+  startsim (default "false"): undocumented
+  world (default "/home/darren/rover_workspace/simulation/worlds/2018_competition_world_files/prelim2.world"): undocumented
+```
