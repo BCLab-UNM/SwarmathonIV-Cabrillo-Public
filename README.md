@@ -79,7 +79,12 @@ Joystick commands can also be simulated using the direction keys (Up=I, Down=K, 
 Install the usb camera driver:
 
 ```
-sudo apt-get install ros-kinetic-video-stream-opencv
+sudo apt install ros-kinetic-video-stream-opencv
+```
+Installing additional packages summarized 
+[Preinstalled Package](https://raw.githubusercontent.com/BCLab-UNM/Swarmathon-Docs/master/PreinstalledCompetitionPackages.md)
+```bash
+sudo apt install ros-kinetic-desktop-full python-rosinstall ros-kinetic-video-stream-opencv git libusb-dev python-catkin-tools ros-kinetic-robot-localization ros-kinetic-hector-gazebo-plugins ros-kinetic-joystick-drivers git qtcreator libcap2-bin ros-kinetic-grid-map ros-kinetic-rosserial-python ros-kinetic-rosserial-arduino ros-kinetic-usb-cam ros-kinetic-multimaster-fkie  
 ```
 
 ##### 4. Clone and build this repository:
