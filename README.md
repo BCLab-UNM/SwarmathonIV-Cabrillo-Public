@@ -14,11 +14,11 @@ Be sure you are using the latest drivers for your video card using the "addition
 
 ![Alt text](readmeImages/InstallGraphics.png "Additional Drivers")
 
-### Quick Start Installation Guide
+## Quick Start Installation Guide
 
 SwarmBaseCode-ROS is designed and tested exclusively on the 64 bit version of Ubuntu 16.04 LTS (Xenial Xerus) and ROS Kinetic Kame. Other systems are untested and are therefore not supported at this time.
 
-#### Summary:
+### Summary:
 1. Install ROS Kinetic. Instructions below in the detailed guide.
 2. Install dependencies, clone and build.
     ```bash
@@ -29,8 +29,8 @@ SwarmBaseCode-ROS is designed and tested exclusively on the 64 bit version of Ub
     source ./devel/setup.bash
     ```
 
-#### Detail
-##### 1. Install ROS Kinetic Kame
+### Detail
+#### 1. Install ROS Kinetic Kame
 
 Detailed instructions for installing ROS Kinetic Kame under Ubuntu 16.04 [here](http://wiki.ros.org/kinetic/Installation/Ubuntu) or follow the summarized instructions below:
 
@@ -48,14 +48,14 @@ rosdep update      # Note this is not run with sudo
 Note: if you accidentally ran ```sudo rosdep update``` you can repair the permissions ```sudo rosdep fix-permissions```.
 
 
-###### Environment Setup
+##### Environment Setup
 From ROS Wiki: It's convenient if the ROS environment variables are automatically added to your bash session every time a new shell is launched:
 ```
 echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-##### 2. Install additional packages
+#### 2. Install additional packages
 
 We use [catkin_tools](https://catkin-tools.readthedocs.io/) to build:
 
@@ -114,7 +114,7 @@ Install IPython, which we use to help develop robot behavior code.
 sudo apt install ipython
 ```
 
-##### 3. Clone the repository and build:
+#### 3. Clone the repository and build:
 
 1. Install git, if necessary.
     ```
@@ -128,7 +128,7 @@ sudo apt install ipython
     catkin build
     ```
     
-##### 4. Run the simulation:
+#### 4. Run the simulation:
 
 1. Start the GUI
   ```
@@ -217,7 +217,7 @@ This section displays important status information:
 
 To close the simulation and the GUI, click the red exit button in the top left-hand corner.
 
-### Software Documentation
+## Software Documentation
 
 Source code can be found in the repository /src directory. This directory contains several subdirectories, each of which contain a single ROS package. Here we present a high-level description of each package.
 
@@ -229,7 +229,7 @@ Source code can be found in the repository /src directory. This directory contai
 - `apriltags2_ros`: An image processor that detects [AprilTag](https://april.eecs.umich.edu/wiki/index.php/AprilTags) fiducial markers in the onboard camera's video stream. This package receives images from the `usb_cam` node (for physical robots) or [gazebo_ros_camera](http://docs.ros.org/kinetic/api/gazebo_plugins/html/classgazebo_1_1GazeboRosCamera.html) (for simulated robots).
 - `ublox`: An unused dependency of `rqt_rover_gui`.
 
-### Robot Behaviors
+## Robot Behaviors
 Behavior code is launched by the task manager. The task manager is a state machine that implements the phases of the robot operation during the competition. The task states are shown below:
 
 ![Figure of task manager state machine](readmeImages/statemachine.jpg)
