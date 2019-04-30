@@ -194,9 +194,9 @@ Source code can be found in the repository /src directory. This directory contai
 
 - `abridge`: A serial interface between SwarmBaseCode-ROS and the A-Star 32U4 microcontroller onboard the physical robot. In the simulation, `abridge` functionality is supplanted by `sbridge`, which interfaces with [gazebo_ros_skid_steer_drive](http://docs.ros.org/kinetic/api/gazebo_plugins/html/classgazebo_1_1GazeboRosSkidSteerDrive.html) (motor and encoders) and [hector_gazebo_plugins](http://wiki.ros.org/hector_gazebo_plugins) (sonar and IMU; see [step 3](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/README.md#3-install-additional-gazebo-plugins) of the Quick Start guide).
 - `rqt_rover_gui`: A Qt-based graphical interface for the physical and simulated robots. See [How to use Qt Creator](https://github.com/BCLab-UNM/SwarmBaseCode-ROS/blob/master/README.md#how-to-use-qt-creator-to-edit-the-simulation-gui) for details on this package.
-- `mobility`: The swarmie API, behaviors, helper functions, debug terminal, teleop and various other nodes. 
-- `mapping`: Grid map that has "obstacle" and "home" layers, and uses A* Search Algorithm to find paths.
-- `diagnostics`: Node for watching for data coming from sensor and reports when it is missing.
+- `mobility`: The Swarmie control API, behaviors, helper functions, debug terminal, teleop and various other nodes.
+- `mapping`: The mapping node uses the [Grid Map](https://github.com/anybotics/grid_map) library to mark sonar obstacles and AprilTag resource locations on a map in the odometry coordinate frame. The node also provides a path-planning navigation service to the Python control code, using A* to find a path to a goal location, returning the path as a list of waypoints avoiding marked sonar obstacles.
+- `diagnostics`: A node monitoring sensor data, logging messages to the `rqt_rover_gui` so the user knows if any hardware is malfunctioning. This node can also stop the rover from moving if an unrecoverable hardware malfunction prevents the rover from receiving important sensor data.
 - `apriltags2_ros`: An image processor that detects [AprilTag](https://april.eecs.umich.edu/wiki/index.php/AprilTags) fiducial markers in the onboard camera's video stream. This package receives images from the `usb_cam` node (for physical robots) or [gazebo_ros_camera](http://docs.ros.org/kinetic/api/gazebo_plugins/html/classgazebo_1_1GazeboRosCamera.html) (for simulated robots).
 - `ublox`: An unused dependency of `rqt_rover_gui`.
 
