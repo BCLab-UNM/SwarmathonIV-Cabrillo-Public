@@ -10,7 +10,8 @@ import rospy
 import time 
 import os 
 import subprocess
-import re 
+import re
+import textwrap
 
 from std_msgs.msg import String, Float32MultiArray, UInt8
 
@@ -62,6 +63,21 @@ class Diagnostics:
     INITIALIZING = 0 
     READY        = 1 
     FAILED       = 2
+
+    FAILURE_INSTRUCTIONS = ' '.join(
+        textwrap.wrap(
+            textwrap.dedent(
+                '''
+                Please troubleshoot this failure and replace the rover if
+                necessary. If you can fix the issue on this rover, you must
+                re-deploy its code and re-position it in a valid starting
+                position near the home plate. If you can't diagnose the problem
+                or choose not to replace the rover, please ensure the rover
+                stops and remains in its current location.
+                '''
+            )
+        )
+    )
 
     def __init__(self):
         self._rover_name = rospy.get_namespace()      
@@ -147,7 +163,10 @@ class Diagnostics:
 
             if self._status == Diagnostics.INITIALIZING:
                 if _is_failed(statuses):
-                    self._diags_log.publish(_err("Rover", self._rover_name, 'has failed.'))
+                    self._diags_log.publish(
+                        _err("Rover", self._rover_name, 'has failed.',
+                             Diagnostics.FAILURE_INSTRUCTIONS)
+                    )
                     self._status = Diagnostics.FAILED
                     self.do_stop()
 
@@ -160,7 +179,10 @@ class Diagnostics:
             
             elif self._status == Diagnostics.READY:
                 if _is_failed(statuses):
-                    self._diags_log.publish(_err("Rover", self._rover_name, 'has failed.'))
+                    self._diags_log.publish(
+                        _err("Rover", self._rover_name, 'has failed.',
+                             Diagnostics.FAILURE_INSTRUCTIONS)
+                    )
                     self._status = Diagnostics.FAILED
                     self.do_stop()
 
