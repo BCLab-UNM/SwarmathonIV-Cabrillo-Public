@@ -1,5 +1,6 @@
 # Swarmathon-Cabrillo
 
+## Overview
 This repository contains Cabrillo College’s 2018 & 2019 submissions to the [NASA Swarmathon](http://www.nasaswarmathon.com), a national swarm robotics competition.
 
 The base code provided to participating schools can be found here [SwarmBaseCode-ROS](https://github.com/BCLab-UNM/SwarmBaseCode-ROS).
@@ -10,15 +11,41 @@ This repository contains:
 2. 3D .STL models for the physical Swarmie build 
 3. Bash shell scripts and launch files for initializing simulated Swarmies in the Gazebo simulator, as well as physical Swarmies
 
-Be sure you are using the latest drivers for your video card using the "additional drivers tool" in Ubuntu. Gazebo client often does not do well with the open source drivers.
-
-![Alt text](readmeImages/InstallGraphics.png "Additional Drivers")
+## Table of Contents
+- [Overview](#overview)
+- [Table of Contents](#table-of-contents)
+- [Quick Start Installation Guide](#quick-start-installation-guide)
+    - [Summary](#summary)
+    - [Detail](#detail)
+        - [1. Install ROS Kinetic Kame](#1-install-ros-kinetic-kame)
+        - [2. Install additional packages](#2-install-additional-packages)
+        - [3. Clone the repository and build](#3-clone-the-repository-and-build)
+        - [4. Run the simulation](#4-run-the-simulation)
+- [Software Documentation](#software-documentation)
+- [Robot Behaviors](#robot-behaviors)
+- [Using the code](#using-the-code)
+    - [Deploying code to a physical rover](#deploying-code-to-a-physical-rover)
+    - [Working with ROS Multimaster](#working-with-ros-multimaster)
+    - [Starting a simulation quickly (removed from competition submission)](#starting-a-simulation-quickly-removed-from-competition-submission)
+    - [Controlling the rover](#controlling-the-rover)
+        - [Manual control](#manual-control)
+            - [1. Using the GUI](#1-using-the-gui)
+            - [2. Using `teleop_keyboard`](#2-using-teleopkeyboard)
+        - [rdb: an interactive Python debugger and development tool](#rdb-an-interactive-python-debugger-and-development-tool)
+        - [Run an individual behavior](#run-an-individual-behavior)
+    - [Working with the maps](#working-with-the-maps)
+        - [RViz display](#rviz-display)
+        - [Triggering a path search in RViz](#triggering-a-path-search-in-rviz)
 
 ## Quick Start Installation Guide
 
 SwarmBaseCode-ROS is designed and tested exclusively on the 64 bit version of Ubuntu 16.04 LTS (Xenial Xerus) and ROS Kinetic Kame. Other systems are untested and are therefore not supported at this time.
 
-### Summary:
+Be sure you are using the latest drivers for your video card using the "additional drivers tool" in Ubuntu. Gazebo client often does not do well with the open source drivers.
+
+![Alt text](readmeImages/InstallGraphics.png "Additional Drivers")
+
+### Summary
 1. Install ROS Kinetic. Instructions below in the detailed guide.
 2. Install dependencies, clone and build.
     ```bash
@@ -114,7 +141,7 @@ Install IPython, which we use to help develop robot behavior code.
 sudo apt install ipython
 ```
 
-#### 3. Clone the repository and build:
+#### 3. Clone the repository and build
 
 1. Install git, if necessary.
     ```
@@ -128,7 +155,7 @@ sudo apt install ipython
     catkin build
     ```
     
-#### 4. Run the simulation:
+#### 4. Run the simulation
 
 1. Start the GUI
   ```
@@ -299,7 +326,7 @@ Optional Arguments:
 ### Controlling the rover
 #### Manual control
 You can control the rover manually two ways:
-##### 1. Using the GUI.
+##### 1. Using the GUI
 - Click on a rover’s name in the upper left of the GUI display.
 - Use I, J, K, L as arrow keys to move the rover.
 ##### 2. Using `teleop_keyboard`
