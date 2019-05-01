@@ -295,3 +295,136 @@ Optional Arguments:
   startsim (default "false"): undocumented
   world (default "/home/darren/rover_workspace/simulation/worlds/2018_competition_world_files/prelim2.world"): undocumented
 ```
+
+### Controlling the rover
+#### Manual control
+You can control the rover manually two ways:
+##### 1. Using the GUI.
+- Click on a rover’s name in the upper left of the GUI display.
+- Use I, J, K, L as arrow keys to move the rover.
+##### 2. Using `teleop_keyboard`
+Unlike the GUI-enabled control, `teleop_keyboard` provides keyboard-based claw controls in addition to motion controls.
+
+Start the `teleop_keyboard` node:
+    
+If you’re connected to only one rover:
+```
+./dev.sh teleop_keyboard.py
+```
+Otherwise, if you’re connected to multiple rovers:
+```
+# connect to the rover named achilles
+source ./devel/setup.bash
+ROS_NAMESPACE=achilles rosrun mobility teleop_keyboard.py
+```
+###### Usage:
+
+`teleop_keyboard` has two modes. It defaults to a fully manual mode and you can optionally use it as a wrapper for some of the `Swarmie` control commands.
+```
+$ ROS_NAMESPACE=achilles rosrun mobility teleop_keyboard.py -h
+usage: teleop_keyboard.py [-h] [-s]
+
+optional arguments:
+-h, --help     show this help message and exit
+-s, --swarmie  use Swarmie API instead to issue driving commands (default:
+           False)
+```
+1. Fully manual mode:
+    ```
+    $ ROS_NAMESPACE=achilles rosrun mobility teleop_keyboard.py  
+    Welcome achilles to the world of the future.
+
+    Reading from the keyboard and Publishing to driver!
+    ----------------------------------------------------------
+    Moving around:       Fingers (use the shift key):
+    u    i    o          U         O
+    j    k    l          (close)   (open)
+    m    ,    .                  
+
+    Wrist:               Driving Parameters:
+    -----------------    -------------------------------------
+    t : up               1/2 : -/+ drive speed by 10%
+    g : middle           5/6 : -/+ turn speed by 10%
+    b : down
+
+    anything else : stop
+
+    CTRL-C to quit
+    ----------------------------------------------------------
+    Currently:
+    drive(1/2): 0.20 (m/s) | turn(5/6): 0.90 (rad/s)
+    ```
+
+2. `Swarmie` control mode:
+    ```
+    $ ROS_NAMESPACE=achilles rosrun mobility teleop_keyboard.py --swarmie
+    Welcome achilles to the world of the future.
+
+    Reading from the keyboard and driving using Swarmie API!
+    --------------------------------------------------------
+    CTRL-C to quit
+    -----------------    -------------------
+    Moving around:       Fingers (use the shift key):
+            i            U         O
+       j    k    l       (close)   (open)
+            ,                       
+
+    Wrist:               Driving Parameters:
+    -----------------    -----------------------------------
+    t : up               1/2 : -/+ drive speed by 10%
+    g : middle           3/4 : -/+ reverse speed by 10%
+    b : down             5/6 : -/+ turn speed by 10%
+                         I/< : -/+ drive distance by 10%
+                         J/L : -/+ turn angle by 10%
+
+    anything else : stop (not implemented)
+    --------------------------------------------------------
+
+    Toggle Obstacles to ignore (* = currently ignored):
+    -----------------
+    (!) PATH_IS_CLEAR = 0*
+    (a) SONAR_LEFT    = 1
+    (s) SONAR_CENTER  = 4
+    (d) SONAR_RIGHT   = 2
+    (f) SONAR_BLOCK   = 8
+    (T) TAG_TARGET    = 256
+    (h) TAG_HOME      = 512
+    (n) INSIDE_HOME   = 1024
+    (C) HOME_CORNER   = 2048
+
+    (S) IS_SONAR      = 15
+    (V) IS_VISION     = 3840
+
+    (v) VISION_SAFE   = 2816
+    (H) VISION_HOME   = 2560
+
+    Currently:
+      drive speed (1/2)   : 0.20 (m/s)
+      reverse speed (3/4) : 0.20 (m/s)
+      turn speed (5/6)    : 0.90 (rad/s)
+      drive dist (I/<)    : 0.50 (m)
+      turn theta (J/L)    : 1.57 (rad)
+    ```
+
+#### rdb: an interactive Python debugger and development tool
+`rdb` is a ROS node that initializes the Python rover control code and drops into an interactive IPython interpreter. From the shell you can control the rover using any method in the `Swarmie` control API, and also run all the rover behaviors.
+```
+In [1]: swarmie.drive(1)
+In [2]: swarmie.turn(math.pi/2)
+In [3]: behavior.init.main()
+In [4]: behavior.search.main()
+In [5]: behavior.pickup.main()
+In [6]: behavior.gohome.main(has_block=True)
+In [7]: behavior.dropoff.main()
+```
+##### To start `rdb`:
+If you’re connected to only one rover:
+```
+./rdb.sh
+```
+Otherwise, if you’re connected to multiple rovers:
+```
+# connect to the rover named achilles
+source ./devel/setup.bash
+ROS_NAMESPACE=achilles rosrun mobility rdb.py
+```
