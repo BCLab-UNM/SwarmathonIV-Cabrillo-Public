@@ -1,6 +1,6 @@
 # Swarmathon-Cabrillo
 
-This repository contains Cabrillo College's 2018 & 2019 submissions to the [NASA Swarmathon](http://www.nasaswarmathon.com), a national swarm robotics competition.
+This repository contains Cabrillo College’s 2018 & 2019 submissions to the [NASA Swarmathon](http://www.nasaswarmathon.com), a national swarm robotics competition.
 
 The base code provided to participating schools can be found here [SwarmBaseCode-ROS](https://github.com/BCLab-UNM/SwarmBaseCode-ROS).
 
@@ -49,7 +49,7 @@ Note: if you accidentally ran ```sudo rosdep update``` you can repair the permis
 
 
 ##### Environment Setup
-From ROS Wiki: It's convenient if the ROS environment variables are automatically added to your bash session every time a new shell is launched:
+From ROS Wiki: It’s convenient if the ROS environment variables are automatically added to your bash session every time a new shell is launched:
 ```
 echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
@@ -178,7 +178,7 @@ Any active rovers, simulated and/or real, will be displayed in the rover list on
 - simulated rovers: This number represents their simulation rate as a percentage of real time. For example, 1.0 = moving at 100% real time factor, 0.5 = moving at 50% real time factor, etc.
 - all rovers: Green = good connection. Yellow = meh connection. Red = bad connection and/or disconnected.
 
-To the right of the connection status is a checkbox for the map frame. If you select a checkbox for a given rover, it's map information will appear in the map to the right. You can arbitrarily select any number of rovers to be displayed in the map frame.
+To the right of the connection status is a checkbox for the map frame. If you select a checkbox for a given rover, it’s map information will appear in the map to the right. You can arbitrarily select any number of rovers to be displayed in the map frame.
 
 ![Alt text](readmeImages/activeRovers.png "Active rovers")
 
@@ -188,13 +188,13 @@ Select a rover to view its sensor outputs.
 
 There are four sensor display frames and one settings frame:
 
-The camera output. This is a rover eye's view of the world.
+The camera output. This is a rover eye’s view of the world.
 
 The ultrasound output is shown as three white rays, one for each ultrasound. The length of the rays indicates the distance to any objects in front of the ultrasound. The distance in meters is displayed in text below these rays. The maximum distance reported by the ultrasounds is 3 meters.  
 
 The IMU sensor display consists of a cube where the red face is the bottom of the rover, the blue face is the top of the rover, and the red and blue bars are the front and back of the rover. The cube is viewed from the top down. The cube is positioned according to the IMU orientation data. For example, if the rover flips over, the red side will be closest to the observer. Accelerometer data is shown as a 3D vector projected into 2D space pointing towards the sum of the accelerations in 3D space.
  
-The map view shows the path taken by the currently selected rover. Green is the encoder position data. In simulation, the encoder position data comes from the odometry topic being published by Gazebo's skid steer controller plugin. In the real robots, it is the encoder output. GPS points are shown as red dots. The EKF is the output of an extended Kalman filter which fuses data from the IMU, GPS, and encoder sensors.
+The map view shows the path taken by the currently selected rover. Green is the encoder position data. In simulation, the encoder position data comes from the odometry topic being published by Gazebo’s skid steer controller plugin. In the real robots, it is the encoder output. GPS points are shown as red dots. The EKF is the output of an extended Kalman filter which fuses data from the IMU, GPS, and encoder sensors.
 
 The map settings frame contains several settings that affect the map view:
 - Frame Views: You can check whether the map displays data from EKF (MAP), odometry (ODOM), and/or GPS (NAVSAT).
@@ -226,7 +226,7 @@ Source code can be found in the repository /src directory. This directory contai
 - `mobility`: The Swarmie control API, behaviors, helper functions, debug terminal, teleop and various other nodes.
 - `mapping`: The mapping node uses the [Grid Map](https://github.com/anybotics/grid_map) library to mark sonar obstacles and AprilTag resource locations on a map in the odometry coordinate frame. The node also provides a path-planning navigation service to the Python control code, using A* to find a path to a goal location, returning the path as a list of waypoints avoiding marked sonar obstacles.
 - `diagnostics`: A node monitoring sensor data, logging messages to the `rqt_rover_gui` so the user knows if any hardware is malfunctioning. This node can also stop the rover from moving if an unrecoverable hardware malfunction prevents the rover from receiving important sensor data.
-- `apriltags2_ros`: An image processor that detects [AprilTag](https://april.eecs.umich.edu/wiki/index.php/AprilTags) fiducial markers in the onboard camera's video stream. This package receives images from the `usb_cam` node (for physical robots) or [gazebo_ros_camera](http://docs.ros.org/kinetic/api/gazebo_plugins/html/classgazebo_1_1GazeboRosCamera.html) (for simulated robots).
+- `apriltags2_ros`: An image processor that detects [AprilTag](https://april.eecs.umich.edu/wiki/index.php/AprilTags) fiducial markers in the onboard camera’s video stream. This package receives images from the `usb_cam` node (for physical robots) or [gazebo_ros_camera](http://docs.ros.org/kinetic/api/gazebo_plugins/html/classgazebo_1_1GazeboRosCamera.html) (for simulated robots).
 - `ublox`: An unused dependency of `rqt_rover_gui`.
 
 ## Robot Behaviors
@@ -239,7 +239,7 @@ The task manager operates as a single ROS node, starting each behavior by import
 * `init` Initializes the rover for a round, saving the collection area location in the odometry coordinate frame.
 * `search` Implements a correlated random walk as a basic
   search method. The behavior also saves resource locations as they are discovered, so the rover can drive directly back to them.
-* `pickup` Picks up a cube with the rover's claw.
+* `pickup` Picks up a cube with the rover’s claw.
 * `gohome` Drives the rover back to the collection area, planning a path around any obstacles currently on the map.
 * `dropoff` Drops a cube off inside the collection area.
 
@@ -269,12 +269,12 @@ In the Multimaster system, you can have GUIs open on multiple laptops if you wan
 #### Requirements
 ##### Name resolution:
 - Each host (laptop and all rovers) must be able to resolve the hostname of all other hosts. This can be done by hard coding names in `/etc/hosts` or using a DNS server on the local network.
-- You cannot rely on mDNS and Avahi's `.local` domain for name resolution. Neither ROS nor `master_discovery`/`master_sync` currently support this.
+- You cannot rely on mDNS and Avahi’s `.local` domain for name resolution. Neither ROS nor `master_discovery`/`master_sync` currently support this.
 
 #### Troubleshooting
-As long as names resolve on each host, the `master_sync` nodes should discover sync with every `master_discovery` node on the network within 10-15 seconds. On rare occasions, this doesn't work properly, and not all of the rovers will show up in the GUI display. If this happens, you can:
+As long as names resolve on each host, the `master_sync` nodes should discover sync with every `master_discovery` node on the network within 10-15 seconds. On rare occasions, this doesn’t work properly, and not all of the rovers will show up in the GUI display. If this happens, you can:
 - Re-launch the GUI and accompanying `master_discovery`/`master_sync` nodes, without re-deploying to any of the rovers.
-- If the above doesn't work, re-deploy code to the missing/un-synced rover.
+- If the above doesn’t work, re-deploy code to the missing/un-synced rover.
 
 ### Starting a simulation quickly (removed from competition submission)
 `run.sh` is a wrapper for a `roslaunch` command to start the GUI. The launch file has a number of useful arguments you can specify from the command line. Any arguments you give to `run.sh` will be added as arguments to the `roslaunch` command it runs.
