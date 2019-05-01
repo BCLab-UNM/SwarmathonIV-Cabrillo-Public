@@ -453,3 +453,70 @@ In [3]: behavior.pickup.main()
 In [4]: behavior.gohome.main(has_block=True)
 In [5]: behavior.dropoff.main()
 ```
+
+### Working with the maps
+The rover maps can be viewed using RViz and tuned at runtime using `rqt_reconfigure`. You can open both programs with a launch file:
+```
+# connect to the rover named achilles
+source ./devel/setup.bach
+roslaunch swarmie grid_map_visualization.launch name:=achilles
+```
+#### RViz display
+By default, RViz is configured to display:
+##### 4 layers of the map:
+1. The search frontier.
+    - This visualizes the cells A*’s frontier expanded through during the most recent path search.
+    - In Rviz, this layer appears as a translucent purple overlay.
+    - Note: You have to set `visualize_frontier` to `"true"` by checking the box in the `rqt_reconfigure` window in order for the `mapping` node to publish frontier data.
+2. Sonar obstacles.
+    - These are marked and cleared from the map using each sonar range measurement as its received.
+    - Clear areas of this layer appear as a light grey; marked areas range from blue to purple.
+3. Targets (AprilTag cubes, ID 0)
+    - Target tag detections are marked and cleared from the map using the rover’s approximate visual field of view.
+    - Clear areas of this layer appear as a dark grey; marked areas appear as a translucent purple.
+4. Home (AprilTag home tags, ID 256)
+    - Home tag detections are marked and cleared from the map using the rover’s approximate visual field of view.
+    - Clear areas of this layer appear as a dark grey; marked areas appear as a translucent purple.
+##### Each path returned by the map’s `get_plan` service:
+These paths are lists of waypoints, displayed as a bright green line in RViz.
+
+![Occupancy Grid RViz Screenshot](readmeImages/mapPathPlanningWithFrontier.png)*Screenshot of RViz occupancy grid display. The visualization shows the search frontier, sonar, target tag, and home tag map layers. The most recent planned path from the rover’s current location (red arrow) to home (multicolor axis) is displayed as a bright green line.*
+
+![Mapping Dynamic Reconfigure Client Screenshot](readmeImages/mapReconfigure.png)*Screenshot of `rqt_reconfigure` client configured to adjust mapping parameters*
+
+#### Triggering a path search in RViz
+##### No movement: rover stays stationary
+For debugging, the `mapping` node subscribes to a `goal` topic. When it receives a `PoseStamped` on this topic it will search for a path from the rover’s current location to the goal location. It will publish the path, but the rover won’t move.
+
+You can publish on the `goal` topic to trigger a path search by clicking on the "2D Nav Goal" button in the RViz menu bar and then clicking a point in the map.
+
+##### With movement: rover drives to the goal point
+The Python code that interfaces with the `mapping/get_plan` service is in `planner.py`. When a rover is driving autonomously, the `Planner` module is imported and called from inside the behavior code. However, you can also run `planner.py` as a standalone node for testing.
+
+If you’re connected to only one rover:
+```
+./dev.sh {planner.py}
+```
+Otherwise, if you’re connected to multiple rovers:
+```
+# connect to the rover named achilles
+source ./devel/setup.bash
+ROS_NAMESPACE=achilles rosrun mobility planner.py
+```
+
+###### Usage:
+```
+ROS_NAMESPACE=achilles rosrun mobility planner.py -h
+usage: planner.py [-h] [--avoid-home | --avoid-targets]
+
+optional arguments:
+  -h, --help       show this help message and exit
+  --avoid-home     whether the rover should avoid home during this run
+                   (default: False)
+  --avoid-targets  whether the rover should avoid targets during this run
+                   (default: False)
+```
+
+When the `planner` node starts, it subscribes to the `goal` topic. When it receives a `PoseStamped` on this topic it will call the `mapping/get_plan` service to get a list of waypoints and then attempt to drive the rover to the goal location, avoiding sonar obstacles and optionally home tags or target tags.
+
+If the `planner` node is running, when you use RViz’s "2D Nav Goal" button to click a point in the map, the rover will attempt to drive to that point.
