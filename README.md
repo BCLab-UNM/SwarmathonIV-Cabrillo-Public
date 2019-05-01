@@ -522,7 +522,7 @@ The Python code that interfaces with the `mapping/get_plan` service is in `plann
 
 If you’re connected to only one rover:
 ```
-./dev.sh {planner.py}
+./dev.sh planner.py
 ```
 Otherwise, if you’re connected to multiple rovers:
 ```
