@@ -234,7 +234,7 @@ Behavior code is launched by the task manager. The task manager is a state machi
 
 ![Figure of task manager state machine](readmeImages/statemachine.jpg)
 
-The task manager operates as a single ROS node, starting each behavior importing it as a Python module and calling its `main()` function. Separating tasks into individual modules eliminates interaction between behaviors, reducing programmer error due to unforeseen consequences. Further, each behavior can be tested in isolation. For example, you can place the rover in front of some blocks then manually launch the pick-up node. This experiment can be repeated quickly and enables programmers to write more thoroughly tested code.
+The task manager operates as a single ROS node, starting each behavior by importing it as a Python module and calling its `main()` function. Separating tasks into individual modules eliminates interaction between behaviors, reducing programmer error due to unforeseen consequences. Further, each behavior can be tested in isolation. For example, you can place the rover in front of some blocks then manually launch the pick-up node. This experiment can be repeated quickly and enables programmers to write more thoroughly tested code.
 
 * `init` Initializes the rover for a round, saving the collection area location in the odometry coordinate frame.
 * `search` Implements a correlated random walk as a basic
