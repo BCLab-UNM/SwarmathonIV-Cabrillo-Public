@@ -428,3 +428,28 @@ Otherwise, if you’re connected to multiple rovers:
 source ./devel/setup.bash
 ROS_NAMESPACE=achilles rosrun mobility rdb.py
 ```
+
+#### Run an individual behavior
+Each robot behavior is contained in its own Python script. You can run a behavior in two ways.
+##### 1. As a standalone ROS node, that exits when the behavior is complete:
+If you’re connected to only one rover:
+```
+./dev.sh {init.py|search.py|pickup.py|gohome.py|dropoff.py}
+```
+Otherwise, if you’re connected to multiple rovers:
+```
+# connect to the rover named achilles
+source ./devel/setup.bash
+ROS_NAMESPACE=achilles rosrun mobility {init.py|search.py|pickup.py|gohome.py|dropoff.py}
+```
+##### 2. As a function called in `rdb`
+Start `rdb`, as shown above in the section describing `rdb`.
+
+Call a behavior’s `main()` function:
+```
+In [1]: behavior.init.main()
+In [2]: behavior.search.main()
+In [3]: behavior.pickup.main()
+In [4]: behavior.gohome.main(has_block=True)
+In [5]: behavior.dropoff.main()
+```
