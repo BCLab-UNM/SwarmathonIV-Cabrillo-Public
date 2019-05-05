@@ -1,7 +1,7 @@
 [submodule "src/apriltags2_ros"]
     path = src/apriltags2_ros
-    url = git@github.com:darrenchurchill/apriltags2_ros.git
+    url = https://github.com/darrenchurchill/apriltags2_ros.git
     branch = apriltag3
 [submodule "src/ublox"]
-	path = src/ublox
-	url = git@github.com:KumarRobotics/ublox.git
+    path = src/ublox
+    url = https://github.com/KumarRobotics/ublox.git
